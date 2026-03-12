@@ -87,7 +87,7 @@ v1에서 4개 에이전트 팀 리뷰를 거쳐 다음을 수정:
 - **When called**: 소설 시작 시 1회 + 아크 전환 시
 - **Arc transition trigger**: `current_chapter`가 다음 아크의 `start_chapter` 도달 시 자동 재호출. 두 번째 호출에서는 새 아크의 긴장감 곡선만 출력.
 - **Tension source of truth**: PlotArchitect가 출력한 `tension_curve`가 정본. `ChapterOutline.tension_level`은 PlotArchitect가 동기화 업데이트.
-- **Model**: Sonnet (구조 설계, 비용 효율)
+- **Model**: Haiku (구조 설계, 소설당 1-2회만 호출)
 
 ### 2. CharacterManager
 
@@ -104,7 +104,7 @@ v1에서 4개 에이전트 팀 리뷰를 거쳐 다음을 수정:
   - 위치가 `WorldSetting.key_locations`에 존재하는지 (또는 신규로 등록)
 - **Voice samples**: NovelSeed에 고정, 에이전트가 관리하지 않음 (불변 참조 데이터)
 - **When called**: 매 챕터 생성 전/후
-- **Model**: Sonnet (상태 추적은 추론 능력보다 정확성 중요)
+- **Model**: Haiku (상태 추적은 구조화된 출력, 경량 모델로 충분)
 
 ### 3. Writer
 
@@ -123,7 +123,7 @@ v1에서 4개 에이전트 팀 리뷰를 거쳐 다음을 수정:
   - `ending_fix`: 결말 훅만 수정
   - `full_regenerate`: 전체 재작성 (score < 40 일 때만)
 - **Specialization**: 장르별 시스템 프롬프트 분기
-- **Model**: Opus / GPT-4o (글 품질이 핵심)
+- **Model**: Sonnet (글 품질 핵심이지만 비용 효율 고려. Sonnet 4의 글쓰기 품질이 충분히 높음)
 
 ### 4. Evaluator (Editor + QA 통합)
 
@@ -167,7 +167,7 @@ class EditorialNote(BaseModel):
     severity: Literal["high", "medium", "low"]
 ```
 
-- **Model**: Sonnet (Tier 2 LLM 평가 시)
+- **Model**: Haiku (Tier 2 LLM 평가 시. rubric 기반 채점이라 경량 모델로 충분)
 
 ## Pipeline Flow
 
@@ -511,33 +511,36 @@ kakao-novel-generator/
 
 ### Model Tiering
 
-| Agent | Model | 이유 |
-|-------|-------|------|
-| PlotArchitect | Sonnet | 구조 설계, 빈번하지 않음 |
-| CharacterManager | Sonnet | 상태 추적, 정확성 > 창의성 |
-| Writer | Opus / GPT-4o | 글 품질이 핵심 |
-| Evaluator (Tier 2) | Sonnet | 평가 기준이 명확해서 Sonnet으로 충분 |
+비용 목표: 50화 기준 1-2만원 ($7-14).
+
+| Agent | Model | 가격 (in/out per 1M) | 이유 |
+|-------|-------|---------------------|------|
+| PlotArchitect | Haiku | $0.25/$1.25 | 구조 설계, 소설당 1-2회만 호출 |
+| CharacterManager | Haiku | $0.25/$1.25 | 상태 추적/요약, 구조화된 출력 |
+| Writer | Sonnet | $3/$15 | 글 품질 핵심. Sonnet의 글쓰기 품질이 충분히 높음 |
+| Evaluator (Tier 2) | Haiku | $0.25/$1.25 | 평가 기준이 rubric으로 명확, 경량 모델로 충분 |
 
 ### Per-Chapter Cost Estimate
 
-| Scenario | Agent Calls | Estimated Tokens | Cost (Opus $15/$75 per 1M) |
-|----------|-------------|-----------------|---------------------------|
-| **Best case** (1회 통과) | CharManager(2) + Writer(1) + Eval rule(1) | ~40K input, ~5K output | ~$0.98 |
-| **Average** (1회 수정) | CharManager(2) + Writer(2) + Eval(2) | ~70K input, ~10K output | ~$1.80 |
-| **Worst case** (3회 수정) | CharManager(2) + Writer(3) + Eval(3) + PlotArch(1) | ~120K input, ~15K output | ~$2.93 |
+| Scenario | Agent Calls | Estimated Tokens | Cost |
+|----------|-------------|-----------------|------|
+| **Best case** (1회 통과) | CharManager(2,Haiku) + Writer(1,Sonnet) + Eval rule | ~40K in, ~5K out | ~$0.12 |
+| **Average** (1회 수정) | CharManager(2) + Writer(2) + Eval(2) | ~70K in, ~10K out | ~$0.20 |
+| **Worst case** (3회 수정) | CharManager(2) + Writer(3) + Eval(3) + PlotArch(1) | ~120K in, ~15K out | ~$0.35 |
 
 ### Per-Novel Cost Estimate (50화)
 
-| Scenario | Cost |
-|----------|------|
-| Best case | ~$49 |
-| Average | ~$90 |
-| Worst case | ~$147 |
+| Scenario | Cost | 원화 (환율 1300) |
+|----------|------|-----------------|
+| Best case | ~$6 | ~8천원 |
+| Average | ~$10 | ~1.3만원 |
+| Worst case | ~$17.5 | ~2.3만원 |
 
-**비용 최적화 레버**:
-- Writer를 GPT-4o-mini로 전환 시 ~70% 절감 (품질 트레이드오프)
-- Rule-based 점수 > 90이면 LLM 평가 스킵 (Tier 2 비용 절감)
-- 컨텍스트 버짓을 줄이면 입력 토큰 절감 (품질 트레이드오프)
+**추가 비용 최적화 레버**:
+- Writer를 GPT-4o-mini로 전환 시 추가 ~60% 절감 (품질 트레이드오프)
+- Rule-based 점수 > 90이면 LLM 평가 스킵 (Tier 2 호출 자체 제거)
+- 컨텍스트 버짓을 20K로 줄이면 입력 토큰 ~35% 절감
+- Evaluator Tier 2를 5화마다만 실행 (나머지는 rule-based만)
 
 ## Quality Strategy
 
