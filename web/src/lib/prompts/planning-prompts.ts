@@ -176,8 +176,8 @@ ${seed.characters.map((c) => `- ${c.name} (${c.role}): ${c.voice.tone}`).join("\
 
 ## 활성 복선
 ${seed.foreshadowing
-  .filter((fs) => fs.planted_at <= arc.end_chapter && fs.reveal_at >= arc.start_chapter)
-  .map((fs) => `- ${fs.name}: ${fs.description} (심기:${fs.planted_at}, 회수:${fs.reveal_at})`)
+  .filter((fs) => fs.planted_at <= arc.end_chapter && (fs.reveal_at ?? Infinity) >= arc.start_chapter)
+  .map((fs) => `- ${fs.name}: ${fs.description} (심기:${fs.planted_at}, 회수:${fs.reveal_at ?? "미정"})`)
   .join("\n") || "없음"}
 
 ${recentSummaries.length > 0 ? `## 이전 내용 요약\n${recentSummaries.map((s) => `- ${s.chapter}화: ${s.summary}`).join("\n")}` : ""}
