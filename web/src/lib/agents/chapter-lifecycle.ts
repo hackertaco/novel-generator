@@ -19,6 +19,9 @@ import type { NovelSeed } from "@/lib/schema/novel";
 import type { ChapterSummary } from "@/lib/schema/chapter";
 import { getWriterSystemPrompt } from "@/lib/prompts/writer-system-prompt";
 import { runEditor } from "./editor-agent";
+import { segmentText, reassemble } from "./segmenter";
+import { locateIssues } from "@/lib/evaluators/issue-locator";
+import { editSegment } from "./segment-editor";
 
 // --- Event types emitted during lifecycle ---
 
@@ -40,6 +43,7 @@ export type LifecycleEvent =
   | { type: "retry"; attempt: number; reason: string; score: number }
   | { type: "improvement"; strategy: string; details: string }
   | { type: "replace_text"; content: string }
+  | { type: "patch"; paragraphId: number; content: string }
   | { type: "complete"; summary: ChapterSummary; final_score: number }
   | { type: "error"; message: string }
   | { type: "done" };
@@ -272,34 +276,39 @@ export async function* runChapterLifecycle(
 
   const blueprintInstructions = options.blueprint
     ? `\n목표 분량: ${options.blueprint.target_word_count}자
-씬 구성을 반드시 따라주세요 (위 블루프린트 참조).
-각 씬의 예상 분량을 참고하여 적절히 배분하세요.`
+씬 구성은 참고만 하세요. 모든 씬을 이번 화에 넣을 필요 없습니다.
+자연스러운 전개가 씬 개수보다 중요합니다. 넘치는 씬은 다음 화로 미루세요.`
     : "";
 
   const chapterRequirements = chapterNumber === 1
     ? `위 설정과 맥락을 바탕으로 1화를 작성해주세요.
 
-## 1화 핵심 목표
-1화는 독자가 "다음 화" 버튼을 누르게 만드는 가장 중요한 화입니다.
+## 1화의 진짜 목표
+1화의 목표는 "이 주인공의 일상이 궁금하다"를 만드는 것입니다.
+충격적 사건이나 대반전이 아니라, **주인공이라는 인간에 대한 호기심**이 핵심입니다.
 
-## 1화 전용 요구사항
-1. **오프닝 훅 (첫 3문장)**: 액션/대화/충격적 상황으로 시작. 설명이나 배경 묘사로 시작 금지.
-   - 좋은 예: "검이 목을 스쳤다." / "너, 오늘 죽어." / 주인공이 위기 상황에 처한 장면
-   - 나쁜 예: "어느 날..." / "이 세계는..." / 세계관 설명
-2. **캐릭터 첫인상**: 주인공의 성격을 행동과 대사로 보여주기. "그는 ~한 성격이었다" 류의 설명 절대 금지.
-3. **세계관은 자연스럽게**: 설정을 설명하지 말고 장면 속에 녹여내기. 독자가 읽다 보면 자연스럽게 알게 되도록.
-4. **엔딩 훅**: 1화 마지막에 "이게 뭐지?" 하는 미스터리나 긴장감. 다음 화를 반드시 읽어야 하는 이유를 만들기.
-5. **분량**: 반드시 4000자~6000자 (장면과 대화를 충분히 전개)
-6. **대사 비중 55% 이상**: 캐릭터 간 대화로 스토리를 진행
-7. **짧은 문단**: 3문장 이하. 한 줄짜리 문장도 적극 활용.
-8. **감각 묘사**: 시각, 청각, 촉각 등 감각을 활용한 묘사로 몰입감 높이기
+## 1화 작성법
+1. **한 장면에만 집중하세요.** 장면 전환 없이, 하나의 공간에서 하나의 상황만.
+2. **주인공의 평범한 순간부터**: 아직 사건이 터지기 전. 이 사람이 어떤 사람인지 보여주세요.
+   - 어떻게 말하는지, 무얼 좋아하는지, 주변 사람들과 어떤 관계인지.
+   - 설명하지 말고 대화와 행동으로만.
+3. **1화 끝에 작은 균열 하나**: 일상에 금이 가는 순간. 뭔가 이상한 낌새.
+   - 대폭발이 아니라 "어...?" 정도의 작은 위화감.
+   - 독자가 "뭐지?" 하고 2화를 눌러보게 만드는 정도.
+4. **세계관은 설명하지 마세요**: 주인공의 일상을 보여주면 세계관은 자연스럽게 드러납니다.
+5. **분량**: 4000~6000자. 한 장면을 깊이 있게.
+6. **대사 비중 55% 이상**
+7. **짧은 문단** (3문장 이하)
 
 ## 절대 금지
-- "~였다. ~였다. ~였다." 같은 문장 구조 반복
-- "마치 ~처럼" 비유 남발
-- 독백으로 상황 해설 ("나는 이 상황이 위험하다고 생각했다")
-- 캐릭터 소개를 나열하듯 하기
-- AI가 쓴 것 같은 딱딱한 문체
+- 전투/추격/위기 상황으로 시작하기 (아직 때가 아닙니다)
+- 세계관/능력 체계 설명
+- 2명 이상의 새 캐릭터를 한꺼번에 소개
+- 시간 점프 ("며칠 후", "다음날")
+- 1화에서 주인공이 각성/변신/능력 획득하기
+- 아웃라인의 모든 key_point를 소화하려 하기 (1~2개면 충분)
+- "~였다. ~였다. ~였다." 어미 반복
+- AI가 쓴 것 같은 문체
 
 출력: 소설 본문만 (메타 정보 없이)`
     : `위 설정과 맥락을 바탕으로 ${chapterNumber}화를 작성해주세요.
@@ -385,43 +394,123 @@ ${rawText.slice(-1500)}`,
     yield { type: "usage", ...contUsage };
   }
 
-  // --- Phase 2: Editor polishes (stream to user) + quality loop ---
-  const MAX_EDITOR_PASSES = 2;
+  // --- Phase 2: Editor polishes + quality loop ---
+  const MAX_EDITOR_PASSES = 5;
   let editedText = rawText;
   let editorFeedback: string | null = null;
 
   for (let editorPass = 1; editorPass <= MAX_EDITOR_PASSES; editorPass++) {
-    yield { type: "stage_change", stage: "editing" };
 
-    // On re-edit, provide evaluation feedback to Editor
-    let editorInput = editedText;
-    if (editorFeedback) {
-      editorInput = editedText;
-    }
+    if (editorPass === 1) {
+      // --- Pass 1: Full Editor (existing behavior) ---
+      yield { type: "stage_change", stage: "editing" };
 
-    let newEditedText = "";
-    const editorStream = runEditor(
-      editorInput,
-      seed,
-      chapterNumber,
-      editorFeedback,
-      previousSummaries,
-    );
-    let editorResult = await editorStream.next();
-    while (!editorResult.done) {
-      newEditedText += editorResult.value;
-      // Stream Editor output to user — this is what they see
-      yield { type: "chunk", content: editorResult.value };
-      editorResult = await editorStream.next();
-    }
+      let newEditedText = "";
+      const editorStream = runEditor(
+        editedText,
+        seed,
+        chapterNumber,
+        editorFeedback,
+        previousSummaries,
+      );
+      let editorResult = await editorStream.next();
+      while (!editorResult.done) {
+        newEditedText += editorResult.value;
+        yield { type: "chunk", content: editorResult.value };
+        editorResult = await editorStream.next();
+      }
 
-    const editorUsage: TokenUsage = editorResult.value;
-    totalUsage = accumulateUsage(totalUsage, editorUsage);
-    yield { type: "usage", ...editorUsage };
+      const editorUsage: TokenUsage = editorResult.value;
+      totalUsage = accumulateUsage(totalUsage, editorUsage);
+      yield { type: "usage", ...editorUsage };
 
-    // Safety check: use editor output only if reasonable
-    if (newEditedText.length >= rawText.length * 0.5) {
-      editedText = newEditedText;
+      if (newEditedText.length >= rawText.length * 0.5) {
+        editedText = newEditedText;
+      }
+    } else {
+      // --- Passes 2-5: Segment Patcher ---
+
+      // Score < 0.4 after pass 1 means text is fundamentally broken — use full editor
+      if (editorPass === 2 && bestScore < 0.4) {
+        yield { type: "stage_change", stage: "editing" };
+        let newEditedText = "";
+        const fallbackFeedback = editorFeedback || "전반적 품질 개선 필요";
+        const fallbackStream = runEditor(editedText, seed, chapterNumber, fallbackFeedback, previousSummaries);
+        let fallbackResult = await fallbackStream.next();
+        while (!fallbackResult.done) {
+          newEditedText += fallbackResult.value;
+          yield { type: "chunk", content: fallbackResult.value };
+          fallbackResult = await fallbackStream.next();
+        }
+        const fallbackUsage: TokenUsage = fallbackResult.value;
+        totalUsage = accumulateUsage(totalUsage, fallbackUsage);
+        yield { type: "usage", ...fallbackUsage };
+        if (newEditedText.length >= rawText.length * 0.5) {
+          editedText = newEditedText;
+        }
+        yield { type: "replace_text", content: editedText };
+      } else {
+        yield { type: "stage_change", stage: "patching" };
+
+        const segments = segmentText(editedText);
+        const segStyle = evaluateStyle(editedText, seed.style);
+        const segConsistency = evaluateConsistency(seed, chapterNumber, editedText, null);
+        const segPacing = evaluatePacing(editedText, chapterNumber);
+
+        const segmentIssues = locateIssues(segments, segStyle, segConsistency, segPacing, seed, chapterNumber);
+
+        if (segmentIssues.length === 0) {
+          // No specific issues found but score still low — fallback to full Editor
+          yield { type: "stage_change", stage: "editing" };
+          let newEditedText = "";
+          const fallbackFeedback = editorFeedback || "전반적 품질 개선 필요";
+          const fallbackStream = runEditor(editedText, seed, chapterNumber, fallbackFeedback, previousSummaries);
+          let fallbackResult = await fallbackStream.next();
+          while (!fallbackResult.done) {
+            newEditedText += fallbackResult.value;
+            yield { type: "chunk", content: fallbackResult.value };
+            fallbackResult = await fallbackStream.next();
+          }
+          const fallbackUsage: TokenUsage = fallbackResult.value;
+          totalUsage = accumulateUsage(totalUsage, fallbackUsage);
+          yield { type: "usage", ...fallbackUsage };
+          if (newEditedText.length >= rawText.length * 0.5) {
+            editedText = newEditedText;
+          }
+          yield { type: "replace_text", content: editedText };
+        } else {
+          // Patch each failing segment sequentially
+          for (const issue of segmentIssues) {
+            const targetSeg = segments.find((s) => s.id === issue.segmentId);
+            if (!targetSeg) continue;
+
+            const prevSeg = segments.find((s) => s.id === issue.segmentId - 1) || null;
+            const nextSeg = segments.find((s) => s.id === issue.segmentId + 1) || null;
+
+            let patchedText = "";
+            const segStream = editSegment(
+              targetSeg, issue.issues, prevSeg, nextSeg,
+              seed, chapterNumber, issue.context,
+            );
+            let segResult = await segStream.next();
+            while (!segResult.done) {
+              patchedText += segResult.value;
+              segResult = await segStream.next();
+            }
+            const segUsage: TokenUsage = segResult.value;
+            totalUsage = accumulateUsage(totalUsage, segUsage);
+            yield { type: "usage", ...segUsage };
+
+            // Safety: only apply patch if reasonable length
+            if (patchedText.length >= targetSeg.text.length * 0.5) {
+              targetSeg.text = patchedText;
+              yield { type: "patch", paragraphId: issue.segmentId, content: patchedText };
+            }
+          }
+
+          editedText = reassemble(segments);
+        }
+      }
     }
 
     // --- Phase 3: Evaluate ---
@@ -429,7 +518,7 @@ ${rawText.slice(-1500)}`,
 
     const styleResult = evaluateStyle(editedText, seed.style);
     const consistencyResult = evaluateConsistency(seed, chapterNumber, editedText, null);
-    const pacingResult = evaluatePacing(editedText);
+    const pacingResult = evaluatePacing(editedText, chapterNumber);
     const overallScore =
       styleResult.overall_score * 0.35 +
       getConsistencyScore(consistencyResult) * 0.35 +
@@ -441,15 +530,22 @@ ${rawText.slice(-1500)}`,
       overall_score: overallScore,
     };
 
-    bestText = editedText;
-    bestScore = overallScore;
+    // Best-score tracking
+    if (overallScore > bestScore) {
+      bestText = editedText;
+      bestScore = overallScore;
+    } else if (editorPass > 1) {
+      // Score regressed — revert to best and stop
+      editedText = bestText;
+      yield { type: "replace_text", content: bestText };
+      break;
+    }
 
-    // If quality passes or this is the last editor pass, we're done
     if (overallScore >= qualityThreshold || editorPass === MAX_EDITOR_PASSES) {
       break;
     }
 
-    // Quality failed — build feedback for Editor's next pass
+    // Build feedback for next pass
     const issues: string[] = [];
     if (!styleResult.dialogue_ratio.pass)
       issues.push(`대사 비율 ${Math.round(styleResult.dialogue_ratio.actual_ratio * 100)}% (목표 ${Math.round(styleResult.dialogue_ratio.target_ratio * 100)}%)`);
@@ -468,9 +564,6 @@ ${rawText.slice(-1500)}`,
       reason: issues.join(", "),
       score: overallScore,
     };
-
-    // Clear streamed text for re-edit
-    yield { type: "replace_text", content: "" };
   }
 
   // Extract summary
