@@ -232,6 +232,11 @@ export function useStreamingGeneration() {
                           "각 화의 블루프린트를 그리는 중...",
                           "씬 구성을 계획하고 있습니다",
                         ],
+                        patching: [
+                          "문제 구간만 정밀 수정 중...",
+                          "편집장이 빨간펜으로 특정 부분만 고치는 중",
+                          "좋은 부분은 살리고, 문제만 콕콕 수정!",
+                        ],
                       };
                       const msgs = wittyMessages[parsed.stage];
                       const labels: Record<string, string> = {};
@@ -304,6 +309,21 @@ export function useStreamingGeneration() {
                       "success",
                     );
                     break;
+                  case "patch": {
+                    // Replace specific paragraph in the full text
+                    // Normalize to match server-side segmentText() behavior
+                    const paragraphs = fullText.split("\n\n").map((p: string) => p.trim()).filter((p: string) => p.length > 0);
+                    if (parsed.paragraphId >= 0 && parsed.paragraphId < paragraphs.length) {
+                      paragraphs[parsed.paragraphId] = parsed.content;
+                      fullText = paragraphs.join("\n\n");
+                      setStreamingText(fullText);
+                      addPipelineLog(
+                        `문단 ${parsed.paragraphId + 1} 수정 완료`,
+                        "info",
+                      );
+                    }
+                    break;
+                  }
                   case "error":
                     setError(parsed.message);
                     addPipelineLog(parsed.message, "warn");
