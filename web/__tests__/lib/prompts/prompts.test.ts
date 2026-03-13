@@ -6,12 +6,12 @@ import { getChapterPrompt } from "@/lib/prompts/chapter-prompt";
 import { getSummaryPrompt } from "@/lib/prompts/summary-prompt";
 
 describe("detectGenre", () => {
-  it('returns "로맨스" for text with "로맨스"', () => {
-    expect(detectGenre("로맨스 소설을 쓰고 싶어요")).toBe("로맨스");
+  it('returns "현대 로맨스" for text with "로맨스"', () => {
+    expect(detectGenre("로맨스 소설을 쓰고 싶어요")).toBe("현대 로맨스");
   });
 
-  it('returns "로맨스" for text with "로판"', () => {
-    expect(detectGenre("로판 느낌의 이야기")).toBe("로맨스");
+  it('returns "로맨스 판타지" for text with "로판"', () => {
+    expect(detectGenre("로판 느낌의 이야기")).toBe("로맨스 판타지");
   });
 
   it('returns "무협" for text with "무협"', () => {
@@ -33,9 +33,9 @@ describe("detectGenre", () => {
 
 describe("getGenrePrompt", () => {
   it("returns prompt containing genre guide", () => {
-    const prompt = getGenrePrompt("로맨스", "테스트 인터뷰");
+    const prompt = getGenrePrompt("현대 로맨스", "테스트 인터뷰");
 
-    expect(prompt).toContain("카카오페이지 로맨스/로판 전문 작가");
+    expect(prompt).toContain("카카오페이지 현대 로맨스 전문 작가");
   });
 
   it("includes interview result", () => {
