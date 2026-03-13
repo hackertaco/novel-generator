@@ -1,6 +1,7 @@
 """Character schema definitions."""
 
-from pydantic import BaseModel, Field
+from typing import Any
+from pydantic import BaseModel, Field, field_validator
 
 
 class CharacterVoice(BaseModel):
@@ -35,6 +36,23 @@ class CharacterState(BaseModel):
         default_factory=list, description="Secrets this character knows"
     )
 
+    @field_validator('level', mode='before')
+    @classmethod
+    def parse_level(cls, v: Any) -> int | None:
+        """Parse level from string or int."""
+        if v is None:
+            return None
+        if isinstance(v, int):
+            return v
+        if isinstance(v, str):
+            # Try to extract number from string like "1" or "레벨 1"
+            import re
+            match = re.search(r'\d+', v)
+            if match:
+                return int(match.group())
+            return None
+        return None
+
 
 class Character(BaseModel):
     """Complete character definition."""
@@ -51,3 +69,17 @@ class Character(BaseModel):
 
     # Mutable - updated each chapter
     state: CharacterState = Field(default_factory=CharacterState)
+
+    @field_validator('introduction_chapter', mode='before')
+    @classmethod
+    def parse_chapter(cls, v: Any) -> int:
+        """Parse chapter from string or int."""
+        if isinstance(v, int):
+            return v
+        if isinstance(v, str):
+            import re
+            match = re.search(r'\d+', v)
+            if match:
+                return int(match.group())
+            return 1
+        return 1

@@ -15,6 +15,70 @@ export interface ChapterContext {
   styleGuide: string;
 }
 
+/**
+ * For chapters 1-3, radically limit context so the writer CAN'T cram everything in.
+ * The less the writer knows, the slower it writes.
+ */
+function buildStarvedContext(
+  seed: NovelSeed,
+  chapterNum: number,
+): string {
+  const mc = seed.characters.find((c) => c.role === "주인공" || c.id === "mc");
+  const parts: string[] = [];
+
+  parts.push(`# 소설 정보
+제목: ${seed.title}
+장르: ${seed.world.genre} / ${seed.world.sub_genre}
+`);
+
+  // Only protagonist info
+  if (mc) {
+    parts.push(`# 주인공
+이름: ${mc.name}
+성격: ${mc.voice.personality_core}
+말투: ${mc.voice.tone}
+예시 대사:
+${mc.voice.sample_dialogues.slice(0, 2).map((d) => `- "${d}"`).join("\n")}
+`);
+  }
+
+  // Chapter 1: just one line about the situation
+  const outline = seed.chapter_outlines.find(
+    (o) => o.chapter_number === chapterNum,
+  );
+  if (outline) {
+    parts.push(`# ${chapterNum}화
+${outline.one_liner}
+`);
+    // Ch1: no key_points at all. Ch2-3: max 1.
+    if (chapterNum >= 2 && outline.key_points.length > 0) {
+      parts.push(`포인트: ${outline.key_points[0]}`);
+    }
+  }
+
+  // Style guide (minimal)
+  parts.push(`# 스타일
+- 시점: ${seed.style.pov}
+- 시제: ${seed.style.tense}
+- 문단: ${seed.style.max_paragraph_length}문장 이하
+`);
+
+  // Previous summaries for ch2-3
+  if (chapterNum > 1) {
+    const recent = seed.chapter_outlines
+      .filter((o) => o.chapter_number < chapterNum)
+      .slice(-2);
+    if (recent.length > 0) {
+      parts.push("# 이전 내용");
+      for (const o of recent) {
+        parts.push(`- ${o.chapter_number}화: ${o.one_liner}`);
+      }
+    }
+  }
+
+  return parts.join("\n");
+}
+
 export function buildChapterContext(
   seed: NovelSeed,
   chapterNum: number,
@@ -24,6 +88,11 @@ export function buildChapterContext(
     summary: string;
   }>,
 ): string {
+  // Context Starvation for early chapters
+  if (chapterNum <= 3) {
+    return buildStarvedContext(seed, chapterNum);
+  }
+
   const parts: string[] = [];
 
   // Novel info
@@ -33,16 +102,25 @@ export function buildChapterContext(
 장르: ${seed.world.genre} / ${seed.world.sub_genre}
 `);
 
-  // Current arc
+  // Current arc (reduced info for early chapters)
   const currentArc = seed.arcs.find(
     (a) => a.start_chapter <= chapterNum && chapterNum <= a.end_chapter,
   );
   if (currentArc) {
-    parts.push(`# 현재 아크
+    const isEarlyInArc = chapterNum <= currentArc.start_chapter + 2;
+    if (isEarlyInArc) {
+      // Early chapters: only show arc name and theme, not summary/climax
+      parts.push(`# 현재 아크
+${currentArc.name} (${currentArc.start_chapter}~${currentArc.end_chapter}화)
+이 아크의 시작 단계입니다. 급하게 전개하지 말고, 상황과 분위기를 충분히 보여주세요.
+`);
+    } else {
+      parts.push(`# 현재 아크
 ${currentArc.name} (${currentArc.start_chapter}~${currentArc.end_chapter}화)
 ${currentArc.summary}
 클라이맥스: ${currentArc.climax_chapter}화
 `);
+    }
   }
 
   // Chapter outline
@@ -50,11 +128,14 @@ ${currentArc.summary}
     (o) => o.chapter_number === chapterNum,
   );
   if (outline) {
+    // Limit key_points for early chapters
+    const maxPoints = chapterNum <= 3 ? 2 : outline.key_points.length;
+    const points = outline.key_points.slice(0, maxPoints);
     parts.push(`# ${chapterNum}화 아웃라인
 제목: ${outline.title}
 핵심: ${outline.one_liner}
 포인트:
-${outline.key_points.map((p) => `- ${p}`).join("\n")}
+${points.map((p) => `- ${p}`).join("\n")}
 긴장도: ${outline.tension_level}/10
 `);
   }
@@ -240,6 +321,11 @@ export function buildBlueprintContext(
     return buildChapterContext(seed, chapterNum, previousSummaries);
   }
 
+  // Context Starvation for early chapters — even with blueprint
+  if (chapterNum <= 3) {
+    return buildStarvedContext(seed, chapterNum);
+  }
+
   const parts: string[] = [];
 
   // Novel info
@@ -249,16 +335,24 @@ export function buildBlueprintContext(
 장르: ${seed.world.genre} / ${seed.world.sub_genre}
 `);
 
-  // Current arc
+  // Current arc (reduced info for early chapters)
   const currentArc = seed.arcs.find(
     (a) => a.start_chapter <= chapterNum && chapterNum <= a.end_chapter,
   );
   if (currentArc) {
-    parts.push(`# 현재 아크
+    const isEarlyInArc = chapterNum <= currentArc.start_chapter + 2;
+    if (isEarlyInArc) {
+      parts.push(`# 현재 아크
+${currentArc.name} (${currentArc.start_chapter}~${currentArc.end_chapter}화)
+이 아크의 시작 단계입니다. 급하게 전개하지 말고, 상황과 분위기를 충분히 보여주세요.
+`);
+    } else {
+      parts.push(`# 현재 아크
 ${currentArc.name} (${currentArc.start_chapter}~${currentArc.end_chapter}화)
 ${currentArc.summary}
 클라이맥스: ${currentArc.climax_chapter}화
 `);
+    }
   }
 
   // Blueprint details
@@ -290,11 +384,16 @@ ${currentArc.summary}
     parts.push("");
   }
 
-  // Key points
+  // Key points (limited for early chapters)
   if (blueprint.key_points.length > 0) {
+    const maxPoints = chapterNum <= 3 ? 2 : blueprint.key_points.length;
+    const points = blueprint.key_points.slice(0, maxPoints);
     parts.push("# 핵심 포인트");
-    for (const point of blueprint.key_points) {
+    for (const point of points) {
       parts.push(`- ${point}`);
+    }
+    if (chapterNum <= 3 && blueprint.key_points.length > maxPoints) {
+      parts.push(`(나머지 ${blueprint.key_points.length - maxPoints}개는 후속 화에서 전개)`);
     }
     parts.push("");
   }

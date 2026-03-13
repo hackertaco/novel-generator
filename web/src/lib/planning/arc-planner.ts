@@ -1,19 +1,27 @@
 import { getAgent } from "@/lib/agents/llm-agent";
 import { getArcPlanPrompt } from "@/lib/prompts/planning-prompts";
 import { ArcPlanSchema, type ArcPlan, type PartPlan } from "@/lib/schema/planning";
+import { CharacterSchema, type Character } from "@/lib/schema/character";
 import type { NovelSeed } from "@/lib/schema/novel";
 import type { TokenUsage } from "@/lib/agents/types";
 import { z } from "zod";
 
 const ArcPlanResponseSchema = z.object({
   arcs: z.array(ArcPlanSchema),
+  new_characters: z.array(CharacterSchema).default([]),
 });
+
+export interface ArcPlanResult {
+  data: ArcPlan[];
+  newCharacters: Character[];
+  usage: TokenUsage;
+}
 
 export async function generateArcPlans(
   seed: NovelSeed,
   part: PartPlan,
   previousPartSummary?: string,
-): Promise<{ data: ArcPlan[]; usage: TokenUsage }> {
+): Promise<ArcPlanResult> {
   const agent = getAgent();
   const prompt = getArcPlanPrompt(seed, part, previousPartSummary);
 
@@ -27,5 +35,15 @@ export async function generateArcPlans(
     taskId: `arc-plan-${part.id}`,
   });
 
-  return { data: result.data.arcs, usage: result.usage };
+  // Filter out characters that already exist in seed
+  const existingIds = new Set(seed.characters.map((c) => c.id));
+  const newCharacters = result.data.new_characters.filter(
+    (c) => !existingIds.has(c.id),
+  );
+
+  return {
+    data: result.data.arcs,
+    newCharacters,
+    usage: result.usage,
+  };
 }

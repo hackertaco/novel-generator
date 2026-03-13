@@ -103,6 +103,12 @@ export class Orchestrator {
 
         const arcResult = await generateArcPlans(seed, needs.part);
         needs.part.arcs = arcResult.data;
+
+        // Merge new characters into seed
+        if (arcResult.newCharacters.length > 0) {
+          seed.characters.push(...arcResult.newCharacters);
+        }
+
         this.options.onPlanUpdate?.(this.options.masterPlan);
         yield { type: "plan_update", plan: this.options.masterPlan };
 

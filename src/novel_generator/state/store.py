@@ -105,3 +105,17 @@ class StateStore:
             "total_chapters": total,
             "progress_percent": (current / total * 100) if total > 0 else 0,
         }
+
+    def update_progress(self, last_chapter: int) -> None:
+        """Update progress tracking.
+
+        Args:
+            last_chapter: The last successfully generated chapter number
+        """
+        progress_path = self.state_dir / "progress.json"
+        progress = {
+            "last_generated": last_chapter,
+            "updated_at": __import__("datetime").datetime.now().isoformat(),
+        }
+        with open(progress_path, "w", encoding="utf-8") as f:
+            json.dump(progress, f, ensure_ascii=False, indent=2)

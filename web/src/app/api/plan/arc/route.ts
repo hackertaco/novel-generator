@@ -15,7 +15,11 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await generateArcPlans(seed, part, previousPartSummary);
-    return NextResponse.json({ arcs: result.data, usage: result.usage });
+    return NextResponse.json({
+      arcs: result.data,
+      newCharacters: result.newCharacters,
+      usage: result.usage,
+    });
   } catch (err) {
     console.error("[plan/arc] Error:", err);
     const message = err instanceof Error ? err.message : "아크 플랜 생성 실패";

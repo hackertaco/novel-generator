@@ -1,0 +1,199 @@
+import { z } from "zod";
+
+import { CharacterSchema, type Character } from "./character";
+import {
+  ForeshadowingSchema,
+  type Foreshadowing,
+  type ForeshadowingAction,
+  shouldAct,
+} from "./foreshadowing";
+
+// --- Schemas ---
+
+export const PlotArcSchema = z.object({
+  id: z.string().describe("Arc identifier (e.g., 'arc_1')"),
+  name: z.string().describe("Arc name (e.g., '귀환편')"),
+  start_chapter: z.number().int().describe("Starting chapter"),
+  end_chapter: z.number().int().describe("Ending chapter"),
+  summary: z.string().describe("Arc summary"),
+  key_events: z.array(z.string()).describe("Major events in this arc"),
+  climax_chapter: z.number().int().describe("Chapter with arc climax"),
+});
+
+export type PlotArc = z.infer<typeof PlotArcSchema>;
+
+export const ChapterOutlineSchema = z.object({
+  chapter_number: z.number().int(),
+  title: z.string(),
+  arc_id: z.string(),
+  one_liner: z.string().describe("One sentence description"),
+  key_points: z.array(z.string()).default([]).describe("Key plot points"),
+  characters_involved: z.array(z.string()).default([]),
+  tension_level: z
+    .number()
+    .int()
+    .min(1)
+    .max(10)
+    .default(5)
+    .describe("Tension level 1-10"),
+});
+
+export type ChapterOutline = z.infer<typeof ChapterOutlineSchema>;
+
+export const StyleGuideSchema = z.object({
+  max_paragraph_length: z
+    .number()
+    .int()
+    .default(3)
+    .describe("Max sentences per paragraph"),
+  dialogue_ratio: z
+    .number()
+    .min(0)
+    .max(1)
+    .default(0.6)
+    .describe("Target dialogue ratio"),
+  sentence_style: z
+    .string()
+    .default("short")
+    .describe("Sentence style: short, punchy"),
+  hook_ending: z
+    .boolean()
+    .default(true)
+    .describe("Each chapter ends with hook"),
+  pov: z.string().default("1인칭").describe("Point of view"),
+  tense: z.string().default("과거형").describe("Tense"),
+  formatting_rules: z.array(z.string()).default([
+    "문단은 3문장 이하로",
+    "대사 후 긴 지문 금지",
+    "클리셰 표현 사용 가능 (장르 특성)",
+    "매 회차 끝은 궁금증 유발",
+  ]),
+});
+
+export type StyleGuide = z.infer<typeof StyleGuideSchema>;
+
+// Helper: convert array to record when LLM outputs wrong format
+function arrayToRecord(v: unknown): unknown {
+  if (Array.isArray(v)) {
+    const record: Record<string, string> = {};
+    for (const item of v) {
+      if (typeof item === "string") {
+        const [key, ...rest] = item.split(/[:：]\s*/);
+        record[key.trim()] = rest.join(":").trim() || key.trim();
+      } else if (typeof item === "object" && item !== null) {
+        // Handle [{name: "x", description: "y"}] format
+        const obj = item as Record<string, unknown>;
+        const name = String(obj.name || obj.id || obj.key || Object.values(obj)[0] || "");
+        const desc = String(obj.description || obj.desc || obj.value || Object.values(obj)[1] || name);
+        if (name) record[name] = desc;
+      }
+    }
+    return record;
+  }
+  return v;
+}
+
+export const WorldSettingSchema = z.object({
+  name: z.string().describe("World/setting name"),
+  genre: z.string().describe("Genre (판타지, 현대, 무협, etc.)"),
+  sub_genre: z.string().describe("Sub-genre (회귀, 빙의, 헌터, etc.)"),
+  time_period: z.string().describe("Time period or era"),
+  magic_system: z
+    .string()
+    .nullable()
+    .default(null)
+    .describe("Magic/power system"),
+  key_locations: z
+    .preprocess(arrayToRecord, z.record(z.string(), z.string()))
+    .default({})
+    .describe("Important locations"),
+  factions: z
+    .preprocess(arrayToRecord, z.record(z.string(), z.string()))
+    .default({})
+    .describe("Important groups/factions"),
+  rules: z
+    .array(z.string())
+    .default([])
+    .describe("World rules and constraints"),
+});
+
+export type WorldSetting = z.infer<typeof WorldSettingSchema>;
+
+export const NovelSeedSchema = z.object({
+  // Meta
+  title: z.string().describe("Novel title"),
+  logline: z.string().describe("One-sentence premise"),
+  total_chapters: z.number().int().describe("Target total chapters"),
+
+  // World
+  world: WorldSettingSchema,
+
+  // Characters (fixed, never compressed)
+  characters: z.array(CharacterSchema).default([]),
+
+  // Plot structure
+  arcs: z.array(PlotArcSchema).default([]),
+  chapter_outlines: z.array(ChapterOutlineSchema).default([]),
+
+  // Foreshadowing (timeline set here)
+  foreshadowing: z.array(ForeshadowingSchema).default([]),
+
+  // Style (fixed)
+  style: StyleGuideSchema.default({
+    max_paragraph_length: 3,
+    dialogue_ratio: 0.6,
+    sentence_style: "short",
+    hook_ending: true,
+    pov: "1인칭",
+    tense: "과거형",
+    formatting_rules: [
+      "문단은 3문장 이하로",
+      "대사 후 긴 지문 금지",
+      "클리셰 표현 사용 가능 (장르 특성)",
+      "매 회차 끝은 궁금증 유발",
+    ],
+  }),
+});
+
+export type NovelSeed = z.infer<typeof NovelSeedSchema>;
+
+// --- Helper Functions ---
+
+/**
+ * Get character by ID from the novel seed.
+ */
+export function getCharacter(
+  seed: NovelSeed,
+  characterId: string,
+): Character | undefined {
+  return seed.characters.find((char) => char.id === characterId);
+}
+
+/**
+ * Get the arc that contains the given chapter.
+ */
+export function getArcForChapter(
+  seed: NovelSeed,
+  chapter: number,
+): PlotArc | undefined {
+  return seed.arcs.find(
+    (arc) => arc.start_chapter <= chapter && chapter <= arc.end_chapter,
+  );
+}
+
+/**
+ * Get all foreshadowing actions needed for the given chapter.
+ */
+export function getForeshadowingActions(
+  seed: NovelSeed,
+  chapter: number,
+): { foreshadowing: Foreshadowing; action: ForeshadowingAction }[] {
+  const results: { foreshadowing: Foreshadowing; action: ForeshadowingAction }[] = [];
+  for (const fs of seed.foreshadowing) {
+    const action = shouldAct(fs, chapter);
+    if (action !== null) {
+      results.push({ foreshadowing: fs, action });
+    }
+  }
+  return results;
+}
