@@ -39,29 +39,53 @@ const DEFAULT_STRUCTURAL_CONSTRAINTS = [
   "주인공의 동반자/반려가 진짜 주인공인 이야기",
 ];
 
-const ROMANCE_PROTAGONIST_TYPES = [
-  // 클래식 로판
-  "정략결혼을 앞둔 영애가", "전생에서 버림받은 황비가", "소설 속 악녀로 빙의한 여주가",
-  "냉혈 공작의 계약 부인이", "왕궁의 시녀로 위장 잠입한 귀족이", "저주받은 기사단장이",
-  "적국의 공주가", "밤마다 악몽을 꾸는 성녀가", "가짜 성녀로 살아가는 평민이",
-  // 육아/가족물
-  "졸지에 폭군의 아이 엄마가 된 시녀가", "남주의 입양딸로 빙의한 아이가 자라서",
-  "악역 계모로 빙의했지만 아이를 진심으로 키우기 시작한 여주가",
+/**
+ * Structured protagonist type with compatible archetype constraints.
+ * Prevents nonsensical combos like "남주의 입양딸" + "집착광공 남주".
+ */
+interface ProtagonistType {
+  text: string;
+  /** Allowed male archetype IDs. If empty, all are allowed. */
+  allowed_male: string[];
+  /** Allowed female archetype IDs. If empty, all are allowed. */
+  allowed_female: string[];
+}
+
+const ROMANCE_PROTAGONIST_ENTRIES: ProtagonistType[] = [
+  // 클래식 로판 — 대부분 조합 자유
+  { text: "정략결혼을 앞둔 영애가", allowed_male: [], allowed_female: [] },
+  { text: "전생에서 버림받은 황비가", allowed_male: ["regretful", "obsessive", "tyrant"], allowed_female: ["strong_willed", "wounded", "schemer"] },
+  { text: "소설 속 악녀로 빙의한 여주가", allowed_male: [], allowed_female: ["schemer", "strong_willed", "cheerful"] },
+  { text: "냉혈 공작의 계약 부인이", allowed_male: ["obsessive", "tsundere_m", "tyrant"], allowed_female: [] },
+  { text: "왕궁의 시녀로 위장 잠입한 귀족이", allowed_male: ["tyrant", "tsundere_m"], allowed_female: ["schemer", "strong_willed"] },
+  { text: "적국의 공주가", allowed_male: ["tyrant", "tsundere_m", "obsessive"], allowed_female: ["strong_willed", "schemer"] },
+  { text: "밤마다 악몽을 꾸는 성녀가", allowed_male: ["sweet", "obsessive"], allowed_female: ["wounded", "innocent"] },
+  { text: "가짜 성녀로 살아가는 평민이", allowed_male: [], allowed_female: ["schemer", "cheerful", "indifferent"] },
+  // 육아/가족물 — 남주는 다정남/츤데레만 (부성애 캐릭터)
+  { text: "졸지에 폭군의 아이 엄마가 된 시녀가", allowed_male: ["tyrant", "tsundere_m"], allowed_female: ["cheerful", "wounded", "innocent"] },
+  { text: "악역 계모로 빙의했지만 아이를 진심으로 키우기 시작한 여주가", allowed_male: ["sweet", "tsundere_m", "puppy"], allowed_female: ["cheerful", "strong_willed"] },
+  { text: "남주의 아이를 대신 키우게 된 시녀가", allowed_male: ["tsundere_m", "sweet", "tyrant"], allowed_female: ["cheerful", "wounded", "innocent"] },
   // 영지/경영물
-  "망한 영지에 빙의해 영지를 살려야 하는 관리인이", "빚더미 가문을 물려받은 영애가",
-  "3년 계약으로 영지를 관리하다 과로사한 뒤 회귀한 관리인이",
+  { text: "망한 영지에 빙의해 영지를 살려야 하는 관리인이", allowed_male: ["tsundere_m", "sweet"], allowed_female: ["strong_willed", "schemer"] },
+  { text: "빚더미 가문을 물려받은 영애가", allowed_male: [], allowed_female: ["strong_willed", "schemer"] },
+  { text: "3년 계약으로 영지를 관리하다 과로사한 뒤 회귀한 관리인이", allowed_male: ["regretful", "sweet"], allowed_female: ["strong_willed", "indifferent"] },
   // 정치/여제물
-  "황제 자리를 노리는 유일한 황녀가", "후궁에서 살아남아야 하는 이세계인이",
-  "외교관으로 위장한 첩보원 귀족이",
+  { text: "황제 자리를 노리는 유일한 황녀가", allowed_male: ["tsundere_m", "obsessive", "sweet"], allowed_female: ["strong_willed", "schemer"] },
+  { text: "후궁에서 살아남아야 하는 이세계인이", allowed_male: ["tyrant", "obsessive"], allowed_female: ["schemer", "strong_willed", "cheerful"] },
+  { text: "외교관으로 위장한 첩보원 귀족이", allowed_male: ["tsundere_m", "sweet"], allowed_female: ["schemer", "strong_willed"] },
   // 시한부/저주
-  "시한부 선고를 받은 공주가", "저주로 밤마다 괴물로 변하는 영애가",
-  "수명이 1년밖에 남지 않은 성녀가",
+  { text: "시한부 선고를 받은 공주가", allowed_male: ["obsessive", "sweet", "regretful"], allowed_female: ["wounded", "cheerful"] },
+  { text: "저주로 밤마다 괴물로 변하는 영애가", allowed_male: ["sweet", "obsessive"], allowed_female: ["wounded", "indifferent"] },
+  { text: "수명이 1년밖에 남지 않은 성녀가", allowed_male: ["obsessive", "sweet", "puppy"], allowed_female: ["wounded", "cheerful", "indifferent"] },
   // 착각물/코미디
-  "죽는 연기를 했는데 진짜 대단한 사람으로 착각당한 엑스트라가",
-  "호감도 시스템이 눈에 보이는 빙의자가",
+  { text: "죽는 연기를 했는데 진짜 대단한 사람으로 착각당한 엑스트라가", allowed_male: ["puppy", "tsundere_m"], allowed_female: ["cheerful", "indifferent"] },
+  { text: "호감도 시스템이 눈에 보이는 빙의자가", allowed_male: [], allowed_female: ["cheerful", "schemer", "strong_willed"] },
   // 수인물
-  "흑표범 수인 공작의 계약 동반자가 된 토끼 수인이",
+  { text: "흑표범 수인 공작의 계약 동반자가 된 토끼 수인이", allowed_male: ["tsundere_m", "obsessive"], allowed_female: ["cheerful", "innocent"] },
 ];
+
+// Flat array for backward compat with pickRandom
+const ROMANCE_PROTAGONIST_TYPES = ROMANCE_PROTAGONIST_ENTRIES.map((e) => e.text);
 
 const ROMANCE_STARTING_SITUATIONS = [
   // 관계 시작 트리거
@@ -143,41 +167,39 @@ export function pickRandom<T>(arr: T[], count: number): T[] {
  * Build the creative seeds prompt with genre-aware random constraints.
  */
 /**
- * Pick 3 distinct archetype pairings for the 3 plot candidates.
- * Each plot gets a different male×female archetype combo for diversity.
+ * Pick archetype pairing that's compatible with a given protagonist type.
+ * Uses the protagonist's allowed_male/allowed_female constraints to filter.
  */
-function pickArchetypePairings(genre: string): Array<{ maleLabel: string; femaleLabel: string; comboDesc: string }> {
+function pickArchetypePairingForProtagonist(
+  protagonistText: string,
+  genre: string,
+): { maleLabel: string; femaleLabel: string; comboDesc: string } {
   const pool = getGenrePool(genre);
-  const pairings: Array<{ maleLabel: string; femaleLabel: string; comboDesc: string }> = [];
+  const entry = ROMANCE_PROTAGONIST_ENTRIES.find((e) => e.text === protagonistText);
 
-  // Pick 3 different male archetypes, each with a compatible female
-  const maleIds = pickRandom(pool.male_leads, Math.min(3, pool.male_leads.length));
+  // Filter male archetypes: use protagonist constraint if set, else genre pool
+  const allowedMaleIds = entry?.allowed_male?.length
+    ? entry.allowed_male.filter((id) => pool.male_leads.includes(id))
+    : pool.male_leads;
+  const maleId = pickRandom(allowedMaleIds.length > 0 ? allowedMaleIds : pool.male_leads, 1)[0];
+  const male = getMaleArchetype(maleId)!;
 
-  for (const maleId of maleIds) {
-    const male = getMaleArchetype(maleId);
-    if (!male) continue;
+  // Filter female archetypes: use protagonist constraint, then male compatibility, then genre pool
+  const allowedFemaleIds = entry?.allowed_female?.length
+    ? entry.allowed_female.filter((id) => pool.female_leads.includes(id))
+    : pool.female_leads;
+  // Prefer archetypes that are both allowed AND compatible with the male
+  const compatAndAllowed = allowedFemaleIds.filter((fId) => male.compatible_with.includes(fId));
+  const femaleId = compatAndAllowed.length > 0
+    ? pickRandom(compatAndAllowed, 1)[0]
+    : pickRandom(allowedFemaleIds.length > 0 ? allowedFemaleIds : pool.female_leads, 1)[0];
+  const female = getFemaleArchetype(femaleId)!;
 
-    // Find a compatible female in the genre pool
-    const compatibleInPool = male.compatible_with.filter((fId) => pool.female_leads.includes(fId));
-    const femaleId = compatibleInPool.length > 0
-      ? pickRandom(compatibleInPool, 1)[0]
-      : pool.female_leads[0];
-    const female = getFemaleArchetype(femaleId);
-    if (!female) continue;
-
-    pairings.push({
-      maleLabel: male.label,
-      femaleLabel: female.label,
-      comboDesc: `${male.label} 남주(${male.description.split(".")[0]}) × ${female.label} 여주(${female.description.split(".")[0]})`,
-    });
-  }
-
-  // Ensure we have exactly 3 (fill with defaults if needed)
-  while (pairings.length < 3) {
-    pairings.push(pairings[0] ?? { maleLabel: "다정남형", femaleLabel: "사이다형", comboDesc: "다정남형 × 사이다형" });
-  }
-
-  return pairings;
+  return {
+    maleLabel: male.label,
+    femaleLabel: female.label,
+    comboDesc: `${male.label} 남주(${male.description.split(".")[0]}) × ${female.label} 여주(${female.description.split(".")[0]})`,
+  };
 }
 
 export function buildCreativeSeeds(genre: string): string {
@@ -185,7 +207,22 @@ export function buildCreativeSeeds(genre: string): string {
   const protagonists = pickRandom(protPool, 3);
   const situations = pickRandom(sitPool, 3);
   const structures = pickRandom(strPool, 3);
-  const archetypePairs = pickArchetypePairings(genre);
+  // Pick archetype pairings that are compatible with each protagonist type
+  const pairA = isRomanceGenre(genre) ? pickArchetypePairingForProtagonist(protagonists[0], genre) : { maleLabel: "", femaleLabel: "", comboDesc: "" };
+  const pairB = isRomanceGenre(genre) ? pickArchetypePairingForProtagonist(protagonists[1], genre) : { maleLabel: "", femaleLabel: "", comboDesc: "" };
+  const pairC = isRomanceGenre(genre) ? pickArchetypePairingForProtagonist(protagonists[2], genre) : { maleLabel: "", femaleLabel: "", comboDesc: "" };
+
+  const archetypeSection = isRomanceGenre(genre) ? `
+  캐릭터 조합: ${pairA.comboDesc}
+  → male_archetype: "${pairA.maleLabel}", female_archetype: "${pairA.femaleLabel}"` : "";
+
+  const archetypeSectionB = isRomanceGenre(genre) ? `
+  캐릭터 조합: ${pairB.comboDesc}
+  → male_archetype: "${pairB.maleLabel}", female_archetype: "${pairB.femaleLabel}"` : "";
+
+  const archetypeSectionC = isRomanceGenre(genre) ? `
+  캐릭터 조합: ${pairC.comboDesc}
+  → male_archetype: "${pairC.maleLabel}", female_archetype: "${pairC.femaleLabel}"` : "";
 
   return `장르: ${genre}
 
@@ -193,25 +230,20 @@ export function buildCreativeSeeds(genre: string): string {
 이 제약조건을 기반으로 각 플롯을 만들되, 장르에 맞게 자유롭게 변형하세요.
 
 **플롯 A**: ${protagonists[0]} ${situations[0]}에 처한 이야기.
-  구조적 특징: ${structures[0]}
-  캐릭터 조합: ${archetypePairs[0].comboDesc}
-  → male_archetype: "${archetypePairs[0].maleLabel}", female_archetype: "${archetypePairs[0].femaleLabel}"
+  구조적 특징: ${structures[0]}${archetypeSection}
 
 **플롯 B**: ${protagonists[1]} ${situations[1]}에 처한 이야기.
-  구조적 특징: ${structures[1]}
-  캐릭터 조합: ${archetypePairs[1].comboDesc}
-  → male_archetype: "${archetypePairs[1].maleLabel}", female_archetype: "${archetypePairs[1].femaleLabel}"
+  구조적 특징: ${structures[1]}${archetypeSectionB}
 
 **플롯 C**: ${protagonists[2]} ${situations[2]}에 처한 이야기.
-  구조적 특징: ${structures[2]}
-  캐릭터 조합: ${archetypePairs[2].comboDesc}
-  → male_archetype: "${archetypePairs[2].maleLabel}", female_archetype: "${archetypePairs[2].femaleLabel}"
+  구조적 특징: ${structures[2]}${archetypeSectionC}
 
 ## 중요 지침
 - 각 플롯의 logline에 캐릭터 아키타입의 특성이 자연스럽게 묻어나야 합니다
 - male_archetype, female_archetype 필드에 위에 지정된 라벨을 그대로 넣으세요
 - 3개 플롯은 서로 **완전히 다른 캐릭터 조합과 이야기**여야 합니다
-- 조건이 장르와 안 맞으면 장르에 맞게 변형해도 됩니다`;
+- 조건이 장르와 안 맞으면 장르에 맞게 변형해도 됩니다
+- **주인공 유형과 캐릭터 아키타입이 논리적으로 맞아야 합니다** (예: 육아물 주인공이면 남주는 부성애 캐릭터여야 함)`;
 }
 
 export interface PlotContext {
