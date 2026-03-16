@@ -104,14 +104,34 @@ export const useNovelStore = create<NovelState>()(
     (set) => ({
       ...initialState,
 
-      setGenre: (genre) => set({ genre, plots: [], selectedPlot: null, seed: null }),
+      // Hierarchical reset: changing a parent step clears all child steps
+      setGenre: (genre) => set({
+        genre,
+        // Clear: plots → seed → plan → chapters
+        plots: [], selectedPlot: null,
+        seed: null,
+        masterPlan: null, planningStage: "idle" as const,
+        chapters: {}, summaries: [], currentChapter: 0, arcSummaries: {},
+        pipelineStage: "idle", pipelineRetries: 0, pipelineLogs: [],
+      }),
       setPlots: (plots) => set({ plots }),
       selectPlot: (plot) =>
-        set(() => {
-          // Always reset seed/chapters when selecting a plot to force re-generation
-          return { selectedPlot: plot, seed: null, chapters: {}, summaries: [], currentChapter: 0, masterPlan: null, planningStage: "idle" as const };
-        }),
-      setSeed: (seed) => set({ seed }),
+        set(() => ({
+          selectedPlot: plot,
+          // Clear: seed → plan → chapters
+          seed: null,
+          masterPlan: null, planningStage: "idle" as const,
+          chapters: {}, summaries: [], currentChapter: 0, arcSummaries: {},
+          pipelineStage: "idle", pipelineRetries: 0, pipelineLogs: [],
+        })),
+      setSeed: (seed) => set((s) => ({
+        seed,
+        // When seed changes, clear plan → chapters (but not if just setting null)
+        ...(seed && s.seed && seed !== s.seed ? {
+          masterPlan: null, planningStage: "idle" as const,
+          chapters: {}, summaries: [], currentChapter: 0, arcSummaries: {},
+        } : {}),
+      })),
       setIsGenerating: (v) => set({ isGenerating: v }),
       setStreamingText: (text) => set({ streamingText: text }),
       appendStreamingText: (chunk) =>
