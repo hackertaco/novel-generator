@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Link from "next/link";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,9 +31,9 @@ export default function RootLayout({
         <div className="min-h-screen bg-[#0a0a0a]">
           <header className="border-b border-zinc-800 px-6 py-4">
             <div className="mx-auto flex max-w-4xl items-center justify-between">
-              <a href="/" className="text-lg font-bold text-white">
+              <Link href="/" className="text-lg font-bold text-white">
                 웹소설 생성기
-              </a>
+              </Link>
               <span className="text-xs text-zinc-500">AI-Powered</span>
             </div>
           </header>

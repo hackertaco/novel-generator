@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
-import type { ChapterContext, PipelineAgent, RuleIssue, Snapshot, CriticReport, CriticIssue, LifecycleEvent } from "@/lib/agents/pipeline";
+import type { ChapterContext } from "@/lib/agents/pipeline";
+import type { NovelSeed } from "@/lib/schema/novel";
 import { accumulateUsage } from "@/lib/agents/pipeline";
 
 describe("Pipeline types", () => {
   it("ChapterContext has all required fields", () => {
     const ctx: ChapterContext = {
-      seed: {} as any,
+      seed: {} as unknown as NovelSeed,
       chapterNumber: 1,
       previousSummaries: [],
       text: "test",

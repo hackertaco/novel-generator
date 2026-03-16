@@ -3,6 +3,9 @@ import type { ChapterSummary } from "@/lib/schema/chapter";
 import type { ChapterBlueprint } from "@/lib/schema/planning";
 import type { TokenUsage } from "@/lib/agents/types";
 
+/** Lightweight summary passed between pipeline stages (not the full ChapterSummary). */
+export type PreviousChapterSummary = { chapter: number; title: string; summary: string };
+
 // --- Issue types ---
 
 export interface RuleIssue {
@@ -40,7 +43,7 @@ export interface ChapterContext {
   seed: NovelSeed;
   chapterNumber: number;
   blueprint?: ChapterBlueprint;
-  previousSummaries: ChapterSummary[];
+  previousSummaries: PreviousChapterSummary[];
   text: string;
   snapshots: Snapshot[];
   bestScore: number;

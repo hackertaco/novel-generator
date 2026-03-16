@@ -159,6 +159,8 @@ const MOCK_SEED: NovelSeed = {
       planted_at: 1,
       hints_at: [5, 10, 20],
       reveal_at: 28,
+      status: "pending",
+      hint_count: 0,
     },
   ],
   style: {

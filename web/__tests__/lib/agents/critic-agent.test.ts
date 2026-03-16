@@ -6,6 +6,7 @@ import {
   buildCriticPrompt,
 } from "@/lib/agents/critic-agent";
 import type { RuleIssue } from "@/lib/agents/pipeline";
+import type { NovelSeed } from "@/lib/schema/novel";
 
 describe("parseCriticResponse", () => {
   it("parses valid JSON response into CriticReport", () => {
@@ -111,7 +112,7 @@ describe("buildCriticPrompt", () => {
     const prompt = buildCriticPrompt(
       "소설 본문 텍스트",
       [],
-      { world: { genre: "현대 판타지" } } as any
+      { world: { genre: "현대 판타지" } } as unknown as NovelSeed
     );
     expect(prompt).toContain("소설 본문 텍스트");
   });
@@ -122,14 +123,14 @@ describe("buildCriticPrompt", () => {
     ];
     const prompt = buildCriticPrompt("본문", ruleIssues, {
       world: { genre: "로맨스" },
-    } as any);
+    } as unknown as NovelSeed);
     expect(prompt).toContain("~였다 3연속");
   });
 
   it("includes genre info", () => {
     const prompt = buildCriticPrompt("본문", [], {
       world: { genre: "무협" },
-    } as any);
+    } as unknown as NovelSeed);
     expect(prompt).toContain("무협");
   });
 });

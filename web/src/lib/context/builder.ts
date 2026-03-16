@@ -42,17 +42,25 @@ ${mc.voice.sample_dialogues.slice(0, 2).map((d) => `- "${d}"`).join("\n")}
 `);
   }
 
-  // Chapter 1: just one line about the situation
+  // Chapter 1: just the situation, no plot details
   const outline = seed.chapter_outlines.find(
     (o) => o.chapter_number === chapterNum,
   );
   if (outline) {
-    parts.push(`# ${chapterNum}화
+    if (chapterNum === 1) {
+      // Ch1: only show the mood/setting, not the plot. Strip out specific events.
+      parts.push(`# 1화
+분위기: ${outline.one_liner}
+(주의: 위 내용은 이 소설 전체의 출발점입니다. 1화에서 다 보여줄 필요 없습니다. 주인공의 일상 한 장면만 쓰세요.)
+`);
+    } else {
+      parts.push(`# ${chapterNum}화
 ${outline.one_liner}
 `);
-    // Ch1: no key_points at all. Ch2-3: max 1.
-    if (chapterNum >= 2 && outline.key_points.length > 0) {
-      parts.push(`포인트: ${outline.key_points[0]}`);
+      // Ch2-3: max 1 key_point.
+      if (chapterNum >= 2 && outline.key_points.length > 0) {
+        parts.push(`포인트: ${outline.key_points[0]}`);
+      }
     }
   }
 

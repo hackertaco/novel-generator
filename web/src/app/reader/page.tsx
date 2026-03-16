@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useNovelStore } from "@/hooks/useNovelStore";
 import { useStreamingGeneration } from "@/hooks/useStreamingGeneration";
@@ -9,6 +9,14 @@ import GenerationControls from "@/components/reader/GenerationControls";
 import EvaluationBadge from "@/components/reader/EvaluationBadge";
 
 export default function ReaderPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ReaderPageInner />
+    </Suspense>
+  );
+}
+
+function ReaderPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const {

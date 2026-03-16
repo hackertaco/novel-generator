@@ -72,7 +72,6 @@ export async function POST(request: NextRequest) {
           });
 
           // Manually iterate to capture the generator return value (TokenUsage)
-          let usage: TokenUsage | undefined;
           let result = await llmStream.next();
           while (!result.done) {
             fullText += result.value;
@@ -80,7 +79,7 @@ export async function POST(request: NextRequest) {
             result = await llmStream.next();
           }
           // result.done is true, result.value is the return value (TokenUsage)
-          usage = result.value;
+          const usage: TokenUsage | undefined = result.value;
 
           // Send usage event
           if (usage) {

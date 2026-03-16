@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { ZodError, ZodIssueCode } from "zod";
+import { ZodError, ZodIssueCode, type ZodIssue } from "zod";
 import {
   extractJsonBlock,
   extractYamlBlock,
@@ -189,7 +189,7 @@ describe("formatZodErrorKorean", () => {
         received: "undefined",
         path: ["name"],
         message: "Required",
-      },
+      } as unknown as ZodIssue,
     ]);
     const result = formatZodErrorKorean(error);
     expect(result).toBe("필드 'name'이(가) 누락되었습니다. 반드시 포함해주세요.");
@@ -203,7 +203,7 @@ describe("formatZodErrorKorean", () => {
         received: "null",
         path: ["title"],
         message: "Expected string, received null",
-      },
+      } as unknown as ZodIssue,
     ]);
     const result = formatZodErrorKorean(error);
     expect(result).toBe("필드 'title'이(가) 누락되었습니다. 반드시 포함해주세요.");
@@ -217,7 +217,7 @@ describe("formatZodErrorKorean", () => {
         received: "string",
         path: ["age"],
         message: "Expected number, received string",
-      },
+      } as unknown as ZodIssue,
     ]);
     const result = formatZodErrorKorean(error);
     expect(result).toBe(
@@ -234,7 +234,7 @@ describe("formatZodErrorKorean", () => {
         inclusive: true,
         path: ["content"],
         message: "String must contain at least 1 character(s)",
-      },
+      } as unknown as ZodIssue,
     ]);
     const result = formatZodErrorKorean(error);
     expect(result).toBe(
@@ -251,7 +251,7 @@ describe("formatZodErrorKorean", () => {
         inclusive: true,
         path: ["score"],
         message: "Number must be less than or equal to 100",
-      },
+      } as unknown as ZodIssue,
     ]);
     const result = formatZodErrorKorean(error);
     expect(result).toBe(
@@ -267,7 +267,7 @@ describe("formatZodErrorKorean", () => {
         received: "undefined",
         path: ["characters", 0, "name"],
         message: "Required",
-      },
+      } as unknown as ZodIssue,
     ]);
     const result = formatZodErrorKorean(error);
     expect(result).toBe(
@@ -283,7 +283,7 @@ describe("formatZodErrorKorean", () => {
         received: "undefined",
         path: ["a"],
         message: "Required",
-      },
+      } as unknown as ZodIssue,
       {
         code: ZodIssueCode.too_small,
         minimum: 1,
@@ -291,7 +291,7 @@ describe("formatZodErrorKorean", () => {
         inclusive: true,
         path: ["b"],
         message: "Array must contain at least 1 element(s)",
-      },
+      } as unknown as ZodIssue,
     ]);
     const result = formatZodErrorKorean(error);
     const lines = result.split("\n");

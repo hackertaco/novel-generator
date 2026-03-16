@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { LifecycleEvent, ChapterContext, PipelineAgent } from "@/lib/agents/pipeline";
 import type { ChapterLifecycleOptions } from "@/lib/agents/chapter-lifecycle";
+import type { NovelSeed } from "@/lib/schema/novel";
 
 describe("Pipeline integration", () => {
   it("LifecycleEvent type includes new stage values", () => {
@@ -21,7 +22,7 @@ describe("Pipeline integration", () => {
 
   it("preserves existing ChapterLifecycleOptions interface", () => {
     const options: ChapterLifecycleOptions = {
-      seed: { world: { genre: "현대 판타지" } } as any,
+      seed: { world: { genre: "현대 판타지" } } as unknown as NovelSeed,
       chapterNumber: 1,
       previousSummaries: [],
       qualityThreshold: 0.85,
@@ -66,7 +67,7 @@ describe("Pipeline integration", () => {
 
     const pipeline = [agentA, agentB];
     const ctx = {
-      seed: {} as any,
+      seed: {} as unknown as NovelSeed,
       chapterNumber: 1,
       previousSummaries: [],
       text: "",

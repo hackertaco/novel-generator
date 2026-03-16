@@ -1,10 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import { QualityLoop } from "@/lib/agents/quality-loop";
-import type { ChapterContext, CriticReport, CriticIssue } from "@/lib/agents/pipeline";
+import type { ChapterContext, CriticIssue, CriticReport, LifecycleEvent } from "@/lib/agents/pipeline";
+import type { CriticAgent } from "@/lib/agents/critic-agent";
+import type { SurgeonAgent } from "@/lib/agents/surgeon-agent";
+import type { NovelSeed } from "@/lib/schema/novel";
 
 function makeCtx(text = "문단0\n\n문단1\n\n문단2"): ChapterContext {
   return {
-    seed: { world: { genre: "현대 판타지" }, characters: [], foreshadowing: [], arcs: [], chapter_outlines: [], style: {} } as any,
+    seed: { world: { genre: "현대 판타지" }, characters: [], foreshadowing: [], arcs: [], chapter_outlines: [], style: {} } as unknown as NovelSeed,
     chapterNumber: 1,
     previousSummaries: [],
     text,
@@ -33,7 +36,7 @@ const minorIssue: CriticIssue = {
   description: "어미 반복", severity: "minor", suggestedFix: "변경",
 };
 
-async function collectEvents(gen: AsyncGenerator<any>) {
+async function collectEvents(gen: AsyncGenerator<LifecycleEvent>) {
   const events = [];
   for await (const e of gen) events.push(e);
   return events;
@@ -43,7 +46,7 @@ describe("QualityLoop", () => {
   it("stops when score meets threshold on first evaluation", async () => {
     const critic = { evaluate: vi.fn().mockResolvedValue(makeReport(0.9)), quickScore: vi.fn() };
     const surgeon = { fix: vi.fn() };
-    const loop = new QualityLoop(critic as any, surgeon as any);
+    const loop = new QualityLoop(critic as unknown as CriticAgent, surgeon as unknown as SurgeonAgent);
     const ctx = makeCtx();
     const events = await collectEvents(loop.run(ctx));
     expect(events.some(e => e.type === "evaluation")).toBe(true);
@@ -57,7 +60,7 @@ describe("QualityLoop", () => {
     };
     const surgeonFix = vi.fn(async function*() { yield "수정됨"; return { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 }; });
     const surgeon = { fix: surgeonFix };
-    const loop = new QualityLoop(critic as any, surgeon as any);
+    const loop = new QualityLoop(critic as unknown as CriticAgent, surgeon as unknown as SurgeonAgent);
     const ctx = makeCtx();
     await collectEvents(loop.run(ctx));
     expect(surgeonFix).toHaveBeenCalledTimes(1); // only major, not minor
@@ -70,7 +73,7 @@ describe("QualityLoop", () => {
     };
     const surgeonFix = vi.fn(async function*() { yield "bad text"; return { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 }; });
     const surgeon = { fix: surgeonFix };
-    const loop = new QualityLoop(critic as any, surgeon as any);
+    const loop = new QualityLoop(critic as unknown as CriticAgent, surgeon as unknown as SurgeonAgent);
     const ctx = makeCtx();
     const originalText = ctx.text;
     await collectEvents(loop.run(ctx));
@@ -88,7 +91,7 @@ describe("QualityLoop", () => {
     };
     const surgeonFix = vi.fn(async function*() { yield "ok"; return { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 }; });
     const surgeon = { fix: surgeonFix };
-    const loop = new QualityLoop(critic as any, surgeon as any);
+    const loop = new QualityLoop(critic as unknown as CriticAgent, surgeon as unknown as SurgeonAgent);
     const ctx = makeCtx();
     await collectEvents(loop.run(ctx));
     expect(critic.evaluate.mock.calls.length).toBeLessThanOrEqual(6); // initial + max 5
@@ -99,7 +102,7 @@ describe("QualityLoop", () => {
       evaluate: vi.fn().mockResolvedValue(makeReport(0.9)),
       quickScore: vi.fn(),
     };
-    const loop = new QualityLoop(critic as any, {} as any);
+    const loop = new QualityLoop(critic as unknown as CriticAgent, {} as unknown as SurgeonAgent);
     const ctx = makeCtx();
     await collectEvents(loop.run(ctx));
     expect(ctx.snapshots[0]).toEqual({ text: ctx.text, score: 0.9, iteration: 0 });

@@ -9,4 +9,6 @@ export const PlotOptionSchema = z.object({
   key_twist: z.string(),
 });
 
+export const PlotOptionArraySchema = z.array(PlotOptionSchema);
+
 export type PlotOption = z.infer<typeof PlotOptionSchema>;

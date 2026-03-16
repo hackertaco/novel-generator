@@ -20,7 +20,7 @@ describe("/api/evaluate smoke test", () => {
     characters: [{
       id: "mc", name: "현우", role: "주인공", introduction_chapter: 1,
       voice: { tone: "냉소적", speech_patterns: ["~하지", "알아서 해"], sample_dialogues: ["대사"], personality_core: "냉소적" },
-      backstory: "배경", arc_summary: "성장", state: { level: 1, status: "normal", relationships: {}, inventory: [], secrets_known: [] },
+      backstory: "배경", arc_summary: "성장", state: { level: 1, location: null, status: "normal", relationships: {}, inventory: [], secrets_known: [] },
     }],
     arcs: [{ id: "arc_1", name: "1부", start_chapter: 1, end_chapter: 50, summary: "요약", key_events: [], climax_chapter: 48 }],
     chapter_outlines: [],
