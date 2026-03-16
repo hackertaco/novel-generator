@@ -77,39 +77,33 @@ export async function evolveBlueprintCandidates(
   const prompt = getChapterBlueprintPrompt(seed, arc, previousChapterSummaries);
   const evaluator = new BlueprintEvaluator();
 
-  // Stage 1: Generate 3 candidates
-  const candidates: BlueprintCandidate[] = [];
+  // Stage 1: Generate 3 candidates in parallel
+  const results = await Promise.all(
+    BLUEPRINT_TEMPERATURES.map((temperature, i) =>
+      llmAgent.callStructured({
+        prompt,
+        system: BLUEPRINT_SYSTEM_PROMPT,
+        temperature,
+        maxTokens: 8000,
+        schema: ChapterBlueprintResponseSchema,
+        format: "json",
+        taskId: `blueprint-candidate-${arc.id}-${i + 1}`,
+      }).then((result) => ({
+        blueprints: result.data.chapter_blueprints,
+        temperature,
+        index: i,
+        usage: result.usage,
+      })),
+    ),
+  );
+
+  const candidates: BlueprintCandidate[] = results;
   const totalUsage: TokenUsage = {
-    prompt_tokens: 0,
-    completion_tokens: 0,
-    total_tokens: 0,
-    cost_usd: 0,
+    prompt_tokens: results.reduce((s, r) => s + r.usage.prompt_tokens, 0),
+    completion_tokens: results.reduce((s, r) => s + r.usage.completion_tokens, 0),
+    total_tokens: results.reduce((s, r) => s + r.usage.total_tokens, 0),
+    cost_usd: results.reduce((s, r) => s + r.usage.cost_usd, 0),
   };
-
-  for (let i = 0; i < BLUEPRINT_TEMPERATURES.length; i++) {
-    const temperature = BLUEPRINT_TEMPERATURES[i];
-    const result = await llmAgent.callStructured({
-      prompt,
-      system: BLUEPRINT_SYSTEM_PROMPT,
-      temperature,
-      maxTokens: 8000,
-      schema: ChapterBlueprintResponseSchema,
-      format: "json",
-      taskId: `blueprint-candidate-${arc.id}-${i + 1}`,
-    });
-
-    candidates.push({
-      blueprints: result.data.chapter_blueprints,
-      temperature,
-      index: i,
-      usage: result.usage,
-    });
-
-    totalUsage.prompt_tokens += result.usage.prompt_tokens;
-    totalUsage.completion_tokens += result.usage.completion_tokens;
-    totalUsage.total_tokens += result.usage.total_tokens;
-    totalUsage.cost_usd += result.usage.cost_usd;
-  }
 
   // Stage 2: Evaluate each candidate by merging blueprints into seed
   const scored = candidates.map((candidate) => {

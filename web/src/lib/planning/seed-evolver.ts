@@ -46,39 +46,33 @@ export async function generateSeedCandidates(
   const llmAgent = agent ?? getAgent();
   const prompt = getSeedPrompt(interviewResult);
 
-  const candidates: SeedCandidate[] = [];
+  // Generate all 3 candidates in parallel for speed
+  const results = await Promise.all(
+    SEED_TEMPERATURES.map((temperature, i) =>
+      llmAgent.callStructured({
+        prompt,
+        system: SEED_SYSTEM_PROMPT,
+        temperature,
+        maxTokens: 8000,
+        schema: NovelSeedSchema,
+        format: "yaml",
+        taskId: `seed-generation-candidate-${i + 1}`,
+      }).then((result) => ({
+        seed: result.data,
+        temperature,
+        index: i,
+        usage: result.usage,
+      })),
+    ),
+  );
+
+  const candidates: SeedCandidate[] = results;
   const totalUsage: TokenUsage = {
-    prompt_tokens: 0,
-    completion_tokens: 0,
-    total_tokens: 0,
-    cost_usd: 0,
+    prompt_tokens: results.reduce((s, r) => s + r.usage.prompt_tokens, 0),
+    completion_tokens: results.reduce((s, r) => s + r.usage.completion_tokens, 0),
+    total_tokens: results.reduce((s, r) => s + r.usage.total_tokens, 0),
+    cost_usd: results.reduce((s, r) => s + r.usage.cost_usd, 0),
   };
-
-  for (let i = 0; i < SEED_TEMPERATURES.length; i++) {
-    const temperature = SEED_TEMPERATURES[i];
-
-    const result = await llmAgent.callStructured({
-      prompt,
-      system: SEED_SYSTEM_PROMPT,
-      temperature,
-      maxTokens: 8000,
-      schema: NovelSeedSchema,
-      format: "yaml",
-      taskId: `seed-generation-candidate-${i + 1}`,
-    });
-
-    candidates.push({
-      seed: result.data,
-      temperature,
-      index: i,
-      usage: result.usage,
-    });
-
-    totalUsage.prompt_tokens += result.usage.prompt_tokens;
-    totalUsage.completion_tokens += result.usage.completion_tokens;
-    totalUsage.total_tokens += result.usage.total_tokens;
-    totalUsage.cost_usd += result.usage.cost_usd;
-  }
 
   return { candidates, usage: totalUsage };
 }
