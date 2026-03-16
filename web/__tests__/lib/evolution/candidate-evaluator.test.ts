@@ -44,24 +44,26 @@ const makeMinimalSeed = (): NovelSeed => ({
 // ---------------------------------------------------------------------------
 
 describe("EVALUATOR_WEIGHTS", () => {
-  it("exports EVALUATOR_WEIGHT as 0.25", () => {
-    expect(EVALUATOR_WEIGHT).toBe(0.25);
+  it("exports EVALUATOR_WEIGHT as 0.2", () => {
+    expect(EVALUATOR_WEIGHT).toBe(0.2);
   });
 
-  it("all four weights sum to 1.0", () => {
+  it("all five weights sum to 1.0", () => {
     const sum =
       EVALUATOR_WEIGHTS.pacing_quality +
       EVALUATOR_WEIGHTS.character_introduction +
       EVALUATOR_WEIGHTS.foreshadowing_usage +
-      EVALUATOR_WEIGHTS.genre_alignment;
+      EVALUATOR_WEIGHTS.genre_alignment +
+      EVALUATOR_WEIGHTS.archetype_diversity;
     expect(sum).toBeCloseTo(1.0);
   });
 
-  it("each weight is 0.25", () => {
-    expect(EVALUATOR_WEIGHTS.pacing_quality).toBe(0.25);
-    expect(EVALUATOR_WEIGHTS.character_introduction).toBe(0.25);
-    expect(EVALUATOR_WEIGHTS.foreshadowing_usage).toBe(0.25);
-    expect(EVALUATOR_WEIGHTS.genre_alignment).toBe(0.25);
+  it("each weight is 0.2", () => {
+    expect(EVALUATOR_WEIGHTS.pacing_quality).toBe(0.2);
+    expect(EVALUATOR_WEIGHTS.character_introduction).toBe(0.2);
+    expect(EVALUATOR_WEIGHTS.foreshadowing_usage).toBe(0.2);
+    expect(EVALUATOR_WEIGHTS.genre_alignment).toBe(0.2);
+    expect(EVALUATOR_WEIGHTS.archetype_diversity).toBe(0.2);
   });
 });
 
@@ -113,10 +115,11 @@ describe("evaluateCandidate", () => {
     const seed = makeMinimalSeed();
     const result = evaluateCandidate(seed);
     const expected =
-      result.pacing_quality * 0.25 +
-      result.character_introduction * 0.25 +
-      result.foreshadowing_usage * 0.25 +
-      result.genre_alignment * 0.25;
+      result.pacing_quality * 0.2 +
+      result.character_introduction * 0.2 +
+      result.foreshadowing_usage * 0.2 +
+      result.genre_alignment * 0.2 +
+      result.archetype_diversity * 0.2;
     expect(result.overall_score).toBeCloseTo(expected, 3);
   });
 
