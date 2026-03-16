@@ -8,7 +8,7 @@ import type { PlotOption } from "@/lib/schema/plot";
 
 export default function PlotPage() {
   const router = useRouter();
-  const { genre, plots, selectedPlot, setPlots, selectPlot, setError } =
+  const { genre, plots, selectedPlot, setPlots, selectPlot, setSeed, setError } =
     useNovelStore();
   const [loading, setLoading] = useState(false);
 
@@ -39,7 +39,11 @@ export default function PlotPage() {
   };
 
   const handleNext = () => {
-    if (selectedPlot) router.push("/preview");
+    if (selectedPlot) {
+      // Always clear previous seed so preview page generates a fresh one
+      setSeed(null);
+      router.push("/preview");
+    }
   };
 
   // Auto-generate on first visit (always fetch fresh plots)

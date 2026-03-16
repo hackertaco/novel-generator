@@ -55,7 +55,7 @@ interface NovelState {
   setGenre: (genre: string) => void;
   setPlots: (plots: PlotOption[]) => void;
   selectPlot: (plot: PlotOption) => void;
-  setSeed: (seed: NovelSeed) => void;
+  setSeed: (seed: NovelSeed | null) => void;
   setIsGenerating: (v: boolean) => void;
   setStreamingText: (text: string) => void;
   appendStreamingText: (chunk: string) => void;
