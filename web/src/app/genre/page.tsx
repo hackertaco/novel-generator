@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useNovelStore } from "@/hooks/useNovelStore";
 import GenreCard from "@/components/genre/GenreCard";
@@ -8,7 +9,12 @@ const GENRES = ["현대 판타지", "정통 판타지", "무협", "로맨스 판
 
 export default function GenrePage() {
   const router = useRouter();
-  const { genre, setGenre } = useNovelStore();
+  const { genre, setGenre, reset } = useNovelStore();
+
+  // Starting a new novel — clear all previous state
+  useEffect(() => {
+    reset();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelect = (g: string) => {
     setGenre(g);
