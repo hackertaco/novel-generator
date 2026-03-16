@@ -72,10 +72,10 @@ describe("buildPlotCriticPrompt", () => {
 
 describe("PlotCritic", () => {
   const mockPlots = [
-    { id: "A", title: "제목", logline: "로그라인", hook: "훅", arc_summary: ["1부"], key_twist: "반전" },
+    { id: "A", title: "제목", logline: "로그라인", hook: "훅", arc_summary: ["1부"], key_twist: "반전", male_archetype: "", female_archetype: "" },
   ];
   const improvedPlots = [
-    { id: "A", title: "개선됨", logline: "더 좋은 로그라인", hook: "더 좋은 훅", arc_summary: ["1부"], key_twist: "더 좋은 반전" },
+    { id: "A", title: "개선됨", logline: "더 좋은 로그라인", hook: "더 좋은 훅", arc_summary: ["1부"], key_twist: "더 좋은 반전", male_archetype: "", female_archetype: "" },
   ];
 
   beforeEach(() => {

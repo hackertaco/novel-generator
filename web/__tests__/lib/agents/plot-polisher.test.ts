@@ -55,10 +55,10 @@ describe("buildPlotPolisherPrompt", () => {
 
 describe("PlotPolisher", () => {
   const inputPlots = [
-    { id: "A", title: "제목", logline: "나쁜 로그라인", hook: "훅", arc_summary: ["1부"], key_twist: "반전" },
+    { id: "A", title: "제목", logline: "나쁜 로그라인", hook: "훅", arc_summary: ["1부"], key_twist: "반전", male_archetype: "", female_archetype: "" },
   ];
   const polishedPlots = [
-    { id: "A", title: "제목", logline: "더 자연스러운 로그라인", hook: "훅", arc_summary: ["1부"], key_twist: "반전" },
+    { id: "A", title: "제목", logline: "더 자연스러운 로그라인", hook: "훅", arc_summary: ["1부"], key_twist: "반전", male_archetype: "", female_archetype: "" },
   ];
 
   beforeEach(() => {

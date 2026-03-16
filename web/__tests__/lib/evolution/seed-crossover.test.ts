@@ -63,6 +63,7 @@ const makeCandidateScore = (overall: number, issues: string[] = []): CandidateSc
   character_introduction: overall,
   foreshadowing_usage: overall,
   genre_alignment: overall,
+  archetype_diversity: overall,
   overall_score: overall,
   issues,
 });

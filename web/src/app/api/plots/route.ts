@@ -17,6 +17,8 @@ function generateMockPlots(genre: string): PlotOption[] {
           "3부: 진심 - 과거의 상처 직면, 새로운 관계",
         ],
         key_twist: "남주가 후회하는 '그 일'은 여주가 이미 용서한 것이었다",
+        male_archetype: "",
+        female_archetype: "",
       },
       {
         id: "B",
@@ -29,6 +31,8 @@ function generateMockPlots(genre: string): PlotOption[] {
           "3부: 선택 - 복수냐 사랑이냐",
         ],
         key_twist: "남주도 사실 회귀자였다",
+        male_archetype: "",
+        female_archetype: "",
       },
       {
         id: "C",
@@ -41,6 +45,8 @@ function generateMockPlots(genre: string): PlotOption[] {
           "3부: 증명 - 진심을 보여주기 위한 남주의 변화",
         ],
         key_twist: "여주가 떠난 진짜 이유는 남주를 지키기 위해서였다",
+        male_archetype: "",
+        female_archetype: "",
       },
     ],
     default: [
@@ -55,6 +61,8 @@ function generateMockPlots(genre: string): PlotOption[] {
           "3부: 정점 - 최강자로 등극",
         ],
         key_twist: "재능이 아니라 저주였다",
+        male_archetype: "",
+        female_archetype: "",
       },
       {
         id: "B",
@@ -67,6 +75,8 @@ function generateMockPlots(genre: string): PlotOption[] {
           "3부: 대결 - 더 이상 숨지 않는다",
         ],
         key_twist: "능력의 원천이 사라진 가족과 연결되어 있었다",
+        male_archetype: "",
+        female_archetype: "",
       },
       {
         id: "C",
@@ -79,6 +89,8 @@ function generateMockPlots(genre: string): PlotOption[] {
           "3부: 귀환 - 달라진 위치로 돌아오다",
         ],
         key_twist: "버린 줄 알았던 사람이 사실 지켜보고 있었다",
+        male_archetype: "",
+        female_archetype: "",
       },
     ],
   };

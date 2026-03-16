@@ -19,6 +19,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const archetypeInfo = plot.male_archetype || plot.female_archetype
+      ? `\n남주 아키타입: ${plot.male_archetype || "미지정"}\n여주 아키타입: ${plot.female_archetype || "미지정"}`
+      : "";
+
     const interviewResult = `장르: ${genre}
 
 ## 선택한 플롯
@@ -27,7 +31,7 @@ export async function POST(request: NextRequest) {
 훅: ${plot.hook}
 전개:
 ${plot.arc_summary.map((a) => `- ${a}`).join("\n")}
-핵심 반전: ${plot.key_twist}`;
+핵심 반전: ${plot.key_twist}${archetypeInfo}`;
 
     // ── Stage 1: Generate 3 candidates (temperatures 0.7, 0.9, 1.1) ──────────
     const { candidates, usage: generationUsage } =

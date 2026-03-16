@@ -3,6 +3,11 @@ import { getGenrePrompt } from "@/lib/prompts/genre-prompts";
 import { PlotOptionArraySchema } from "@/lib/schema/plot";
 import type { PlotOption } from "@/lib/schema/plot";
 import type { TokenUsage } from "@/lib/agents/types";
+import {
+  getGenrePool,
+  getMaleArchetype,
+  getFemaleArchetype,
+} from "@/lib/archetypes/character-archetypes";
 
 // --- Creative constraint pools for plot diversity ---
 
@@ -91,11 +96,50 @@ export function pickRandom<T>(arr: T[], count: number): T[] {
 /**
  * Build the creative seeds prompt with genre-aware random constraints.
  */
+/**
+ * Pick 3 distinct archetype pairings for the 3 plot candidates.
+ * Each plot gets a different male×female archetype combo for diversity.
+ */
+function pickArchetypePairings(genre: string): Array<{ maleLabel: string; femaleLabel: string; comboDesc: string }> {
+  const pool = getGenrePool(genre);
+  const pairings: Array<{ maleLabel: string; femaleLabel: string; comboDesc: string }> = [];
+
+  // Pick 3 different male archetypes, each with a compatible female
+  const maleIds = pickRandom(pool.male_leads, Math.min(3, pool.male_leads.length));
+
+  for (const maleId of maleIds) {
+    const male = getMaleArchetype(maleId);
+    if (!male) continue;
+
+    // Find a compatible female in the genre pool
+    const compatibleInPool = male.compatible_with.filter((fId) => pool.female_leads.includes(fId));
+    const femaleId = compatibleInPool.length > 0
+      ? pickRandom(compatibleInPool, 1)[0]
+      : pool.female_leads[0];
+    const female = getFemaleArchetype(femaleId);
+    if (!female) continue;
+
+    pairings.push({
+      maleLabel: male.label,
+      femaleLabel: female.label,
+      comboDesc: `${male.label} 남주(${male.description.split(".")[0]}) × ${female.label} 여주(${female.description.split(".")[0]})`,
+    });
+  }
+
+  // Ensure we have exactly 3 (fill with defaults if needed)
+  while (pairings.length < 3) {
+    pairings.push(pairings[0] ?? { maleLabel: "다정남형", femaleLabel: "사이다형", comboDesc: "다정남형 × 사이다형" });
+  }
+
+  return pairings;
+}
+
 export function buildCreativeSeeds(genre: string): string {
   const { protagonists: protPool, situations: sitPool, structures: strPool } = getConstraints(genre);
   const protagonists = pickRandom(protPool, 3);
   const situations = pickRandom(sitPool, 3);
   const structures = pickRandom(strPool, 3);
+  const archetypePairs = pickArchetypePairings(genre);
 
   return `장르: ${genre}
 
@@ -104,15 +148,24 @@ export function buildCreativeSeeds(genre: string): string {
 
 **플롯 A**: ${protagonists[0]} ${situations[0]}에 처한 이야기.
   구조적 특징: ${structures[0]}
+  캐릭터 조합: ${archetypePairs[0].comboDesc}
+  → male_archetype: "${archetypePairs[0].maleLabel}", female_archetype: "${archetypePairs[0].femaleLabel}"
 
 **플롯 B**: ${protagonists[1]} ${situations[1]}에 처한 이야기.
   구조적 특징: ${structures[1]}
+  캐릭터 조합: ${archetypePairs[1].comboDesc}
+  → male_archetype: "${archetypePairs[1].maleLabel}", female_archetype: "${archetypePairs[1].femaleLabel}"
 
 **플롯 C**: ${protagonists[2]} ${situations[2]}에 처한 이야기.
   구조적 특징: ${structures[2]}
+  캐릭터 조합: ${archetypePairs[2].comboDesc}
+  → male_archetype: "${archetypePairs[2].maleLabel}", female_archetype: "${archetypePairs[2].femaleLabel}"
 
-위 조건을 출발점으로 삼되, 최종 플롯은 조건을 넘어서 자유롭게 발전시키세요.
-조건이 장르와 안 맞으면 장르에 맞게 변형해도 됩니다. 핵심은 3개가 서로 완전히 다른 이야기여야 한다는 것.`;
+## 중요 지침
+- 각 플롯의 logline에 캐릭터 아키타입의 특성이 자연스럽게 묻어나야 합니다
+- male_archetype, female_archetype 필드에 위에 지정된 라벨을 그대로 넣으세요
+- 3개 플롯은 서로 **완전히 다른 캐릭터 조합과 이야기**여야 합니다
+- 조건이 장르와 안 맞으면 장르에 맞게 변형해도 됩니다`;
 }
 
 export interface PlotContext {

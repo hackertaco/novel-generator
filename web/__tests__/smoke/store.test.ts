@@ -23,7 +23,7 @@ describe("useNovelStore smoke test", () => {
 
   it("should set genre and reset downstream state", () => {
     const store = useNovelStore.getState();
-    store.setPlots([{ id: "A", title: "t", logline: "l", hook: "h", arc_summary: [], key_twist: "k" }]);
+    store.setPlots([{ id: "A", title: "t", logline: "l", hook: "h", arc_summary: [], key_twist: "k", male_archetype: "", female_archetype: "" }]);
     store.setGenre("무협");
 
     const state = useNovelStore.getState();
@@ -34,7 +34,7 @@ describe("useNovelStore smoke test", () => {
   });
 
   it("should select a plot", () => {
-    const plot = { id: "B", title: "테스트", logline: "l", hook: "h", arc_summary: ["a"], key_twist: "k" };
+    const plot = { id: "B", title: "테스트", logline: "l", hook: "h", arc_summary: ["a"], key_twist: "k", male_archetype: "", female_archetype: "" };
     useNovelStore.getState().selectPlot(plot);
     expect(useNovelStore.getState().selectedPlot).toEqual(plot);
   });
