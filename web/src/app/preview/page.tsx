@@ -13,12 +13,17 @@ export default function PreviewPage() {
   const [loading, setLoading] = useState(false);
   const didFetch = useRef(false);
 
+  // Reset didFetch when selectedPlot changes so re-visiting triggers generation
+  useEffect(() => {
+    didFetch.current = false;
+  }, [selectedPlot?.id]);
+
   useEffect(() => {
     if (!seed && genre && selectedPlot && !loading && !didFetch.current) {
       didFetch.current = true;
       generateSeed();
     }
-  }, [genre, selectedPlot]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [seed, genre, selectedPlot, loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const generateSeed = async () => {
     if (!genre || !selectedPlot) return;

@@ -107,10 +107,9 @@ export const useNovelStore = create<NovelState>()(
       setGenre: (genre) => set({ genre, plots: [], selectedPlot: null, seed: null }),
       setPlots: (plots) => set({ plots }),
       selectPlot: (plot) =>
-        set((s) => {
-          // Only reset seed/chapters when selecting a DIFFERENT plot
-          if (s.selectedPlot?.id === plot.id) return { selectedPlot: plot };
-          return { selectedPlot: plot, seed: null, chapters: {}, summaries: [], currentChapter: 0 };
+        set(() => {
+          // Always reset seed/chapters when selecting a plot to force re-generation
+          return { selectedPlot: plot, seed: null, chapters: {}, summaries: [], currentChapter: 0, masterPlan: null, planningStage: "idle" as const };
         }),
       setSeed: (seed) => set({ seed }),
       setIsGenerating: (v) => set({ isGenerating: v }),
