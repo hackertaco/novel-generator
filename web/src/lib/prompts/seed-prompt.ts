@@ -1,8 +1,16 @@
+import { getArchetypeGuidance } from "@/lib/archetypes/character-archetypes";
+
 export function getSeedPrompt(interviewResult: string): string {
+  // Extract genre from interview result for archetype guidance
+  const genreMatch = interviewResult.match(/장르:\s*(.+)/);
+  const genre = genreMatch ? genreMatch[1].trim() : "로맨스 판타지";
+  const archetypeGuide = getArchetypeGuidance(genre);
+
   return `다음 인터뷰 결과를 바탕으로 웹소설 설계를 완성해주세요.
 
 ## 인터뷰 결과
 ${interviewResult}
+${archetypeGuide}
 
 ## 출력 형식 (YAML)
 다음 구조로 NovelSeed를 생성해주세요:
