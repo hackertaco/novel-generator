@@ -8,6 +8,10 @@ import {
   getMaleArchetype,
   getFemaleArchetype,
 } from "@/lib/archetypes/character-archetypes";
+import {
+  pickDiverseTemplates,
+  formatPremisePrompt,
+} from "@/lib/prompts/premise-templates";
 
 // --- Creative constraint pools for plot diversity ---
 
@@ -203,11 +207,63 @@ function pickArchetypePairingForProtagonist(
 }
 
 export function buildCreativeSeeds(genre: string): string {
+  // Try premise templates first (research-backed "fun formulas")
+  const templates = pickDiverseTemplates(genre, 3);
+  if (templates.length >= 3) {
+    return buildPremiseBasedSeeds(genre, templates);
+  }
+
+  // Fallback: old random combinatorial system
+  return buildRandomSeeds(genre);
+}
+
+/**
+ * Build seeds from curated premise templates (preferred path).
+ */
+function buildPremiseBasedSeeds(genre: string, templates: ReturnType<typeof pickDiverseTemplates>): string {
+  const premisePrompt = formatPremisePrompt(templates);
+
+  // Add archetype pairings based on template suggestions
+  const archetypeSections = templates.map((t, i) => {
+    if (!isRomanceGenre(genre)) return "";
+    const pool = getGenrePool(genre);
+    const malePool = t.suggested_male.length > 0
+      ? t.suggested_male.filter((id) => pool.male_leads.includes(id))
+      : pool.male_leads;
+    const femalePool = t.suggested_female.length > 0
+      ? t.suggested_female.filter((id) => pool.female_leads.includes(id))
+      : pool.female_leads;
+    const maleId = pickRandom(malePool.length > 0 ? malePool : pool.male_leads, 1)[0];
+    const male = getMaleArchetype(maleId)!;
+    const femaleCompatible = femalePool.filter((fId) => male.compatible_with.includes(fId));
+    const femaleId = femaleCompatible.length > 0
+      ? pickRandom(femaleCompatible, 1)[0]
+      : pickRandom(femalePool.length > 0 ? femalePool : pool.female_leads, 1)[0];
+    const female = getFemaleArchetype(femaleId)!;
+    const label = String.fromCharCode(65 + i);
+    return `\n**플롯 ${label} 캐릭터**: ${male.label} 남주(${male.description.split(".")[0]}) × ${female.label} 여주(${female.description.split(".")[0]})
+  → male_archetype: "${male.label}", female_archetype: "${female.label}"`;
+  });
+
+  return `장르: ${genre}
+
+${premisePrompt}
+${archetypeSections.filter(Boolean).join("\n")}
+
+## 추가 지침
+- male_archetype, female_archetype 필드에 위에 지정된 라벨을 그대로 넣으세요
+- 전제의 핵심 아이러니를 반드시 로그라인과 전개에 녹이세요
+- 전제를 "설명"하지 말고 구체적 인물·장소·사건으로 "보여주세요"`;
+}
+
+/**
+ * Fallback: old random combinatorial system for genres without enough templates.
+ */
+function buildRandomSeeds(genre: string): string {
   const { protagonists: protPool, situations: sitPool, structures: strPool } = getConstraints(genre);
   const protagonists = pickRandom(protPool, 3);
   const situations = pickRandom(sitPool, 3);
   const structures = pickRandom(strPool, 3);
-  // Pick archetype pairings that are compatible with each protagonist type
   const pairA = isRomanceGenre(genre) ? pickArchetypePairingForProtagonist(protagonists[0], genre) : { maleLabel: "", femaleLabel: "", comboDesc: "" };
   const pairB = isRomanceGenre(genre) ? pickArchetypePairingForProtagonist(protagonists[1], genre) : { maleLabel: "", femaleLabel: "", comboDesc: "" };
   const pairC = isRomanceGenre(genre) ? pickArchetypePairingForProtagonist(protagonists[2], genre) : { maleLabel: "", femaleLabel: "", comboDesc: "" };

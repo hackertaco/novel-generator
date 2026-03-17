@@ -61,14 +61,18 @@ describe("buildCreativeSeeds", () => {
 
   it("includes 3 plot sections (A, B, C)", () => {
     const result = buildCreativeSeeds("로맨스 판타지");
-    expect(result).toContain("**플롯 A**");
-    expect(result).toContain("**플롯 B**");
-    expect(result).toContain("**플롯 C**");
+    // Premise-based format uses "플롯 A의 출발점" or "플롯 A"
+    expect(result).toContain("플롯 A");
+    expect(result).toContain("플롯 B");
+    expect(result).toContain("플롯 C");
   });
 
-  it("includes structural constraints", () => {
+  it("includes premise or structural info", () => {
     const result = buildCreativeSeeds("현대 판타지");
-    expect(result).toContain("구조적 특징:");
+    // Should contain either premise template info or structural constraints
+    const hasPremise = result.includes("전제:") || result.includes("재미 포인트:");
+    const hasStructure = result.includes("구조적 특징:");
+    expect(hasPremise || hasStructure).toBe(true);
   });
 
   it("uses romance-specific pools for romance genres", () => {
