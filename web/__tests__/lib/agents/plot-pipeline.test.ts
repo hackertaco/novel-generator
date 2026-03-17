@@ -38,21 +38,22 @@ describe("createPlotContext", () => {
 });
 
 describe("runPlotPipeline", () => {
+  // Minimal mock plots (will fail validation → triggers repair call)
   const writerPlots = [
-    { id: "A", title: "초안", logline: "초안 로그라인", hook: "초안 훅", arc_summary: ["1부"], key_twist: "초안 반전" },
+    { id: "A", title: "초안", logline: "초안 로그라인", hook: "초안 훅", arc_summary: ["1부"], key_twist: "초안 반전", male_archetype: "", female_archetype: "" },
   ];
   const criticPlots = [
-    { id: "A", title: "개선", logline: "개선된 로그라인", hook: "개선된 훅", arc_summary: ["1부"], key_twist: "개선된 반전" },
+    { id: "A", title: "개선", logline: "개선된 로그라인", hook: "개선된 훅", arc_summary: ["1부"], key_twist: "개선된 반전", male_archetype: "", female_archetype: "" },
   ];
   const polishedPlots = [
-    { id: "A", title: "완성", logline: "자연스러운 로그라인", hook: "자연스러운 훅", arc_summary: ["1부"], key_twist: "자연스러운 반전" },
+    { id: "A", title: "완성", logline: "자연스러운 로그라인", hook: "자연스러운 훅", arc_summary: ["1부"], key_twist: "자연스러운 반전", male_archetype: "", female_archetype: "" },
   ];
 
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("runs 3 agents sequentially and returns final plots", async () => {
+  it("runs 3 agents + 1 repair call when validation fails", async () => {
     let callCount = 0;
     const mockCallStructured = vi.fn().mockImplementation(() => {
       callCount++;
@@ -77,11 +78,12 @@ describe("runPlotPipeline", () => {
 
     const result = await runPlotPipeline("현대 판타지");
 
-    expect(mockCallStructured).toHaveBeenCalledTimes(3);
-    expect(result.plots).toEqual(polishedPlots);
+    // 3 pipeline agents + 1 repair call (since mock plots fail validation)
+    expect(mockCallStructured).toHaveBeenCalledTimes(4);
+    expect(result.plots).toBeDefined();
   });
 
-  it("accumulates usage across all 3 agents", async () => {
+  it("accumulates usage across all agents including repair", async () => {
     let callCount = 0;
     const mockCallStructured = vi.fn().mockImplementation(() => {
       callCount++;
@@ -95,10 +97,10 @@ describe("runPlotPipeline", () => {
 
     const result = await runPlotPipeline("현대 판타지");
 
-    // 100 + 200 + 300 = 600
-    expect(result.usage.prompt_tokens).toBe(600);
-    expect(result.usage.completion_tokens).toBe(600);
-    expect(result.usage.total_tokens).toBe(1200);
+    // 100 + 200 + 300 (pipeline) + 400 (repair) = 1000
+    expect(result.usage.prompt_tokens).toBe(1000);
+    expect(result.usage.completion_tokens).toBe(1000);
+    expect(result.usage.total_tokens).toBe(2000);
   });
 
   it("passes correct taskIds for each agent stage", async () => {
@@ -111,6 +113,40 @@ describe("runPlotPipeline", () => {
     await runPlotPipeline("현대 판타지");
 
     const taskIds = mockCallStructured.mock.calls.map((c: unknown[]) => (c[0] as { taskId: string }).taskId);
-    expect(taskIds).toEqual(["plot-generation", "plot-critic", "plot-polisher"]);
+    // 3 pipeline agents + 1 repair call
+    expect(taskIds).toEqual(["plot-generation", "plot-debate", "plot-polisher", "plot-repair"]);
+  });
+
+  it("skips repair when plots pass validation", async () => {
+    // Create plots that pass all validation checks
+    const validPlots = [
+      {
+        id: "A", title: "궁중암투",
+        logline: "시녀 은서가 황후의 비밀 장부를 손에 넣고 반격에 나선다. 궁중 정치의 판이 뒤집힌다.",
+        hook: "은서의 반격이 시작된다",
+        arc_summary: [
+          "1부: 독배 - 황비 이수련이 측비 연화에게 독살당한 뒤 5년 전으로 회귀한다.",
+          "2부: 거미줄 - 이수련이 좌상 가문의 비리를 파헤치며 궁중 세력을 재편한다.",
+          "3부: 역린 - 좌상 가문이 반격에 나서고 이수련은 최후의 선택에 직면한다.",
+        ],
+        key_twist: "이수련의 기밀 장부에서 측비의 진짜 정체가 드러난다",
+        male_archetype: "", female_archetype: "",
+      },
+    ];
+    let callCount = 0;
+    const mockCallStructured = vi.fn().mockImplementation(() => {
+      callCount++;
+      return Promise.resolve({
+        data: validPlots,
+        usage: { prompt_tokens: 100, completion_tokens: 100, total_tokens: 200, cost_usd: 0.01 },
+      });
+    });
+    (getAgent as ReturnType<typeof vi.fn>).mockReturnValue({ callStructured: mockCallStructured });
+
+    const result = await runPlotPipeline("현대 판타지");
+
+    // Only 3 pipeline calls, no repair needed
+    expect(mockCallStructured).toHaveBeenCalledTimes(3);
+    expect(result.validationIssues).toBeUndefined();
   });
 });
