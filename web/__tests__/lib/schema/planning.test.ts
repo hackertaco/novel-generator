@@ -10,20 +10,20 @@ import {
 describe("SceneSpec", () => {
   it("validates a complete scene spec", () => {
     const scene = SceneSpecSchema.parse({
-      purpose: "MC가 던전 입구에서 수상한 기운을 감지한다",
+      purpose: "이준혁이 던전 입구에서 수상한 기운을 감지한다",
       type: "action",
       characters: ["mc", "companion_1"],
       estimated_chars: 1500,
       emotional_tone: "긴장",
     });
-    expect(scene.purpose).toBe("MC가 던전 입구에서 수상한 기운을 감지한다");
+    expect(scene.purpose).toBe("이준혁이 던전 입구에서 수상한 기운을 감지한다");
     expect(scene.type).toBe("action");
     expect(scene.estimated_chars).toBe(1500);
   });
 
   it("provides defaults for optional fields", () => {
     const scene = SceneSpecSchema.parse({
-      purpose: "대화 장면",
+      purpose: "이준혁이 강서연에게 던전 정보를 전달하는 대화 장면",
       type: "dialogue",
     });
     expect(scene.characters).toEqual([]);
@@ -41,9 +41,9 @@ describe("ChapterBlueprint", () => {
       one_liner: "던전 깊숙이 진입하며 첫 보스와 조우",
       role_in_arc: "rising_action",
       scenes: [
-        { purpose: "던전 진입", type: "action", estimated_chars: 1200 },
-        { purpose: "파티 내 갈등", type: "dialogue", estimated_chars: 1000 },
-        { purpose: "보스 등장 클리프행어", type: "hook", estimated_chars: 800 },
+        { purpose: "이준혁이 던전 입구에서 마나 감지기가 오작동하는 것을 발견한다", type: "action", estimated_chars: 1200 },
+        { purpose: "강서연이 이준혁에게 '이 패턴은 3년 전과 같다'고 경고한다", type: "dialogue", estimated_chars: 1000 },
+        { purpose: "던전 안에서 사망한 형 이도현의 목소리가 들려온다", type: "hook", estimated_chars: 800 },
       ],
       dependencies: ["ch4에서 얻은 열쇠 사용"],
       target_word_count: 3000,
@@ -65,8 +65,8 @@ describe("ChapterBlueprint", () => {
       arc_id: "arc_1",
       one_liner: "이야기의 시작",
       scenes: [
-        { purpose: "오프닝", type: "action", estimated_chars: 1500 },
-        { purpose: "마무리", type: "hook", estimated_chars: 500 },
+        { purpose: "이준혁이 평범한 아침을 보내며 학교에 가는 오프닝 장면", type: "action", estimated_chars: 1500 },
+        { purpose: "이준혁이 교실 창문 너머로 하늘에 균열이 생기는 것을 목격한다", type: "hook", estimated_chars: 500 },
       ],
     });
     expect(blueprint.target_word_count).toBe(2000);

@@ -11,6 +11,7 @@ import type { NovelSeed } from "@/lib/schema/novel";
 import type { ChapterBlueprint, SceneSpec } from "@/lib/schema/planning";
 import type { TokenUsage } from "@/lib/agents/types";
 import { validateScene, buildSceneRepairPrompt } from "./scene-validator";
+import { planBeats, writeSceneByBeats } from "./beat-writer";
 
 export interface SceneWriterOptions {
   seed: NovelSeed;
@@ -171,29 +172,29 @@ export async function writeChapterByScenes(
   for (let i = 0; i < blueprint.scenes.length; i++) {
     const scene = blueprint.scenes[i];
 
-    // 1. Generate scene
-    const prompt = buildScenePrompt(
-      seed, chapterNumber, blueprint, scene, i,
-      sceneTexts, previousSummaries,
-    );
-
-    const result = await agent.call({
-      prompt,
-      system: systemPrompt,
+    // 1. Generate scene using beat-by-beat structured writing
+    const beats = planBeats(scene, seed);
+    const previousText = sceneTexts.length > 0 ? sceneTexts[sceneTexts.length - 1] : "";
+    const beatResult = await writeSceneByBeats({
+      beats,
+      scene,
+      seed,
+      chapterNumber,
+      previousText,
+      systemPrompt,
       model,
-      temperature: 0.5,
-      maxTokens: Math.max(2000, Math.ceil(scene.estimated_chars * 1.5)),
-      taskId: `chapter-${chapterNumber}-scene-${i + 1}`,
     });
-    totalUsage = addUsage(totalUsage, result.usage);
+    totalUsage = addUsage(totalUsage, beatResult.usage);
 
-    let sceneText = result.data.trim();
+    let sceneText = beatResult.text;
 
-    // 2. Code validation
-    const validation = validateScene(sceneText, scene.estimated_chars, scene.type);
+    // 2. Code validation + strict retry loop (up to 3 attempts)
+    const MAX_REPAIR_ATTEMPTS = 3;
+    let validation = validateScene(sceneText, scene.estimated_chars, scene.type);
+    let repairAttempt = 0;
 
-    // 3. If errors found, one repair attempt
-    if (!validation.passed) {
+    while (!validation.passed && repairAttempt < MAX_REPAIR_ATTEMPTS) {
+      repairAttempt++;
       const repairPrompt = buildSceneRepairPrompt(sceneText, validation.issues);
       const repairResult = await agent.call({
         prompt: repairPrompt,
@@ -201,22 +202,22 @@ export async function writeChapterByScenes(
         model,
         temperature: 0.3,
         maxTokens: Math.max(2000, Math.ceil(scene.estimated_chars * 1.5)),
-        taskId: `chapter-${chapterNumber}-scene-${i + 1}-repair`,
+        taskId: `chapter-${chapterNumber}-scene-${i + 1}-repair-${repairAttempt}`,
       });
       totalUsage = addUsage(totalUsage, repairResult.usage);
 
       const repairedText = repairResult.data.trim();
-      // Only use repair if it's not too short
       if (repairedText.length > sceneText.length * 0.5) {
         sceneText = repairedText;
       }
 
-      // Re-validate (log remaining issues but don't loop)
-      const revalidation = validateScene(sceneText, scene.estimated_chars, scene.type);
-      if (!revalidation.passed) {
-        for (const issue of revalidation.issues.filter((i) => i.severity === "error")) {
-          remainingIssues.push(`[씬${i + 1}] ${issue.message}`);
-        }
+      validation = validateScene(sceneText, scene.estimated_chars, scene.type);
+    }
+
+    // Log remaining issues after all retry attempts
+    if (!validation.passed) {
+      for (const issue of validation.issues.filter((iss) => iss.severity === "error")) {
+        remainingIssues.push(`[씬${i + 1}] ${issue.message}`);
       }
     }
 

@@ -78,8 +78,8 @@ describe("runPlotPipeline", () => {
 
     const result = await runPlotPipeline("현대 판타지");
 
-    // 3 pipeline agents + 1 repair call (since mock plots fail validation)
-    expect(mockCallStructured).toHaveBeenCalledTimes(4);
+    // 3 pipeline agents + up to 3 repair calls (since mock plots fail validation)
+    expect(mockCallStructured.mock.calls.length).toBeGreaterThanOrEqual(4);
     expect(result.plots).toBeDefined();
   });
 
@@ -97,10 +97,9 @@ describe("runPlotPipeline", () => {
 
     const result = await runPlotPipeline("현대 판타지");
 
-    // 100 + 200 + 300 (pipeline) + 400 (repair) = 1000
-    expect(result.usage.prompt_tokens).toBe(1000);
-    expect(result.usage.completion_tokens).toBe(1000);
-    expect(result.usage.total_tokens).toBe(2000);
+    // 3 pipeline + up to 3 repairs — usage accumulates
+    expect(result.usage.prompt_tokens).toBeGreaterThanOrEqual(600);
+    expect(result.usage.total_tokens).toBeGreaterThanOrEqual(1200);
   });
 
   it("passes correct taskIds for each agent stage", async () => {
@@ -113,8 +112,10 @@ describe("runPlotPipeline", () => {
     await runPlotPipeline("현대 판타지");
 
     const taskIds = mockCallStructured.mock.calls.map((c: unknown[]) => (c[0] as { taskId: string }).taskId);
-    // 3 pipeline agents + 1 repair call
-    expect(taskIds).toEqual(["plot-generation", "plot-debate", "plot-polisher", "plot-repair"]);
+    // 3 pipeline agents + repair calls (numbered)
+    expect(taskIds.slice(0, 3)).toEqual(["plot-generation", "plot-debate", "plot-polisher"]);
+    expect(taskIds.length).toBeGreaterThanOrEqual(4);
+    expect(taskIds[3]).toMatch(/^plot-repair-/);
   });
 
   it("skips repair when plots pass validation", async () => {

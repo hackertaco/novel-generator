@@ -71,9 +71,14 @@ export async function runPlotPipeline(genre: string): Promise<PlotPipelineResult
   const validation = validatePlots(ctx.plots, romance);
   ctx.plots = validation.plots; // Apply auto-fixes (archetype labels, etc.)
 
-  // Stage 3: If non-auto-fixable issues remain, do one focused repair call
-  if (!validation.passed && validation.regenerationNeeded.length > 0) {
-    const repairPrompt = buildRepairPrompt(ctx.plots, validation.regenerationNeeded, romance);
+  // Stage 3: Strict repair loop — retry until validation passes (max 3 attempts)
+  const MAX_PLOT_REPAIR_ATTEMPTS = 3;
+  let currentValidation = validation;
+  let repairAttempt = 0;
+
+  while (!currentValidation.passed && currentValidation.regenerationNeeded.length > 0 && repairAttempt < MAX_PLOT_REPAIR_ATTEMPTS) {
+    repairAttempt++;
+    const repairPrompt = buildRepairPrompt(ctx.plots, currentValidation.regenerationNeeded, romance);
     const agent = getAgent();
     const result = await agent.callStructured({
       prompt: repairPrompt,
@@ -82,20 +87,21 @@ export async function runPlotPipeline(genre: string): Promise<PlotPipelineResult
       maxTokens: 4096,
       schema: PlotOptionArraySchema,
       format: "json",
-      taskId: "plot-repair",
+      taskId: `plot-repair-${repairAttempt}`,
     });
 
     ctx.plots = result.data;
     addUsage(ctx, result.usage);
 
-    // Re-validate after repair (auto-fix only, no more LLM calls)
-    const revalidation = validatePlots(ctx.plots, romance);
-    ctx.plots = revalidation.plots;
+    currentValidation = validatePlots(ctx.plots, romance);
+    ctx.plots = currentValidation.plots; // Apply auto-fixes
+  }
 
+  if (!currentValidation.passed) {
     return {
       plots: ctx.plots,
       usage: ctx.usage,
-      validationIssues: revalidation.regenerationNeeded.map((i) => `[${i.plotId}/${i.field}] ${i.issue}`),
+      validationIssues: currentValidation.regenerationNeeded.map((i) => `[${i.plotId}/${i.field}] ${i.issue}`),
     };
   }
 

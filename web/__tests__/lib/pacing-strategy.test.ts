@@ -181,9 +181,9 @@ const MOCK_BLUEPRINT: ChapterBlueprint = {
   one_liner: "고3 이준혁의 지루한 일상, 그리고 하늘에 생긴 이상한 균열",
   role_in_arc: "setup",
   scenes: [
-    { purpose: "준혁의 학교 일상", type: "dialogue", characters: ["mc"], estimated_chars: 2000, emotional_tone: "평범" },
-    { purpose: "편의점 알바 장면", type: "dialogue", characters: ["mc"], estimated_chars: 1500, emotional_tone: "무료함" },
-    { purpose: "하늘의 균열 발견", type: "hook", characters: ["mc"], estimated_chars: 500, emotional_tone: "위화감" },
+    { purpose: "이준혁이 학교에서 친구들과 평범한 점심을 먹으며 일상을 보낸다", type: "dialogue", characters: ["mc"], estimated_chars: 2000, emotional_tone: "평범" },
+    { purpose: "이준혁이 편의점 알바를 하며 손님과 짧은 대화를 나눈다", type: "dialogue", characters: ["mc"], estimated_chars: 1500, emotional_tone: "무료함" },
+    { purpose: "이준혁이 편의점 창문 너머로 하늘에 균열이 생기는 것을 목격한다", type: "hook", characters: ["mc"], estimated_chars: 500, emotional_tone: "위화감" },
   ],
   dependencies: [],
   target_word_count: 4000,
