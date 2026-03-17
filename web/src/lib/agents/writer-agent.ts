@@ -4,6 +4,7 @@ import { buildChapterContext, buildBlueprintContext } from "@/lib/context/builde
 import { selectModelTier, getModelForTier } from "@/lib/llm/tier";
 import { sanitize } from "./rule-guard";
 import { accumulateUsage } from "./pipeline";
+import { writeChapterByScenes } from "./scene-writer";
 import type { PipelineAgent, ChapterContext, LifecycleEvent } from "./pipeline";
 
 /**
@@ -39,6 +40,47 @@ export class WriterAgent implements PipelineAgent {
     const model = getModelForTier(tier);
     const systemPrompt = getWriterSystemPrompt(seed.world.genre, chapterNumber);
 
+    // Scene-by-scene generation when blueprint has scenes
+    if (blueprint && blueprint.scenes.length > 0) {
+      yield { type: "stage_change", stage: "writing" };
+
+      const sceneResult = await writeChapterByScenes({
+        seed,
+        chapterNumber,
+        blueprint,
+        systemPrompt,
+        model,
+        previousSummaries: previousSummaries.map((s) => ({
+          chapter: s.chapter,
+          summary: s.summary,
+        })),
+      });
+
+      ctx.totalUsage = accumulateUsage(ctx.totalUsage, sceneResult.usage);
+      yield { type: "usage", ...sceneResult.usage };
+
+      // Self-review on assembled text
+      yield { type: "stage_change", stage: "self-review" };
+
+      const selfReviewResult = await agent.call({
+        prompt: `${getSelfReviewPrompt()}\n\n---\n\n${sceneResult.fullText}`,
+        system: systemPrompt,
+        model,
+        temperature: 0.2,
+        maxTokens: 12000,
+        taskId: `chapter-${chapterNumber}-self-review`,
+      });
+
+      ctx.totalUsage = accumulateUsage(ctx.totalUsage, selfReviewResult.usage);
+      yield { type: "usage", ...selfReviewResult.usage };
+
+      const reviewed = handleSelfReviewResponse(selfReviewResult.data, sceneResult.fullText);
+      ctx.text = sanitize(reviewed);
+      yield { type: "replace_text", content: ctx.text };
+      return;
+    }
+
+    // Fallback: single-shot generation (no blueprint or empty scenes)
     // Build context prompt
     const context = blueprint
       ? buildBlueprintContext(seed, chapterNumber, previousSummaries, blueprint)
