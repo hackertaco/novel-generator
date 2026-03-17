@@ -196,72 +196,35 @@ const MOCK_BLUEPRINT: ChapterBlueprint = {
 
 // --- Context Starvation Tests ---
 
-describe("Context Starvation (ch1-3)", () => {
-  it("ch1 context should NOT contain arc summary", () => {
-    const ctx = buildChapterContext(MOCK_SEED, 1, []);
-    expect(ctx).not.toContain("능력에 눈을 뜨며");
-    expect(ctx).not.toContain("헌터의 세계에 입문");
-    expect(ctx).not.toContain("클라이맥스");
-  });
-
-  it("ch1 context should NOT contain non-MC characters", () => {
-    const ctx = buildChapterContext(MOCK_SEED, 1, []);
-    expect(ctx).not.toContain("강서연");
-    expect(ctx).not.toContain("박도윤");
-    expect(ctx).not.toContain("최태산");
-  });
-
-  it("ch1 context should NOT contain foreshadowing instructions", () => {
-    const ctx = buildChapterContext(MOCK_SEED, 1, []);
-    expect(ctx).not.toContain("복선");
-    expect(ctx).not.toContain("fs_1");
-  });
-
-  it("ch1 context should contain ONLY protagonist + minimal info", () => {
+describe("Chapter context (ch1-3 no longer starved)", () => {
+  it("ch1 context should contain novel info and protagonist", () => {
     const ctx = buildChapterContext(MOCK_SEED, 1, []);
     expect(ctx).toContain("이준혁");
     expect(ctx).toContain("테스트 소설");
     expect(ctx).toContain("현대 판타지");
-    // Should have one_liner but NOT multiple key_points
+  });
+
+  it("ch1 context should contain chapter outline", () => {
+    const ctx = buildChapterContext(MOCK_SEED, 1, []);
     expect(ctx).toContain("지루한 일상");
   });
 
-  it("ch1 context should have no key_points", () => {
+  it("ch1 context should contain arc info", () => {
     const ctx = buildChapterContext(MOCK_SEED, 1, []);
-    expect(ctx).not.toContain("편의점 알바");
-    expect(ctx).not.toContain("균열이 보인다는 암시");
-  });
-
-  it("ch2 context should have at most 1 key_point", () => {
-    const ctx = buildChapterContext(MOCK_SEED, 2, []);
-    // Should contain the one_liner
-    expect(ctx).toContain("균열이 커지고");
-    // Should contain first key_point
-    expect(ctx).toContain("균열 확대");
-    // Should NOT contain second key_point
-    expect(ctx).not.toContain("동물들의 이상 행동");
-  });
-
-  it("ch4 context should contain full info (not starved)", () => {
-    const ctx = buildChapterContext(MOCK_SEED, 4, []);
-    // Chapter 4 should have arc summary
+    // ch1 is early in arc, should show arc name
     expect(ctx).toContain("각성편");
   });
 
-  it("blueprint context for ch1 should also be starved", () => {
-    const ctx = buildBlueprintContext(MOCK_SEED, 1, [], MOCK_BLUEPRINT);
-    // Should NOT contain blueprint scenes
-    expect(ctx).not.toContain("편의점 알바 장면");
-    // Should NOT contain non-MC characters
-    expect(ctx).not.toContain("강서연");
-    expect(ctx).not.toContain("박도윤");
-    // Should contain MC
-    expect(ctx).toContain("이준혁");
+  it("ch4 context should contain full info", () => {
+    const ctx = buildChapterContext(MOCK_SEED, 4, []);
+    expect(ctx).toContain("각성편");
   });
 
-  it("ch1 context should be short (under 500 chars)", () => {
-    const ctx = buildChapterContext(MOCK_SEED, 1, []);
-    expect(ctx.length).toBeLessThan(500);
+  it("blueprint context for ch1 should use blueprint (not starved)", () => {
+    const ctx = buildBlueprintContext(MOCK_SEED, 1, [], MOCK_BLUEPRINT);
+    // Should contain blueprint details
+    expect(ctx).toContain("블루프린트");
+    expect(ctx).toContain("이준혁");
   });
 });
 

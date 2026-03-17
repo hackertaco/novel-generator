@@ -96,11 +96,6 @@ export function buildChapterContext(
     summary: string;
   }>,
 ): string {
-  // Context Starvation for early chapters
-  if (chapterNum <= 3) {
-    return buildStarvedContext(seed, chapterNum);
-  }
-
   const parts: string[] = [];
 
   // Novel info
@@ -327,11 +322,6 @@ export function buildBlueprintContext(
   // Fall back to basic context if no blueprint
   if (!blueprint) {
     return buildChapterContext(seed, chapterNum, previousSummaries);
-  }
-
-  // Context Starvation for early chapters — even with blueprint
-  if (chapterNum <= 3) {
-    return buildStarvedContext(seed, chapterNum);
   }
 
   const parts: string[] = [];
