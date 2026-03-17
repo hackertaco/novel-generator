@@ -16,6 +16,7 @@
  */
 
 import type { NovelSeed } from "@/lib/schema/novel";
+import type { ChapterBlueprint } from "@/lib/schema/planning";
 import { evaluatePacingQuality } from "@/lib/evolution/evaluators/pacing-quality";
 import type { PacingQualityResult } from "@/lib/evolution/evaluators/pacing-quality";
 import {
@@ -26,15 +27,18 @@ import { evaluateForeshadowingUsage } from "@/lib/evolution/evaluators/foreshado
 import type { ForeshadowingUsageResult } from "@/lib/evolution/evaluators/foreshadowing-usage";
 import { evaluateGenreAlignment } from "@/lib/evolution/evaluators/genre-alignment";
 import type { GenreAlignmentResult } from "@/lib/evolution/evaluators/genre-alignment";
+import { evaluateSceneSpecificity } from "@/lib/evolution/evaluators/scene-specificity";
+import type { SceneSpecificityResult } from "@/lib/evolution/evaluators/scene-specificity";
 
 // ---------------------------------------------------------------------------
 // Score weight constants (exported for tests)
 // ---------------------------------------------------------------------------
 
-export const WEIGHT_PACING_QUALITY = 0.25;
-export const WEIGHT_CHARACTER_INTRODUCTION = 0.25;
-export const WEIGHT_FORESHADOWING_USAGE = 0.25;
-export const WEIGHT_GENRE_ALIGNMENT = 0.25;
+export const WEIGHT_PACING_QUALITY = 0.2;
+export const WEIGHT_CHARACTER_INTRODUCTION = 0.2;
+export const WEIGHT_FORESHADOWING_USAGE = 0.2;
+export const WEIGHT_GENRE_ALIGNMENT = 0.2;
+export const WEIGHT_SCENE_SPECIFICITY = 0.2;
 
 // ---------------------------------------------------------------------------
 // EvaluationResult schema
@@ -48,13 +52,13 @@ export const WEIGHT_GENRE_ALIGNMENT = 0.25;
  */
 export interface EvaluationResult {
   /**
-   * Weighted overall score across all four dimensions.
+   * Weighted overall score across all five dimensions.
    * Range: [0, 1], rounded to 3 decimal places.
    */
   total_score: number;
 
   /**
-   * True only when all four sub-evaluators pass their criteria.
+   * True only when all five sub-evaluators pass their criteria.
    */
   pass: boolean;
 
@@ -63,6 +67,7 @@ export interface EvaluationResult {
   character_introduction: CharacterDensityResult;
   foreshadowing_usage: ForeshadowingUsageResult;
   genre_alignment: GenreAlignmentResult;
+  scene_specificity: SceneSpecificityResult;
 
   /**
    * Aggregated issue strings from all sub-evaluators.
@@ -95,12 +100,11 @@ export class BlueprintEvaluator {
    * @param seed - The NovelSeed to evaluate.
    * @returns EvaluationResult with sub-scores and aggregated issues.
    */
-  evaluate(seed: NovelSeed): EvaluationResult {
+  evaluate(seed: NovelSeed, blueprints?: ChapterBlueprint[]): EvaluationResult {
     // 1. Pacing quality (from chapter_outlines)
     const pacingResult = evaluatePacingQuality(seed);
 
     // 2. Character introduction density (from seed.characters)
-    //    evaluateCharacterDensity accepts Pick<Character, "introduction_chapter">[]
     const characterResult = evaluateCharacterDensity(seed.characters);
 
     // 3. Foreshadowing usage (from arcs + foreshadowing list)
@@ -109,12 +113,18 @@ export class BlueprintEvaluator {
     // 4. Genre alignment (from world setting + arcs + chapter_outlines)
     const genreResult = evaluateGenreAlignment(seed);
 
+    // 5. Scene specificity (from blueprints)
+    const sceneResult = blueprints && blueprints.length > 0
+      ? evaluateSceneSpecificity(blueprints)
+      : { overall_score: 0.5, pass: true, issues: [], details: { avgPurposeLength: 0, shortPurposeCount: 0, genericPurposeCount: 0, totalScenes: 0 } };
+
     // --- Weighted total score ---
     const totalScore =
       pacingResult.overall_score * WEIGHT_PACING_QUALITY +
       characterResult.overall_score * WEIGHT_CHARACTER_INTRODUCTION +
       foreshadowingResult.overall_score * WEIGHT_FORESHADOWING_USAGE +
-      genreResult.overall_score * WEIGHT_GENRE_ALIGNMENT;
+      genreResult.overall_score * WEIGHT_GENRE_ALIGNMENT +
+      sceneResult.overall_score * WEIGHT_SCENE_SPECIFICITY;
 
     // --- Aggregate issues ---
     const issues: string[] = [
@@ -122,6 +132,7 @@ export class BlueprintEvaluator {
       ...buildCharacterIssues(characterResult),
       ...foreshadowingResult.issues,
       ...genreResult.issues,
+      ...sceneResult.issues,
     ];
 
     return {
@@ -131,11 +142,13 @@ export class BlueprintEvaluator {
         characterResult.ep1_character_count.pass &&
         characterResult.new_per_chapter.pass &&
         foreshadowingResult.pass &&
-        genreResult.pass,
+        genreResult.pass &&
+        sceneResult.pass,
       pacing_quality: pacingResult,
       character_introduction: characterResult,
       foreshadowing_usage: foreshadowingResult,
       genre_alignment: genreResult,
+      scene_specificity: sceneResult,
       issues,
     };
   }

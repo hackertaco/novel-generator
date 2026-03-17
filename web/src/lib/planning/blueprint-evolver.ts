@@ -110,7 +110,7 @@ export async function evolveBlueprintCandidates(
     const mergedSeed = mergeBlueprintsIntoSeed(seed, candidate.blueprints);
     return {
       candidate,
-      score: evaluator.evaluate(mergedSeed),
+      score: evaluator.evaluate(mergedSeed, candidate.blueprints),
     };
   });
 

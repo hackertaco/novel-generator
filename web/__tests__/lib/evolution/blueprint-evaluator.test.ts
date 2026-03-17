@@ -18,6 +18,7 @@ import {
   WEIGHT_CHARACTER_INTRODUCTION,
   WEIGHT_FORESHADOWING_USAGE,
   WEIGHT_GENRE_ALIGNMENT,
+  WEIGHT_SCENE_SPECIFICITY,
 } from "@/lib/evolution/blueprint-evaluator";
 import type { EvaluationResult } from "@/lib/evolution/blueprint-evaluator";
 import type { NovelSeed } from "@/lib/schema/novel";
@@ -257,19 +258,23 @@ function makeFailingSeed(): NovelSeed {
 
 describe("weight constants", () => {
   it("WEIGHT_PACING_QUALITY is 0.25", () => {
-    expect(WEIGHT_PACING_QUALITY).toBe(0.25);
+    expect(WEIGHT_PACING_QUALITY).toBe(0.2);
   });
 
   it("WEIGHT_CHARACTER_INTRODUCTION is 0.25", () => {
-    expect(WEIGHT_CHARACTER_INTRODUCTION).toBe(0.25);
+    expect(WEIGHT_CHARACTER_INTRODUCTION).toBe(0.2);
   });
 
   it("WEIGHT_FORESHADOWING_USAGE is 0.25", () => {
-    expect(WEIGHT_FORESHADOWING_USAGE).toBe(0.25);
+    expect(WEIGHT_FORESHADOWING_USAGE).toBe(0.2);
   });
 
   it("WEIGHT_GENRE_ALIGNMENT is 0.25", () => {
-    expect(WEIGHT_GENRE_ALIGNMENT).toBe(0.25);
+    expect(WEIGHT_GENRE_ALIGNMENT).toBe(0.2);
+  });
+
+  it("WEIGHT_SCENE_SPECIFICITY is 0.2", () => {
+    expect(WEIGHT_SCENE_SPECIFICITY).toBe(0.2);
   });
 
   it("weights sum to 1.0", () => {
@@ -277,7 +282,8 @@ describe("weight constants", () => {
       WEIGHT_PACING_QUALITY +
       WEIGHT_CHARACTER_INTRODUCTION +
       WEIGHT_FORESHADOWING_USAGE +
-      WEIGHT_GENRE_ALIGNMENT;
+      WEIGHT_GENRE_ALIGNMENT +
+      WEIGHT_SCENE_SPECIFICITY;
     expect(sum).toBeCloseTo(1.0, 10);
   });
 });
@@ -371,7 +377,7 @@ describe("EvaluationResult shape", () => {
 // ---------------------------------------------------------------------------
 
 describe("total_score calculation", () => {
-  it("equals weighted sum of the four sub-scores", () => {
+  it("equals weighted sum of the five sub-scores", () => {
     const evaluator = new BlueprintEvaluator();
     const seed = makeMinimalSeed();
     const result = evaluator.evaluate(seed);
@@ -380,7 +386,8 @@ describe("total_score calculation", () => {
       result.pacing_quality.overall_score * WEIGHT_PACING_QUALITY +
       result.character_introduction.overall_score * WEIGHT_CHARACTER_INTRODUCTION +
       result.foreshadowing_usage.overall_score * WEIGHT_FORESHADOWING_USAGE +
-      result.genre_alignment.overall_score * WEIGHT_GENRE_ALIGNMENT;
+      result.genre_alignment.overall_score * WEIGHT_GENRE_ALIGNMENT +
+      result.scene_specificity.overall_score * WEIGHT_SCENE_SPECIFICITY;
 
     expect(result.total_score).toBeCloseTo(expectedScore, 3);
   });
