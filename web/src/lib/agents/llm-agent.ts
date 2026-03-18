@@ -68,20 +68,47 @@ function buildMessages(
   return messages;
 }
 
+/**
+ * Create an OpenRouter client for cross-provider model access.
+ * Used when model name contains "/" (e.g., "anthropic/claude-3.5-sonnet").
+ */
+function createOpenRouterClient(): OpenAI | null {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) return null;
+  return new OpenAI({
+    apiKey: key,
+    baseURL: "https://openrouter.ai/api/v1",
+  });
+}
+
 export class LLMAgent {
   private client: OpenAI;
+  private openRouterClient: OpenAI | null;
   private defaultModel: string;
   private tracker: TokenTracker;
 
   constructor(options?: { budgetUsd?: number }) {
     this.client = createClient();
+    this.openRouterClient = createOpenRouterClient();
     this.defaultModel = getDefaultModel();
     this.tracker = new TokenTracker(options?.budgetUsd);
+  }
+
+  /**
+   * Get the appropriate client for a model.
+   * Models with "/" (e.g., "anthropic/claude-3.5-sonnet") route through OpenRouter.
+   */
+  private getClientForModel(model: string): OpenAI {
+    if (model.includes("/") && this.openRouterClient) {
+      return this.openRouterClient;
+    }
+    return this.client;
   }
 
   /** Basic call with token tracking and rate-limit retry */
   async call(options: AgentCallOptions): Promise<AgentCallResult<string>> {
     const model = options.model || this.defaultModel;
+    const client = this.getClientForModel(model);
     const messages = buildMessages(options.prompt, options.system);
     const maxRateLimitRetries = 3;
 
@@ -89,7 +116,7 @@ export class LLMAgent {
       const startTime = Date.now();
 
       try {
-        const response = await this.client.chat.completions.create({
+        const response = await client.chat.completions.create({
           model,
           messages,
           temperature: options.temperature ?? 0.7,
@@ -230,15 +257,16 @@ export class LLMAgent {
     options: AgentCallOptions
   ): AsyncGenerator<string, TokenUsage> {
     const model = options.model || this.defaultModel;
+    const client = this.getClientForModel(model);
     const messages = buildMessages(options.prompt, options.system);
     const startTime = Date.now();
-    const isOpenAI = getProvider() === "openai";
+    const isOpenAI = getProvider() === "openai" && !model.includes("/");
 
     let stream: AsyncIterable<OpenAI.Chat.Completions.ChatCompletionChunk>;
     const maxRateLimitRetries = 3;
     for (let rlAttempt = 0; rlAttempt <= maxRateLimitRetries; rlAttempt++) {
       try {
-        stream = await this.client.chat.completions.create({
+        stream = await client.chat.completions.create({
           model,
           messages,
           temperature: options.temperature ?? 0.7,

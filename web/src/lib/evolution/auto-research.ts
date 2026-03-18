@@ -33,6 +33,12 @@ export interface QualityMetrics {
   vague_narrative_count: number;
   /** Character count (length) */
   char_count: number;
+  /** Self-repetition overlap ratio (0-1, lower is better) */
+  repetition_overlap: number;
+  /** Conflict resolution score (0-1, lower is better for early chapters) */
+  premature_resolution: number;
+  /** Sentiment mismatch count */
+  sentiment_mismatch_count: number;
 }
 
 export interface LLMJudgement {
@@ -42,6 +48,10 @@ export interface LLMJudgement {
   character_voice_distinction: number;
   /** "Is the premise/conflict clear?" (1-10) */
   premise_clarity: number;
+  /** "Is the plot coherent/plausible?" (1-10) */
+  coherence: number;
+  /** "Are expressions varied (no repetition)?" (1-10) */
+  expression_variety: number;
   /** Specific feedback for improvement */
   feedback: string;
 }
@@ -102,19 +112,21 @@ export interface AutoResearchState {
 // Score calculation
 // ---------------------------------------------------------------------------
 
-const QUALITY_WEIGHT = 0.7;
-const EFFICIENCY_WEIGHT = 0.3;
+const QUALITY_WEIGHT = 0.9;
+const EFFICIENCY_WEIGHT = 0.1;
 
-// Quality sub-weights
-const W_DIALOGUE = 0.15;
-const W_TELL_NOT_SHOW = 0.15;
+// Quality sub-weights (code metrics: 40%, LLM judgement: 60%)
+const W_DIALOGUE = 0.10;
+const W_TELL_NOT_SHOW = 0.10;
 const W_ENDING_REPEAT = 0.10;
 const W_VAGUE = 0.10;
-const W_CLICK_NEXT = 0.30;
-const W_VOICE = 0.20;
+const W_CLICK_NEXT = 0.20;
+const W_VOICE = 0.10;
+const W_COHERENCE = 0.15;
+const W_EXPRESSION = 0.15;
 
 // Efficiency baselines (for normalization)
-const TOKEN_BASELINE = 50000; // "average" token usage for a chapter
+const TOKEN_BASELINE = 150000; // realistic token usage for a full chapter pipeline
 const MAX_RETRIES = 9; // 3 scenes × 3 retries each
 
 /**
@@ -133,13 +145,18 @@ export function calculateScore(
   const clickScore = judgement.next_chapter_click / 10;
   const voiceScore = judgement.character_voice_distinction / 10;
 
+  const coherenceScore = judgement.coherence / 10;
+  const expressionScore = judgement.expression_variety / 10;
+
   const qualityScore =
     dialogueScore * W_DIALOGUE +
     tellShowScore * W_TELL_NOT_SHOW +
     endingScore * W_ENDING_REPEAT +
     vagueScore * W_VAGUE +
     clickScore * W_CLICK_NEXT +
-    voiceScore * W_VOICE;
+    voiceScore * W_VOICE +
+    coherenceScore * W_COHERENCE +
+    expressionScore * W_EXPRESSION;
 
   // Efficiency sub-scores
   const tokenScore = Math.max(0, 1 - efficiency.total_tokens / TOKEN_BASELINE);
@@ -188,13 +205,25 @@ ${chapterText}
    - 5점: 대충 알겠지만 구체적이지 않음
    - 10점: 핵심 갈등과 주인공의 목표가 선명함
 
-4. **feedback**: 가장 큰 약점 1개와 구체적 개선 방향
+4. **coherence**: 이야기의 개연성이 있습니까?
+   - 1점: 장면 전환이 뜬금없고, 캐릭터 행동에 이유가 없음
+   - 5점: 대체로 괜찮지만 일부 전개가 억지스러움
+   - 10점: 모든 사건과 행동에 설득력 있는 동기와 인과관계가 있음
+
+5. **expression_variety**: 표현이 다양합니까?
+   - 1점: 같은 표현/구조가 계속 반복됨 ("~였다. ~였다.", "그녀는 ~했다" 패턴)
+   - 5점: 가끔 반복이 보이지만 대체로 다양
+   - 10점: 문장 구조, 어미, 묘사 방식이 풍부하고 지루하지 않음
+
+6. **feedback**: 가장 큰 약점 1개와 구체적 개선 방향
 
 ## 출력 형식 (JSON)
 {
   "next_chapter_click": 7,
   "character_voice_distinction": 5,
   "premise_clarity": 8,
+  "coherence": 6,
+  "expression_variety": 7,
   "feedback": "대사 비율이 낮아서 캐릭터 매력이 부족합니다. 호위와의 대화를 더 길게 전개하면..."
 }
 
@@ -213,10 +242,20 @@ export function buildModificationPrompt(
   currentScore: EvaluationScore,
   chapterText: string,
   previousExperiments: Experiment[],
+  forbiddenTargets?: string[],
 ): string {
   const recentExps = previousExperiments.slice(-5).map((e) =>
     `실험 #${e.id}: ${e.modification} → ${e.kept ? "✅ 개선" : "❌ 악화"} (점수: ${e.score.overall})`
   ).join("\n");
+
+  // Build target constraint
+  const allTargets = ["writer_system_prompt", "scene_validator_rules", "beat_structure", "blueprint_prompt"];
+  const availableTargets = forbiddenTargets?.length
+    ? allTargets.filter((t) => !forbiddenTargets.includes(t))
+    : allTargets;
+  const targetConstraint = forbiddenTargets?.length
+    ? `\n⚠️ 최근에 이미 시도한 대상(${forbiddenTargets.join(", ")})은 선택하지 마세요. 다른 대상을 선택하세요.`
+    : "";
 
   return `당신은 웹소설 생성 시스템의 자동 개선 에이전트입니다.
 
@@ -231,6 +270,8 @@ export function buildModificationPrompt(
 - 2화 클릭 의향: ${currentScore.llm_judgement.next_chapter_click}/10
 - 캐릭터 목소리: ${currentScore.llm_judgement.character_voice_distinction}/10
 - 전제 명확성: ${currentScore.llm_judgement.premise_clarity}/10
+- 개연성: ${currentScore.llm_judgement.coherence}/10
+- 표현 다양성: ${currentScore.llm_judgement.expression_variety}/10
 - LLM 피드백: ${currentScore.llm_judgement.feedback}
 - 총 토큰: ${currentScore.efficiency_metrics.total_tokens}
 - 재시도 횟수: ${currentScore.efficiency_metrics.retry_count}
@@ -242,19 +283,22 @@ ${recentExps || "없음 (첫 실험)"}
 ${chapterText.slice(0, 1000)}
 
 ## 당신의 임무
-1. 가장 큰 약점 1개를 식별하세요
-2. 약점을 해결할 **구체적인 시스템 수정** 1개를 제안하세요
-3. 수정 대상은 다음 중 하나:
+1. 가장 점수가 낮은 차원을 식별하세요
+2. 그 약점을 해결할 **구체적인 시스템 수정** 1개를 제안하세요
+3. 이전에 이미 시도한 수정과 **다른 접근**을 해야 합니다
+4. 수정 대상은 다음 중 하나:
    - writer_system_prompt: 글쓰기 지침 수정/추가
    - scene_validator_rules: 검증 규칙 추가/수정
    - beat_structure: 비트 구조 수정
    - blueprint_prompt: 블루프린트 예시 수정
+${targetConstraint}
+   사용 가능: ${availableTargets.join(", ")}
 
 ## 출력 형식 (JSON)
 {
-  "weakness": "가장 큰 약점 설명",
-  "target": "writer_system_prompt",
-  "modification": "수정할 내용을 구체적으로 설명",
+  "weakness": "가장 큰 약점 설명 (어떤 점수가 낮은지 구체적으로)",
+  "target": "${availableTargets[0]}",
+  "modification": "수정할 내용을 구체적으로 설명 (예시 포함)",
   "expected_impact": "이 수정으로 어떤 점수가 얼마나 개선될 것 같은지"
 }
 

@@ -12,7 +12,8 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:smoke": "vitest run __tests__/smoke",
-    "test:all": "vitest run && playwright test"
+    "test:all": "vitest run && playwright test",
+    "auto-research": "tsx scripts/auto-research.ts"
   },
   "dependencies": {
     "js-yaml": "^4.1.1",

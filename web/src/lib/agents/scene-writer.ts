@@ -12,6 +12,9 @@ import type { ChapterBlueprint, SceneSpec } from "@/lib/schema/planning";
 import type { TokenUsage } from "@/lib/agents/types";
 import { validateScene, buildSceneRepairPrompt } from "./scene-validator";
 import { planBeats, writeSceneByBeats } from "./beat-writer";
+import { validateSentiment } from "./sentiment-validator";
+import { detectInterSceneRepetition } from "./repetition-detector";
+import { validateConflictGate } from "./conflict-gate";
 
 export interface SceneWriterOptions {
   seed: NovelSeed;
@@ -62,12 +65,24 @@ ${chapterNumber}화 — ${blueprint.one_liner}
     .filter(Boolean);
 
   if (sceneChars.length > 0) {
-    parts.push("# 이 씬의 캐릭터");
+    parts.push("# 이 씬의 캐릭터 (말투를 반드시 구분하세요!)");
     for (const char of sceneChars) {
       if (!char) continue;
+      const dialogues = char.voice.sample_dialogues.slice(0, 3);
+      const speechPatterns = char.voice.speech_patterns?.slice(0, 3) || [];
       parts.push(`**${char.name}** (${char.role}): ${char.voice.personality_core}
 말투: ${char.voice.tone}
-대사 예시: "${char.voice.sample_dialogues[0] || ""}"
+${speechPatterns.length > 0 ? `말투 특징: ${speechPatterns.join(", ")}` : ""}
+대사 예시:
+${dialogues.map((d) => `  "${d}"`).join("\n") || '  (없음)'}
+⚠️ ${char.name}의 대사는 반드시 위 말투를 따라야 합니다. 다른 캐릭터와 말투가 겹치면 안 됩니다.
+`);
+    }
+    if (sceneChars.length >= 2) {
+      parts.push(`## 캐릭터 음성 구분 규칙
+- 이름을 가리고 대사만 읽어도 누가 말하는지 알 수 있어야 합니다
+- 각 캐릭터의 어휘 수준, 존댓말/반말, 감정 표현 방식이 달라야 합니다
+- 같은 상황에서도 캐릭터마다 다르게 반응해야 합니다
 `);
     }
   }
@@ -102,13 +117,15 @@ ${lastScene.slice(-800)}
 
 ## 작성 규칙
 1. 이 씬의 목적에만 집중하세요. 다른 사건을 끌어오지 마세요.
-2. 대사를 충분히 넣으세요. 캐릭터 목소리가 들려야 합니다.
+2. 대사를 충분히 넣으세요 (전체의 30% 이상). 캐릭터 목소리가 들려야 합니다.
 3. 감정을 설명하지 말고 행동/감각으로 보여주세요:
    - ❌ "불안했다" → ✅ "찻잔을 드는 손끝이 떨렸다"
    - ❌ "결심을 굳혔다" → ✅ "칼집에서 단검을 뽑았다"
 4. 문장 어미를 다양하게 쓰세요 (~였다 반복 금지)
-5. 짧은 문단 (3문장 이하)
-${sceneIndex === blueprint.scenes.length - 1 ? "6. 마지막 씬이므로 다음 화가 궁금해지는 문장으로 끝내세요." : ""}
+5. 짧은 문단 (3문장 이하). 문장 길이도 다양하게 (짧은 문장 → 중간 → 짧은)
+6. 앞 씬에서 쓴 표현/묘사를 반복하지 마세요. 새로운 감각과 비유를 사용하세요.
+7. 갈등은 이 씬에서 해결하지 마세요. 더 꼬이게 만드세요.
+${sceneIndex === blueprint.scenes.length - 1 ? "8. 마지막 씬이므로 다음 화가 궁금해지는 문장으로 끝내세요. 반전이나 새로운 위기를 던지세요." : ""}
 
 출력: 씬 본문만 (메타 정보 없이)`);
 
@@ -218,6 +235,37 @@ export async function writeChapterByScenes(
     if (!validation.passed) {
       for (const issue of validation.issues.filter((iss) => iss.severity === "error")) {
         remainingIssues.push(`[씬${i + 1}] ${issue.message}`);
+      }
+    }
+
+    // Additional validations (non-blocking — log warnings but don't retry)
+    const sentimentResult = validateSentiment(sceneText, scene.emotional_tone);
+    if (!sentimentResult.passed) {
+      for (const issue of sentimentResult.issues) {
+        remainingIssues.push(`[씬${i + 1}/감정] ${issue}`);
+      }
+    }
+
+    if (sceneTexts.length > 0) {
+      const repetitionResult = detectInterSceneRepetition(sceneText, sceneTexts);
+      if (!repetitionResult.passed) {
+        for (const issue of repetitionResult.issues.filter((iss) => iss.severity === "error")) {
+          remainingIssues.push(`[씬${i + 1}/반복] ${issue.message}`);
+        }
+      }
+    }
+
+    const isLastScene = i === blueprint.scenes.length - 1;
+    const conflictResult = validateConflictGate(
+      sceneText,
+      chapterNumber,
+      seed.total_chapters,
+      "rising_action", // default; blueprint doesn't expose role_in_arc per scene
+      isLastScene,
+    );
+    if (!conflictResult.passed) {
+      for (const issue of conflictResult.issues.filter((iss) => iss.severity === "error")) {
+        remainingIssues.push(`[씬${i + 1}/갈등] ${issue.message}`);
       }
     }
 
