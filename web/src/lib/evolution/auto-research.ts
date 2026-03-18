@@ -1,0 +1,262 @@
+/**
+ * AutoResearch Loop — Autonomous system improvement loop.
+ *
+ * Inspired by Andrej Karpathy's AutoResearch: instead of generating
+ * novels and hoping they're good, this loop improves the GENERATION
+ * SYSTEM itself (prompts, templates, rules) through measurable evaluation.
+ *
+ * Loop:
+ *   1. Generate a chapter with current system
+ *   2. Evaluate quality (code metrics + LLM judge)
+ *   3. AI analyzes weaknesses
+ *   4. AI proposes system modifications (prompts, examples, rules)
+ *   5. Apply modifications
+ *   6. Regenerate with modified system
+ *   7. Re-evaluate → keep if better, revert if worse
+ *   8. Repeat
+ */
+
+import type { TokenUsage } from "@/lib/agents/types";
+
+// ---------------------------------------------------------------------------
+// Evaluation types
+// ---------------------------------------------------------------------------
+
+export interface QualityMetrics {
+  /** Dialogue ratio (0-1) */
+  dialogue_ratio: number;
+  /** Tell-not-show violation count */
+  tell_not_show_count: number;
+  /** Ending repetition rate (0-1) */
+  ending_repetition_rate: number;
+  /** Vague narrative count */
+  vague_narrative_count: number;
+  /** Character count (length) */
+  char_count: number;
+}
+
+export interface LLMJudgement {
+  /** "Would you click next chapter?" (1-10) */
+  next_chapter_click: number;
+  /** "Can you distinguish character voices?" (1-10) */
+  character_voice_distinction: number;
+  /** "Is the premise/conflict clear?" (1-10) */
+  premise_clarity: number;
+  /** Specific feedback for improvement */
+  feedback: string;
+}
+
+export interface EfficiencyMetrics {
+  /** Total tokens used across all LLM calls */
+  total_tokens: number;
+  /** Number of retry/repair attempts */
+  retry_count: number;
+}
+
+export interface EvaluationScore {
+  /** Overall score (0-1) */
+  overall: number;
+  /** Quality sub-score (0-1) */
+  quality: number;
+  /** Efficiency sub-score (0-1) */
+  efficiency: number;
+  /** Raw metrics */
+  quality_metrics: QualityMetrics;
+  llm_judgement: LLMJudgement;
+  efficiency_metrics: EfficiencyMetrics;
+}
+
+// ---------------------------------------------------------------------------
+// Experiment tracking
+// ---------------------------------------------------------------------------
+
+export interface Experiment {
+  /** Experiment ID */
+  id: number;
+  /** What was modified */
+  modification: string;
+  /** The generated text */
+  generated_text: string;
+  /** Evaluation score */
+  score: EvaluationScore;
+  /** Whether this experiment was kept */
+  kept: boolean;
+  /** Timestamp */
+  timestamp: number;
+}
+
+export interface AutoResearchState {
+  /** Current best score */
+  best_score: number;
+  /** Best experiment ID */
+  best_experiment_id: number;
+  /** All experiments run so far */
+  experiments: Experiment[];
+  /** Total experiments run */
+  total_runs: number;
+  /** Cumulative improvement from baseline */
+  improvement_from_baseline: number;
+}
+
+// ---------------------------------------------------------------------------
+// Score calculation
+// ---------------------------------------------------------------------------
+
+const QUALITY_WEIGHT = 0.7;
+const EFFICIENCY_WEIGHT = 0.3;
+
+// Quality sub-weights
+const W_DIALOGUE = 0.15;
+const W_TELL_NOT_SHOW = 0.15;
+const W_ENDING_REPEAT = 0.10;
+const W_VAGUE = 0.10;
+const W_CLICK_NEXT = 0.30;
+const W_VOICE = 0.20;
+
+// Efficiency baselines (for normalization)
+const TOKEN_BASELINE = 50000; // "average" token usage for a chapter
+const MAX_RETRIES = 9; // 3 scenes × 3 retries each
+
+/**
+ * Calculate a single evaluation score from raw metrics.
+ */
+export function calculateScore(
+  quality: QualityMetrics,
+  judgement: LLMJudgement,
+  efficiency: EfficiencyMetrics,
+): EvaluationScore {
+  // Quality sub-scores (each 0-1)
+  const dialogueScore = Math.min(1, quality.dialogue_ratio / 0.5); // 50%+ = perfect
+  const tellShowScore = Math.max(0, 1 - quality.tell_not_show_count * 0.2); // 5+ = 0
+  const endingScore = Math.max(0, 1 - quality.ending_repetition_rate * 2); // 50%+ = 0
+  const vagueScore = Math.max(0, 1 - quality.vague_narrative_count * 0.25); // 4+ = 0
+  const clickScore = judgement.next_chapter_click / 10;
+  const voiceScore = judgement.character_voice_distinction / 10;
+
+  const qualityScore =
+    dialogueScore * W_DIALOGUE +
+    tellShowScore * W_TELL_NOT_SHOW +
+    endingScore * W_ENDING_REPEAT +
+    vagueScore * W_VAGUE +
+    clickScore * W_CLICK_NEXT +
+    voiceScore * W_VOICE;
+
+  // Efficiency sub-scores
+  const tokenScore = Math.max(0, 1 - efficiency.total_tokens / TOKEN_BASELINE);
+  const retryScore = Math.max(0, 1 - efficiency.retry_count / MAX_RETRIES);
+  const efficiencyScore = tokenScore * 0.7 + retryScore * 0.3;
+
+  const overall = qualityScore * QUALITY_WEIGHT + efficiencyScore * EFFICIENCY_WEIGHT;
+
+  return {
+    overall: Math.round(overall * 1000) / 1000,
+    quality: Math.round(qualityScore * 1000) / 1000,
+    efficiency: Math.round(efficiencyScore * 1000) / 1000,
+    quality_metrics: quality,
+    llm_judgement: judgement,
+    efficiency_metrics: efficiency,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// LLM Judge prompt
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a prompt for the LLM judge to evaluate a generated chapter.
+ */
+export function buildJudgePrompt(chapterText: string, genre: string): string {
+  return `당신은 카카오페이지 웹소설 품질 심사위원입니다. 다음 ${genre} 장르 1화를 읽고 평가해주세요.
+
+[소설 텍스트]
+${chapterText}
+
+## 평가 기준 (각 1-10점)
+
+1. **next_chapter_click**: 이 1화를 읽고 2화를 클릭하겠습니까?
+   - 1점: 절대 안 함 (지루, 아무 일도 안 일어남)
+   - 5점: 보통 (나쁘진 않지만 끌리지도 않음)
+   - 10점: 즉시 클릭 (너무 궁금해서 못 참겠음)
+
+2. **character_voice_distinction**: 캐릭터 목소리가 구분됩니까?
+   - 1점: 모든 캐릭터가 같은 말투
+   - 5점: 주인공은 구분되지만 나머지는 비슷
+   - 10점: 이름 없이 대사만 읽어도 누군지 알 수 있음
+
+3. **premise_clarity**: 이 소설의 전제/갈등이 명확합니까?
+   - 1점: 1화를 다 읽어도 무슨 소설인지 모름
+   - 5점: 대충 알겠지만 구체적이지 않음
+   - 10점: 핵심 갈등과 주인공의 목표가 선명함
+
+4. **feedback**: 가장 큰 약점 1개와 구체적 개선 방향
+
+## 출력 형식 (JSON)
+{
+  "next_chapter_click": 7,
+  "character_voice_distinction": 5,
+  "premise_clarity": 8,
+  "feedback": "대사 비율이 낮아서 캐릭터 매력이 부족합니다. 호위와의 대화를 더 길게 전개하면..."
+}
+
+JSON만 출력하세요.`;
+}
+
+// ---------------------------------------------------------------------------
+// Modification analysis prompt
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a prompt for the AI agent to analyze weaknesses and propose
+ * system modifications (like AutoResearch modifying train.py).
+ */
+export function buildModificationPrompt(
+  currentScore: EvaluationScore,
+  chapterText: string,
+  previousExperiments: Experiment[],
+): string {
+  const recentExps = previousExperiments.slice(-5).map((e) =>
+    `실험 #${e.id}: ${e.modification} → ${e.kept ? "✅ 개선" : "❌ 악화"} (점수: ${e.score.overall})`
+  ).join("\n");
+
+  return `당신은 웹소설 생성 시스템의 자동 개선 에이전트입니다.
+
+## 현재 시스템 평가 결과
+- 전체 점수: ${currentScore.overall}/1.0
+- 품질 점수: ${currentScore.quality}/1.0
+- 효율 점수: ${currentScore.efficiency}/1.0
+- 대사 비율: ${(currentScore.quality_metrics.dialogue_ratio * 100).toFixed(0)}%
+- Tell-not-show 위반: ${currentScore.quality_metrics.tell_not_show_count}개
+- 어미 반복률: ${(currentScore.quality_metrics.ending_repetition_rate * 100).toFixed(0)}%
+- 모호 서술: ${currentScore.quality_metrics.vague_narrative_count}개
+- 2화 클릭 의향: ${currentScore.llm_judgement.next_chapter_click}/10
+- 캐릭터 목소리: ${currentScore.llm_judgement.character_voice_distinction}/10
+- 전제 명확성: ${currentScore.llm_judgement.premise_clarity}/10
+- LLM 피드백: ${currentScore.llm_judgement.feedback}
+- 총 토큰: ${currentScore.efficiency_metrics.total_tokens}
+- 재시도 횟수: ${currentScore.efficiency_metrics.retry_count}
+
+## 이전 실험 결과
+${recentExps || "없음 (첫 실험)"}
+
+## 현재 생성된 텍스트 (처음 1000자)
+${chapterText.slice(0, 1000)}
+
+## 당신의 임무
+1. 가장 큰 약점 1개를 식별하세요
+2. 약점을 해결할 **구체적인 시스템 수정** 1개를 제안하세요
+3. 수정 대상은 다음 중 하나:
+   - writer_system_prompt: 글쓰기 지침 수정/추가
+   - scene_validator_rules: 검증 규칙 추가/수정
+   - beat_structure: 비트 구조 수정
+   - blueprint_prompt: 블루프린트 예시 수정
+
+## 출력 형식 (JSON)
+{
+  "weakness": "가장 큰 약점 설명",
+  "target": "writer_system_prompt",
+  "modification": "수정할 내용을 구체적으로 설명",
+  "expected_impact": "이 수정으로 어떤 점수가 얼마나 개선될 것 같은지"
+}
+
+JSON만 출력하세요.`;
+}
