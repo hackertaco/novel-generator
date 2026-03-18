@@ -58,8 +58,8 @@ loadEnvFile(path.join(projectRoot, ".env"));
 // ---------------------------------------------------------------------------
 import { runAutoResearchLoop, type LoopRunnerConfig } from "@/lib/evolution/loop-runner";
 import { saveExperimentLog, printExperimentSummary } from "@/lib/evolution/experiment-logger";
+import { generateRichSeed } from "@/lib/evolution/seed-generator";
 import type { NovelSeed } from "@/lib/schema/novel";
-import { runPlotPipeline } from "@/lib/agents/plot-pipeline";
 
 // ---------------------------------------------------------------------------
 // Argument parsing
@@ -138,152 +138,16 @@ function printUsage(): void {
 // ---------------------------------------------------------------------------
 // Seed generation
 // ---------------------------------------------------------------------------
-async function generateMinimalSeed(genre: string): Promise<NovelSeed> {
-  console.log("📝 플롯 파이프라인으로 초기 시드 생성 중...");
-  const pipelineResult = await runPlotPipeline(genre);
-
-  if (pipelineResult.plots.length === 0) {
-    throw new Error("플롯 파이프라인에서 결과를 생성하지 못했습니다.");
-  }
-
-  const plot = pipelineResult.plots[0];
-
-  // Build chapter outlines from arc_summary
-  const totalChapters = 10;
-  const chapterOutlines = Array.from({ length: totalChapters }, (_, i) => ({
-    chapter_number: i + 1,
-    title: `${i + 1}화`,
-    arc_id: "arc_1",
-    one_liner: plot.arc_summary[i] ?? plot.arc_summary[plot.arc_summary.length - 1] ?? plot.logline,
-    key_points: [],
-    characters_involved: [],
-    tension_level: Math.min(3 + i, 10),
-  }));
-
-  // Build characters with distinct voices from plot archetype info
-  const characters = [];
-  if (plot.male_archetype) {
-    // Generate distinct voice based on archetype
-    const archetype = plot.male_archetype;
-    const isCold = archetype.includes("냉혹") || archetype.includes("차가운") || archetype.includes("냉정");
-    const isPlayful = archetype.includes("유쾌") || archetype.includes("장난") || archetype.includes("활발");
-    const isDark = archetype.includes("어둠") || archetype.includes("복수") || archetype.includes("야망");
-
-    characters.push({
-      id: "char_male_lead",
-      name: plot.title.includes("의") ? plot.title.split("의")[0].slice(0, 3) : "강현",
-      role: "주인공",
-      introduction_chapter: 1,
-      voice: {
-        tone: isCold ? "짧고 건조한 말투, 존댓말 위주" : isPlayful ? "반말 섞인 가벼운 말투, 농담 잦음" : isDark ? "낮고 무거운 말투, 의미심장한 말" : "담담하지만 날카로운 말투",
-        speech_patterns: isCold
-          ? ["문장을 짧게 끊는다", "감정 표현을 절제한다", "존댓말을 쓰지만 차갑다"]
-          : isPlayful
-          ? ["반말과 존댓말을 섞는다", "비유와 농담이 많다", "말끝을 흐린다"]
-          : isDark
-          ? ["독백이 길다", "상대를 시험하는 질문을 한다", "의미를 숨긴 말을 한다"]
-          : ["핵심만 말한다", "불필요한 수식을 안 쓴다", "판단이 빠르다"],
-        sample_dialogues: isCold
-          ? ["\"필요 없어.\"", "\"그건 네가 알 바 아니야.\"", "\"...좋을 대로 해.\""]
-          : isPlayful
-          ? ["\"야, 그러다 큰일 나. 진짜로.\"", "\"됐고, 일단 밥이나 먹자.\"", "\"하, 재밌네. 진짜 재밌어.\""]
-          : isDark
-          ? ["\"각오는 됐겠지.\"", "\"넌 아직 모르는 게 많아.\"", "\"...후회는 하지 마.\""]
-          : ["\"상황이 이상해.\"", "\"기다려. 섣불리 움직이면 안 돼.\"", "\"내가 할게.\""],
-        personality_core: archetype,
-      },
-      backstory: `${plot.title}의 남자 주인공 — ${archetype}`,
-      arc_summary: plot.arc_summary.join(" → "),
-      state: {
-        level: null, location: null, status: "normal",
-        relationships: {}, inventory: [], secrets_known: [],
-      },
-    });
-  }
-  if (plot.female_archetype) {
-    const archetype = plot.female_archetype;
-    const isStrong = archetype.includes("강인") || archetype.includes("독립") || archetype.includes("당찬");
-    const isSoft = archetype.includes("상냥") || archetype.includes("순수") || archetype.includes("따뜻");
-    const isCunning = archetype.includes("영리") || archetype.includes("야심") || archetype.includes("계략");
-
-    characters.push({
-      id: "char_female_lead",
-      name: plot.title.length > 4 ? plot.title.slice(-2) : "서연",
-      role: "히로인",
-      introduction_chapter: 1,
-      voice: {
-        tone: isStrong ? "직설적이고 당당한 말투, 반말 비중 높음" : isSoft ? "조심스럽고 부드러운 말투, 존댓말 위주" : isCunning ? "겉은 공손하지만 속에 칼이 있는 말투" : "호기심 많고 솔직한 말투",
-        speech_patterns: isStrong
-          ? ["감정을 숨기지 않는다", "단정적으로 말한다", "약한 모습을 안 보이려 한다"]
-          : isSoft
-          ? ["말끝이 부드럽다", "상대의 기분을 먼저 생각한다", "혼잣말이 많다"]
-          : isCunning
-          ? ["겉과 속이 다른 대사", "상대를 떠보는 질문", "미소 뒤에 계산이 있다"]
-          : ["궁금한 건 바로 묻는다", "감정 표현이 솔직하다", "엉뚱한 비유를 쓴다"],
-        sample_dialogues: isStrong
-          ? ["\"됐어, 내가 알아서 할게.\"", "\"그 정도로 흔들릴 거였으면 시작도 안 했어.\"", "\"...우는 거 아니거든.\""]
-          : isSoft
-          ? ["\"저... 괜찮으신 거예요?\"", "\"이건 제가 준비한 건데, 받아주실 수 있을까요?\"", "\"조금만 더 기다려주세요...\""]
-          : isCunning
-          ? ["\"어머, 그런 뜻이 아니었는데요?\"", "\"전 단지 도움을 드리고 싶었을 뿐이에요.\"", "\"...후후, 재밌는 분이시네요.\""]
-          : ["\"그게 진짜야? 거짓말 같은데.\"", "\"아, 맞다! 나 아까 그거 보고 떠올랐는데─\"", "\"솔직히 말하면, 좀 무서워.\""],
-        personality_core: archetype,
-      },
-      backstory: `${plot.title}의 여자 주인공 — ${archetype}`,
-      arc_summary: plot.arc_summary.join(" → "),
-      state: {
-        level: null, location: null, status: "normal",
-        relationships: {}, inventory: [], secrets_known: [],
-      },
-    });
-  }
-
-  const seed: NovelSeed = {
-    title: plot.title,
-    logline: plot.logline,
-    total_chapters: totalChapters,
-    world: {
-      name: plot.title,
-      genre,
-      sub_genre: "",
-      time_period: "",
-      magic_system: null,
-      key_locations: {},
-      factions: {},
-      rules: [],
-    },
-    characters,
-    arcs: [
-      {
-        id: "arc_1",
-        name: "도입",
-        start_chapter: 1,
-        end_chapter: totalChapters,
-        summary: plot.logline,
-        key_events: plot.arc_summary,
-        climax_chapter: Math.ceil(totalChapters * 0.8),
-      },
-    ],
-    chapter_outlines: chapterOutlines,
-    foreshadowing: [],
-    style: {
-      max_paragraph_length: 3,
-      dialogue_ratio: 0.6,
-      sentence_style: "short",
-      hook_ending: true,
-      pov: "1인칭",
-      tense: "과거형",
-      formatting_rules: [
-        "문단은 3문장 이하로",
-        "대사 후 긴 지문 금지",
-        "클리셰 표현 사용 가능 (장르 특성)",
-        "매 회차 끝은 궁금증 유발",
-      ],
-    },
-  };
-
-  console.log(`✅ 시드 생성 완료: "${seed.title}"`);
-  return seed;
+async function generateFullSeed(genre: string, model?: string): Promise<NovelSeed> {
+  console.log("📝 풍부한 시드 생성 중 (5단계 파이프라인)...");
+  const result = await generateRichSeed({
+    genre,
+    model,
+    totalChapters: 200,
+    onProgress: (step) => console.log(`   ${step}`),
+  });
+  console.log(`✅ 시드 생성 완료: "${result.seed.title}" (캐릭터 ${result.seed.characters.length}명, 아크 ${result.seed.arcs.length}개)`);
+  return result.seed;
 }
 
 function loadSeedFile(filePath: string): NovelSeed {
@@ -312,7 +176,7 @@ async function main(): Promise<void> {
     console.log(`📂 시드 파일 로드: ${args.seedFile}`);
     seed = loadSeedFile(args.seedFile);
   } else {
-    seed = await generateMinimalSeed(args.genre);
+    seed = await generateFullSeed(args.genre, args.model);
   }
 
   // Print start banner
