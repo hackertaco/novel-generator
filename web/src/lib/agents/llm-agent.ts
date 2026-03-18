@@ -116,11 +116,14 @@ export class LLMAgent {
       const startTime = Date.now();
 
       try {
+        const usesMaxCompletionTokens = model.startsWith("gpt-5") || model.startsWith("o3") || model.startsWith("o4");
         const response = await client.chat.completions.create({
           model,
           messages,
           temperature: options.temperature ?? 0.7,
-          max_tokens: options.maxTokens ?? 4096,
+          ...(usesMaxCompletionTokens
+            ? { max_completion_tokens: options.maxTokens ?? 4096 }
+            : { max_tokens: options.maxTokens ?? 4096 }),
         });
 
         const duration_ms = Date.now() - startTime;
@@ -266,11 +269,14 @@ export class LLMAgent {
     const maxRateLimitRetries = 3;
     for (let rlAttempt = 0; rlAttempt <= maxRateLimitRetries; rlAttempt++) {
       try {
+        const usesMaxCompletionTokensStream = model.startsWith("gpt-5") || model.startsWith("o3") || model.startsWith("o4");
         stream = await client.chat.completions.create({
           model,
           messages,
           temperature: options.temperature ?? 0.7,
-          max_tokens: options.maxTokens ?? 4096,
+          ...(usesMaxCompletionTokensStream
+            ? { max_completion_tokens: options.maxTokens ?? 4096 }
+            : { max_tokens: options.maxTokens ?? 4096 }),
           stream: true,
           ...(isOpenAI ? { stream_options: { include_usage: true } } : {}),
         });
