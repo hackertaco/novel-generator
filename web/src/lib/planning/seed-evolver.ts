@@ -9,7 +9,7 @@ import type { TokenUsage } from "@/lib/agents/types";
  * Mid  (0.9): balanced creativity
  * High (1.1): creative, exploratory
  */
-export const SEED_TEMPERATURES = [0.7, 0.9, 1.1] as const;
+export const SEED_TEMPERATURES = [0.8] as const;
 export type SeedTemperature = (typeof SEED_TEMPERATURES)[number];
 
 /** A single generated seed candidate with its generation metadata. */
@@ -53,7 +53,7 @@ export async function generateSeedCandidates(
         prompt,
         system: SEED_SYSTEM_PROMPT,
         temperature,
-        maxTokens: 8000,
+        maxTokens: 16000,
         schema: NovelSeedSchema,
         format: "yaml",
         taskId: `seed-generation-candidate-${i + 1}`,

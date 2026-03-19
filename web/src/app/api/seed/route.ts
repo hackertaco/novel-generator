@@ -5,6 +5,8 @@ import { evaluateCandidate } from "@/lib/evolution/candidate-evaluator";
 import { crossoverSeeds } from "@/lib/evolution/seed-crossover";
 import type { TokenUsage } from "@/lib/agents/types";
 
+export const maxDuration = 300;
+
 export async function POST(request: NextRequest) {
   try {
     const { genre, plot } = (await request.json()) as {
@@ -50,15 +52,23 @@ ${plot.arc_summary.map((a) => `- ${a}`).join("\n")}
     const best = scored[0];
     const secondBest = scored[1];
 
-    // ── Stage 3: Crossover — 1 LLM call merging best + second-best ───────────
-    const { seed, usage: crossoverUsage } = await crossoverSeeds(
-      best.candidate,
-      best.score,
-      secondBest.candidate,
-      secondBest.score,
-    );
+    // ── Stage 3: Crossover (only if 2+ candidates) ─────────────────────────
+    let seed;
+    let crossoverUsage: TokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 };
 
-    // Aggregate total usage (3 generation calls + 1 crossover call = 4 total)
+    if (secondBest) {
+      const crossoverResult = await crossoverSeeds(
+        best.candidate,
+        best.score,
+        secondBest.candidate,
+        secondBest.score,
+      );
+      seed = crossoverResult.seed;
+      crossoverUsage = crossoverResult.usage;
+    } else {
+      seed = best.candidate.seed;
+    }
+
     const usage: TokenUsage = {
       prompt_tokens:
         generationUsage.prompt_tokens + crossoverUsage.prompt_tokens,
