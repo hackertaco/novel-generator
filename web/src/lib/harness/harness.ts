@@ -222,24 +222,32 @@ export class NovelHarness {
     const startTime = Date.now();
     let blueprint: ChapterBlueprint | undefined;
 
-    // Lazy planning
+    // Lazy planning (with fallback — planning failure shouldn't block generation)
     if (this.masterPlan) {
       const scheduler = new LazyScheduler(this.masterPlan);
       const needs = scheduler.getPlanningNeeds(chapterNumber);
 
       if (needs.needsL2 && needs.part) {
-        const arcResult = await generateArcPlans(seed, needs.part);
-        needs.part.arcs = arcResult.data;
-        if (arcResult.newCharacters.length > 0) {
-          seed.characters.push(...arcResult.newCharacters);
+        try {
+          const arcResult = await generateArcPlans(seed, needs.part);
+          needs.part.arcs = arcResult.data;
+          if (arcResult.newCharacters.length > 0) {
+            seed.characters.push(...arcResult.newCharacters);
+          }
+          yield { type: "plan_generated", plan: this.masterPlan };
+        } catch (err) {
+          console.warn(`[harness] 아크 플래닝 실패, 블루프린트 없이 진행: ${err instanceof Error ? err.message : err}`);
         }
-        yield { type: "plan_generated", plan: this.masterPlan };
       }
 
       const arc = scheduler.getArcForChapter(chapterNumber);
       if (arc && scheduler.needsChapterBlueprint(chapterNumber)) {
-        const bpResult = await generateChapterBlueprints(seed, arc, previousSummaries);
-        arc.chapter_blueprints = bpResult.data;
+        try {
+          const bpResult = await generateChapterBlueprints(seed, arc, previousSummaries);
+          arc.chapter_blueprints = bpResult.data;
+        } catch (err) {
+          console.warn(`[harness] 블루프린트 생성 실패, 없이 진행: ${err instanceof Error ? err.message : err}`);
+        }
       }
 
       blueprint = scheduler.getBlueprint(chapterNumber);
