@@ -154,11 +154,34 @@ export class NovelHarness {
       for (const change of chapterMemory.character_changes) {
         const state = this.characterTracker.getCurrentState(change.characterId);
         if (state) {
+          const updatedRelationships = { ...state.relationships };
+          const relUpdates = (change as Record<string, unknown>).relationship_updates as Record<string, string> | undefined;
+          if (relUpdates) {
+            for (const [key, val] of Object.entries(relUpdates)) {
+              updatedRelationships[key] = val;
+            }
+          }
+          const emotionalState = (change as Record<string, unknown>).emotional_state as string | undefined;
+          const newLocation = (change as Record<string, unknown>).location as string | undefined;
+          const newSecrets = (change as Record<string, unknown>).new_secrets as string[] | undefined;
+
           this.characterTracker.recordState({
             ...state,
             chapter: chapterNumber,
             growth_note: change.change,
+            relationships: updatedRelationships,
+            status: emotionalState && emotionalState !== "neutral" ? emotionalState : state.status,
+            location: newLocation || state.location,
           });
+
+          // Update seed character state
+          const seedChar = seed.characters.find((c) => c.id === change.characterId);
+          if (seedChar) {
+            if (relUpdates) seedChar.state.relationships = { ...seedChar.state.relationships, ...relUpdates };
+            if (newLocation) seedChar.state.location = newLocation;
+            if (emotionalState) seedChar.state.status = emotionalState;
+            if (newSecrets?.length) seedChar.state.secrets_known = [...(seedChar.state.secrets_known || []), ...newSecrets];
+          }
         }
       }
     }

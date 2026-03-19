@@ -133,12 +133,30 @@ ${chapterOutline.one_liner}${keyPtsStr}
       const gender = char.gender || "male";
       const pronoun = gender === "female" ? "그녀" : gender === "other" ? "그" : "그";
       const genderLabel = gender === "female" ? "여성" : gender === "male" ? "남성" : "기타";
+
+      // Current mutable state
+      const stateLines: string[] = [];
+      if (char.state.status && char.state.status !== "normal") {
+        stateLines.push(`현재 감정/상태: ${char.state.status}`);
+      }
+      if (char.state.location) {
+        stateLines.push(`현재 위치: ${char.state.location}`);
+      }
+      const relEntries = Object.entries(char.state.relationships || {});
+      if (relEntries.length > 0) {
+        stateLines.push(`관계: ${relEntries.map(([k, v]) => `${k}(${v})`).join(", ")}`);
+      }
+      if (char.state.secrets_known && char.state.secrets_known.length > 0) {
+        stateLines.push(`알고 있는 비밀: ${char.state.secrets_known.join(", ")}`);
+      }
+      const stateBlock = stateLines.length > 0 ? `\n${stateLines.join("\n")}` : "";
+
       parts.push(`**${char.name}** (${char.role}, ${genderLabel}) — 대명사: "${pronoun}"
 성격: ${char.voice.personality_core}
 말투: ${char.voice.tone}
 ${speechPatterns.length > 0 ? `말투 특징: ${speechPatterns.join(", ")}` : ""}
 대사 예시:
-${dialogues.map((d) => `  "${d}"`).join("\n") || '  (없음)'}
+${dialogues.map((d) => `  "${d}"`).join("\n") || '  (없음)'}${stateBlock}
 ⚠️ ${char.name}은(는) ${genderLabel}입니다. 반드시 "${pronoun}"로 지칭하세요. 대사는 위 말투를 따라야 합니다.
 `);
     }

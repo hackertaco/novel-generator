@@ -200,16 +200,51 @@ export class Orchestrator {
     const chapterMemory = await summarizeChapter(chapterText, chapterNumber, seed);
     this.memory!.addChapter(chapterMemory);
 
-    // 2. Update character tracker from the summary
+    // 2. Update character tracker with rich state changes
     if (this.characterTracker && chapterMemory.character_changes.length > 0) {
       for (const change of chapterMemory.character_changes) {
         const currentState = this.characterTracker.getCurrentState(change.characterId);
         if (currentState) {
+          // Merge relationship updates
+          const updatedRelationships = { ...currentState.relationships };
+          const relUpdates = (change as Record<string, unknown>).relationship_updates as Record<string, string> | undefined;
+          if (relUpdates) {
+            for (const [key, val] of Object.entries(relUpdates)) {
+              updatedRelationships[key] = val;
+            }
+          }
+
+          // Extract new fields
+          const emotionalState = (change as Record<string, unknown>).emotional_state as string | undefined;
+          const newLocation = (change as Record<string, unknown>).location as string | undefined;
+          const newSecrets = (change as Record<string, unknown>).new_secrets as string[] | undefined;
+
+          // Build status string from emotional state
+          const status = emotionalState && emotionalState !== "neutral"
+            ? emotionalState
+            : currentState.status;
+
           this.characterTracker.recordState({
             ...currentState,
             chapter: chapterNumber,
             growth_note: change.change,
+            relationships: updatedRelationships,
+            status,
+            location: newLocation || currentState.location,
           });
+
+          // Also update the seed's character state for downstream use
+          const seedChar = seed.characters.find((c) => c.id === change.characterId);
+          if (seedChar) {
+            if (relUpdates) {
+              seedChar.state.relationships = { ...seedChar.state.relationships, ...relUpdates };
+            }
+            if (newLocation) seedChar.state.location = newLocation;
+            if (emotionalState) seedChar.state.status = status;
+            if (newSecrets && newSecrets.length > 0) {
+              seedChar.state.secrets_known = [...(seedChar.state.secrets_known || []), ...newSecrets];
+            }
+          }
         }
       }
     }
