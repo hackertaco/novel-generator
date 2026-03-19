@@ -123,7 +123,7 @@ function ReaderPageInner() {
         <GenerationControls
           isGenerating={isGenerating}
           currentChapter={currentChapter}
-          onGenerate={() => generateOrchestrated()}
+          onGenerate={(preset) => generateOrchestrated(undefined, { preset })}
           onAbort={abort}
           pipelineStage={pipelineStage}
           pipelineRetries={pipelineRetries}

@@ -135,7 +135,7 @@ export function useStreamingGeneration() {
   );
 
   const generateOrchestrated = useCallback(
-    async (chapterNumber?: number, options?: { qualityThreshold?: number; maxAttempts?: number; budgetUsd?: number }) => {
+    async (chapterNumber?: number, options?: { qualityThreshold?: number; maxAttempts?: number; budgetUsd?: number; preset?: string }) => {
       if (!seed) {
         setError("시드가 없습니다. 처음부터 시작해주세요.");
         return;
@@ -177,6 +177,7 @@ export function useStreamingGeneration() {
             previousChapterEnding,
             options,
             masterPlan,
+            preset: options?.preset || "default",
           }),
           signal: abortRef.current.signal,
         });
@@ -344,6 +345,12 @@ export function useStreamingGeneration() {
                     }
                     break;
                   }
+                  case "harness_done":
+                    addPipelineLog(
+                      `하네스 완료 (${parsed.config}) — $${(parsed.totalCostUsd ?? 0).toFixed(4)}, ${((parsed.totalDurationMs ?? 0) / 1000).toFixed(1)}초`,
+                      "success",
+                    );
+                    break;
                   case "error":
                     setError(parsed.message);
                     addPipelineLog(parsed.message, "warn");

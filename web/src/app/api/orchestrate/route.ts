@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { Orchestrator } from "@/lib/agents/orchestrator";
+import { NovelHarness, getDefaultConfig, getBudgetConfig, getFastConfig } from "@/lib/harness";
 import type { NovelSeed } from "@/lib/schema/novel";
 import type { MasterPlan } from "@/lib/schema/planning";
 
@@ -8,7 +9,16 @@ export const maxDuration = 120;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { seed, chapterNumber, previousSummaries, previousChapterEnding, options, batch, masterPlan } = body as {
+    const {
+      seed,
+      chapterNumber,
+      previousSummaries,
+      previousChapterEnding,
+      options,
+      batch,
+      masterPlan,
+      preset,
+    } = body as {
       seed: NovelSeed;
       chapterNumber: number;
       previousSummaries: Array<{
@@ -25,9 +35,11 @@ export async function POST(request: NextRequest) {
       };
       batch?: { startChapter: number; endChapter: number };
       masterPlan?: MasterPlan;
+      /** Harness preset: "default" | "budget" | "fast" */
+      preset?: string;
     };
 
-    console.log(`[orchestrate] 요청: ${chapterNumber}화 생성 (${new Date().toISOString()})`);
+    console.log(`[orchestrate] 요청: ${chapterNumber}화 생성 (preset: ${preset || "legacy"}, ${new Date().toISOString()})`);
 
     if (!seed || !chapterNumber) {
       return new Response(
@@ -35,13 +47,6 @@ export async function POST(request: NextRequest) {
         { status: 400, headers: { "Content-Type": "application/json" } },
       );
     }
-
-    const orchestrator = new Orchestrator({
-      budgetUsd: options?.budgetUsd,
-      qualityThreshold: options?.qualityThreshold,
-      maxAttemptsPerChapter: options?.maxAttempts,
-      masterPlan,
-    });
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
@@ -53,22 +58,86 @@ export async function POST(request: NextRequest) {
         };
 
         try {
-          const events = batch
-            ? orchestrator.generateBatch(
-                seed,
-                batch.startChapter,
-                batch.endChapter,
-                previousSummaries || [],
-              )
-            : orchestrator.generateChapter(
-                seed,
-                chapterNumber,
-                previousSummaries || [],
-                previousChapterEnding,
-              );
+          if (preset) {
+            // --- Harness mode: use NovelHarness ---
+            const configMap: Record<string, () => ReturnType<typeof getDefaultConfig>> = {
+              default: getDefaultConfig,
+              budget: getBudgetConfig,
+              fast: getFastConfig,
+            };
+            const config = (configMap[preset] || getDefaultConfig)();
 
-          for await (const event of events) {
-            send(event as Record<string, unknown>);
+            // Apply user overrides
+            if (options?.qualityThreshold) config.qualityThreshold = options.qualityThreshold;
+            if (options?.maxAttempts) config.maxAttempts = options.maxAttempts;
+            if (options?.budgetUsd) config.budgetUsd = options.budgetUsd;
+            config.output = { mode: "stream", verbose: false };
+
+            const harness = new NovelHarness(config);
+
+            const startCh = batch?.startChapter ?? chapterNumber;
+            const endCh = batch?.endChapter ?? chapterNumber;
+
+            for await (const event of harness.run(seed, startCh, endCh, { masterPlan })) {
+              switch (event.type) {
+                case "chapter_start":
+                  send({ type: "pipeline_stage", stage: "generating_chapter" });
+                  break;
+                case "pipeline_event":
+                  // Forward lifecycle events directly to client
+                  send(event.event as Record<string, unknown>);
+                  break;
+                case "chapter_complete":
+                  send({
+                    type: "complete",
+                    summary: event.result.summary,
+                    final_score: event.result.score,
+                  });
+                  send({ type: "usage", ...event.result.usage });
+                  break;
+                case "plan_generated":
+                  send({ type: "plan_update", plan: event.plan });
+                  break;
+                case "error":
+                  send({ type: "error", message: event.message });
+                  break;
+                case "done":
+                  send({
+                    type: "harness_done",
+                    config: event.result.config,
+                    totalCostUsd: event.result.totalCostUsd,
+                    totalTokens: event.result.totalUsage.total_tokens,
+                    totalDurationMs: event.result.totalDurationMs,
+                  });
+                  break;
+              }
+            }
+          } else {
+            // --- Legacy mode: direct Orchestrator ---
+            const orchestrator = new Orchestrator({
+              budgetUsd: options?.budgetUsd,
+              qualityThreshold: options?.qualityThreshold,
+              maxAttemptsPerChapter: options?.maxAttempts,
+              masterPlan,
+            });
+
+            const events = batch
+              ? orchestrator.generateBatch(
+                  seed,
+                  batch.startChapter,
+                  batch.endChapter,
+                  previousSummaries || [],
+                )
+              : orchestrator.generateChapter(
+                  seed,
+                  chapterNumber,
+                  previousSummaries || [],
+                  previousChapterEnding,
+                );
+
+            for await (const event of events) {
+              send(event as Record<string, unknown>);
+            }
           }
         } catch (err) {
           send({
