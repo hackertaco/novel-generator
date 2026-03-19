@@ -98,6 +98,12 @@ export async function POST(request: NextRequest) {
                 case "plan_generated":
                   send({ type: "plan_update", plan: event.plan });
                   break;
+                case "plausibility_check":
+                  send({ type: "plausibility_check", passed: event.passed, issues: event.issues });
+                  break;
+                case "plausibility_fixed":
+                  send({ type: "plausibility_fixed", fixes: event.fixes });
+                  break;
                 case "error":
                   send({ type: "error", message: event.message });
                   break;

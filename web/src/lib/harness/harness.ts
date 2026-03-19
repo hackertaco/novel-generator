@@ -18,6 +18,7 @@ import { generateArcPlans } from "../planning/arc-planner";
 import { generateChapterBlueprints } from "../planning/chapter-planner";
 import { generateMasterPlan } from "../planning/master-planner";
 import { extractSummaryRuleBased } from "../evaluators/summary";
+import { checkPlausibility, fixPlausibilityIssues } from "../evaluators/plausibility";
 
 // Tracking imports
 import { HierarchicalMemory, summarizeChapter } from "../memory";
@@ -56,6 +57,8 @@ export type HarnessEvent =
   | { type: "chapter_complete"; result: ChapterResult }
   | { type: "pipeline_event"; chapter: number; event: LifecycleEvent }
   | { type: "plan_generated"; plan: MasterPlan }
+  | { type: "plausibility_check"; passed: boolean; issues: Array<{ severity: string; category: string; description: string; suggestion: string }> }
+  | { type: "plausibility_fixed"; fixes: string[] }
   | { type: "error"; chapter: number; message: string }
   | { type: "done"; result: HarnessResult };
 
@@ -329,6 +332,31 @@ export class NovelHarness {
       const planResult = await generateMasterPlan(seed);
       this.masterPlan = planResult.data;
       yield { type: "plan_generated", plan: this.masterPlan };
+    }
+
+    // Plausibility check — catch logical holes before writing
+    try {
+      const plausibility = await checkPlausibility(seed);
+      yield {
+        type: "plausibility_check",
+        passed: plausibility.passed,
+        issues: plausibility.issues,
+      };
+
+      // Auto-fix critical issues
+      if (!plausibility.passed) {
+        const criticalIssues = plausibility.issues.filter((i) => i.severity === "critical");
+        if (criticalIssues.length > 0) {
+          const fixResult = await fixPlausibilityIssues(seed, criticalIssues);
+          // Apply fixes to seed (logline update, etc.)
+          if (fixResult.seed.logline !== seed.logline) {
+            seed.logline = fixResult.seed.logline;
+          }
+          yield { type: "plausibility_fixed", fixes: fixResult.fixes };
+        }
+      }
+    } catch (err) {
+      console.warn(`[harness] 개연성 검증 실패, 건너뜀: ${err instanceof Error ? err.message : err}`);
     }
 
     const chapters: ChapterResult[] = [];

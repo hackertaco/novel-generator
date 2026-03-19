@@ -345,6 +345,24 @@ export function useStreamingGeneration() {
                     }
                     break;
                   }
+                  case "plausibility_check": {
+                    const issueCount = (parsed.issues as unknown[])?.length || 0;
+                    if (parsed.passed) {
+                      addPipelineLog("개연성 검증 통과", "success");
+                    } else {
+                      addPipelineLog(`개연성 문제 ${issueCount}건 발견`, "warn");
+                      for (const issue of (parsed.issues as Array<{ description: string }>) || []) {
+                        addPipelineLog(`  → ${issue.description}`, "warn");
+                      }
+                    }
+                    break;
+                  }
+                  case "plausibility_fixed":
+                    addPipelineLog("개연성 문제 자동 수정 완료", "success");
+                    for (const fix of (parsed.fixes as string[]) || []) {
+                      addPipelineLog(`  ✓ ${fix}`, "info");
+                    }
+                    break;
                   case "harness_done":
                     addPipelineLog(
                       `하네스 완료 (${parsed.config}) — $${(parsed.totalCostUsd ?? 0).toFixed(4)}, ${((parsed.totalDurationMs ?? 0) / 1000).toFixed(1)}초`,
