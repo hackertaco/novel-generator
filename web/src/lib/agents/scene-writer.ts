@@ -8,6 +8,7 @@
 
 import { getAgent } from "./llm-agent";
 import type { NovelSeed } from "@/lib/schema/novel";
+import { getForeshadowingActions } from "@/lib/schema/novel";
 import type { ChapterBlueprint, SceneSpec } from "@/lib/schema/planning";
 import type { TokenUsage } from "@/lib/agents/types";
 import { validateScene, buildSceneRepairPrompt } from "./scene-validator";
@@ -26,6 +27,16 @@ export interface SceneWriterOptions {
   previousSceneTexts?: string[];
   /** Summaries of previous chapters */
   previousSummaries?: Array<{ chapter: number; summary: string }>;
+  /** Hierarchical memory context (replaces previousSummaries when available) */
+  memoryContext?: string;
+  /** Tone guidance for this chapter */
+  toneGuidance?: string;
+  /** Progress context (pacing info) */
+  progressContext?: string;
+  /** Thread reminders to weave into scenes */
+  threadReminders?: string[];
+  /** Correction context from feedback system */
+  correctionContext?: string;
 }
 
 export interface SceneWriterResult {
@@ -42,7 +53,7 @@ export interface SceneWriterResult {
 /**
  * Build the prompt for generating a single scene.
  */
-function buildScenePrompt(
+export function buildScenePrompt(
   seed: NovelSeed,
   chapterNumber: number,
   blueprint: ChapterBlueprint,
@@ -50,14 +61,58 @@ function buildScenePrompt(
   sceneIndex: number,
   previousSceneTexts: string[],
   previousSummaries: Array<{ chapter: number; summary: string }>,
+  extras?: {
+    memoryContext?: string;
+    toneGuidance?: string;
+    progressContext?: string;
+    threadReminders?: string[];
+    correctionContext?: string;
+  },
 ): string {
   const parts: string[] = [];
 
-  // Novel context (minimal)
+  // Novel context (enriched with world details)
   parts.push(`# 소설
-제목: ${seed.title} | 장르: ${seed.world.genre}
+제목: ${seed.title} | 장르: ${seed.world.genre} (${seed.world.sub_genre})
+시대: ${seed.world.time_period}
 ${chapterNumber}화 — ${blueprint.one_liner}
 `);
+
+  // World setting context
+  const worldParts: string[] = [];
+  const keyLocations = seed.world.key_locations;
+  if (keyLocations && Object.keys(keyLocations).length > 0) {
+    const locationEntries = Object.entries(keyLocations).slice(0, 4);
+    worldParts.push(`주요 장소: ${locationEntries.map(([k, v]) => `${k}(${v})`).join(", ")}`);
+  }
+  const factions = seed.world.factions;
+  if (factions && Object.keys(factions).length > 0) {
+    const factionEntries = Object.entries(factions).slice(0, 3);
+    worldParts.push(`세력: ${factionEntries.map(([k, v]) => `${k}(${v})`).join(", ")}`);
+  }
+  if (seed.world.magic_system) {
+    worldParts.push(`능력 체계: ${seed.world.magic_system}`);
+  }
+  if (seed.world.rules.length > 0) {
+    worldParts.push(`세계 규칙: ${seed.world.rules.slice(0, 3).join("; ")}`);
+  }
+  if (worldParts.length > 0) {
+    parts.push(`# 세계관\n${worldParts.join("\n")}\n`);
+  }
+
+  // Chapter outline context (from seed's chapter_outlines)
+  const chapterOutline = seed.chapter_outlines.find(
+    (o) => o.chapter_number === chapterNumber,
+  );
+  if (chapterOutline) {
+    const keyPtsStr = chapterOutline.key_points.length > 0
+      ? `\n핵심 사건: ${chapterOutline.key_points.join(" / ")}`
+      : "";
+    parts.push(`# 이번 화 설계
+${chapterOutline.one_liner}${keyPtsStr}
+긴장도: ${chapterOutline.tension_level}/10
+`);
+  }
 
   // Characters in this scene
   const sceneChars = scene.characters
@@ -87,12 +142,39 @@ ${dialogues.map((d) => `  "${d}"`).join("\n") || '  (없음)'}
     }
   }
 
-  // Previous chapter summaries (last 2, brief)
-  if (previousSummaries.length > 0) {
+  // Previous context: hierarchical memory (preferred) or chapter summaries (fallback)
+  if (extras?.memoryContext) {
+    parts.push(`# 이전 내용 (기억 컨텍스트)\n${extras.memoryContext}\n`);
+  } else if (previousSummaries.length > 0) {
     const recent = previousSummaries.slice(-2);
     parts.push("# 이전 내용");
     for (const s of recent) {
       parts.push(`- ${s.chapter}화: ${s.summary.slice(0, 80)}`);
+    }
+    parts.push("");
+  }
+
+  // Progress/pacing context
+  if (extras?.progressContext) {
+    parts.push(`# 진행 상황\n${extras.progressContext}\n`);
+  }
+
+  // Foreshadowing actions for this chapter
+  const fsActions = getForeshadowingActions(seed, chapterNumber);
+  if (fsActions.length > 0) {
+    parts.push("# 복선 지시 (이 화에서 처리할 복선)");
+    for (const { foreshadowing: fs, action } of fsActions) {
+      switch (action) {
+        case "plant":
+          parts.push(`- [심기] "${fs.name}": ${fs.description}\n  → 독자가 눈치채지 못하도록 자연스러운 묘사나 대사 속에 심으세요. 직접 설명하지 마세요.`);
+          break;
+        case "hint":
+          parts.push(`- [암시] "${fs.name}": ${fs.description}\n  → 이미 심어둔 복선의 단서를 살짝 드러내세요. 캐릭터의 행동이나 소품을 통해 간접적으로.`);
+          break;
+        case "reveal":
+          parts.push(`- [공개] "${fs.name}": ${fs.description}\n  → 복선을 회수하세요. 독자가 "아, 그때 그거!" 하고 느낄 수 있도록 이전 장면과 연결하세요.`);
+          break;
+      }
     }
     parts.push("");
   }
@@ -106,15 +188,34 @@ ${lastScene.slice(-800)}
 `);
   }
 
+  // Tone guidance (before scene instruction)
+  if (extras?.toneGuidance) {
+    parts.push(`# 톤 가이드\n${extras.toneGuidance}\n`);
+  }
+
   // Scene instruction
   const sceneLabel = `씬 ${sceneIndex + 1}/${blueprint.scenes.length}`;
+
+  // Correction context prepended to writing rules
+  const correctionRule = extras?.correctionContext
+    ? `\n## 교정 지침 (이전 피드백 반영)\n${extras.correctionContext}\n`
+    : "";
+
+  // Thread reminders for last or second-to-last scene
+  const isLastOrSecondToLast =
+    sceneIndex >= blueprint.scenes.length - 2;
+  const threadReminderSection =
+    isLastOrSecondToLast && extras?.threadReminders && extras.threadReminders.length > 0
+      ? `\n## 서사 스레드 힌트\n${extras.threadReminders.map((r) => `- ${r}`).join("\n")}\n`
+      : "";
+
   parts.push(`# ${sceneLabel} 지시
 
 **목적**: ${scene.purpose}
 **유형**: ${scene.type}
 **감정톤**: ${scene.emotional_tone}
 **목표 분량**: ${scene.estimated_chars}자
-
+${correctionRule}
 ## 작성 규칙
 1. 이 씬의 목적에만 집중하세요. 다른 사건을 끌어오지 마세요.
 2. 대사를 충분히 넣으세요 (전체의 30% 이상). 캐릭터 목소리가 들려야 합니다.
@@ -125,8 +226,12 @@ ${lastScene.slice(-800)}
 5. 짧은 문단 (3문장 이하). 문장 길이도 다양하게 (짧은 문장 → 중간 → 짧은)
 6. 앞 씬에서 쓴 표현/묘사를 반복하지 마세요. 새로운 감각과 비유를 사용하세요.
 7. 갈등은 이 씬에서 해결하지 마세요. 더 꼬이게 만드세요.
-${sceneIndex === blueprint.scenes.length - 1 ? "8. 마지막 씬이므로 다음 화가 궁금해지는 문장으로 끝내세요. 반전이나 새로운 위기를 던지세요." : ""}
-
+8. 물리적 공간에 장면을 고정하세요: 장소, 시간대, 날씨/조명을 첫 2문장 안에 설정하세요.
+9. 연속 3문장 이상 같은 주어로 시작하지 마세요. 주어를 생략하거나 부사/상황으로 시작하세요.
+10. 대사 뒤에 "~라고 말했다"를 반복하지 마세요. 행동 비트로 화자를 보여주세요:
+    - ❌ "가자." 그가 말했다. → ✅ "가자." 그가 검집을 채웠다.
+${sceneIndex === blueprint.scenes.length - 1 ? "11. 마지막 씬이므로 다음 화가 궁금해지는 문장으로 끝내세요. 반전이나 새로운 위기를 던지세요." : ""}
+${threadReminderSection}
 출력: 씬 본문만 (메타 정보 없이)`);
 
   return parts.join("\n");
@@ -161,6 +266,11 @@ export async function writeChapterByScenes(
     systemPrompt,
     model,
     previousSummaries = [],
+    memoryContext,
+    toneGuidance,
+    progressContext,
+    threadReminders,
+    correctionContext,
   } = options;
 
   const agent = getAgent();

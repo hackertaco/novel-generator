@@ -230,26 +230,70 @@ export function buildSceneRepairPrompt(
   sceneText: string,
   issues: SceneIssue[],
 ): string {
-  const errorMessages = issues
-    .filter((i) => i.severity === "error")
-    .map((i) => `- ${i.message}`)
+  const errorIssues = issues.filter((i) => i.severity === "error");
+  const errorMessages = errorIssues
+    .map((i) => `- [${i.type}] ${i.message}`)
     .join("\n");
+
+  // Build issue-specific repair guidance
+  const specificGuidance: string[] = [];
+  const issueTypes = new Set(errorIssues.map((i) => i.type));
+
+  if (issueTypes.has("tell_not_show")) {
+    specificGuidance.push(`### 감정 설명 → 행동/감각 전환
+- "불안했다" → 손이 떨리거나, 시선이 문 쪽으로 갔다가, 호흡이 짧아지는 등의 신체 반응으로
+- "혼란스러웠다" → 같은 곳을 두 번 보거나, 말을 멈추거나, 물건을 떨어뜨리는 행동으로
+- "슬펐다" → 목소리가 갈라지거나, 고개를 숙이거나, 손톱으로 손등을 긁는 행동으로
+각 감정 설명 표현을 찾아 해당 캐릭터에 맞는 구체적 행동으로 하나씩 교체하세요.`);
+  }
+
+  if (issueTypes.has("dialogue_ratio")) {
+    specificGuidance.push(`### 대사 비율 높이기
+- 긴 서술 문단을 캐릭터의 대사 + 짧은 행동 비트로 분해하세요
+- 설명하던 내용을 캐릭터가 직접 말하게 바꾸세요
+- 대사 뒤에는 "라고 말했다" 대신 행동 태그를 붙이세요 (예: "가자." 검집을 채웠다.)
+주의: 대사를 추가할 때 캐릭터 고유의 말투를 유지하세요.`);
+  }
+
+  if (issueTypes.has("ending_repetition")) {
+    specificGuidance.push(`### 어미 다양화
+연속으로 같은 어미가 나오는 부분을 찾아 다음 중 하나로 교체:
+~ㄴ다/~는다 (현재형), ~더라 (회상), ~ㄹ까 (의문), ~지 (확인), 대화체, 명사 종결("적막.")
+3문장 이내에 같은 어미가 반복되지 않도록 하세요.`);
+  }
+
+  if (issueTypes.has("vague_narrative")) {
+    specificGuidance.push(`### 모호한 서술 → 구체적 행동
+"결심을 굳혔다" → 구체적으로 무엇을 했는지 (칼을 뽑았다, 편지를 찢었다, 문을 잠갔다)
+"다시 시작해야 했다" → 첫 발걸음이 무엇인지 (지도를 펼쳤다, 대장간 문을 두드렸다)
+추상적 결의를 삭제하고 행동 하나로 대체하세요.`);
+  }
+
+  if (issueTypes.has("too_short")) {
+    specificGuidance.push(`### 분량 보완
+- 기존 장면의 감각 묘사를 추가하세요 (시각 외에 청각/촉각/후각)
+- 캐릭터 간 대사 교환을 1-2회 추가하세요
+- 캐릭터의 짧은 내면 반응(행동 기반)을 넣으세요
+주의: 분량을 늘리면서 기존 장면의 흐름과 감정톤을 유지하세요.`);
+  }
+
+  const guidanceBlock = specificGuidance.length > 0
+    ? `\n## 구체적 수정 가이드\n${specificGuidance.join("\n\n")}\n`
+    : "";
 
   return `다음 씬에 품질 문제가 발견되었습니다. 수정해주세요.
 
-## 문제점
+## 발견된 문제
 ${errorMessages}
-
-## 수정 규칙
-1. 감정을 "설명"하지 말고 행동/감각으로 "보여주세요" (Show, don't tell)
-   - ❌ "불안했다" → ✅ "찻잔을 드는 손끝이 떨렸다"
-   - ❌ "혼란스러웠다" → ✅ "거울 속 얼굴이 낯설어 손으로 볼을 만져봤다"
-2. 문장 어미를 다양하게: ~였다, ~했다 만 반복하지 말고 ~ㄴ다, ~는다, ~더라, 대화체 등 섞으세요
-3. 대사를 추가해서 캐릭터 목소리를 살리세요
-4. 모호한 서술("결심을 굳혔다") 대신 구체적 행동("칼집에서 단검을 뽑았다")
+${guidanceBlock}
+## 수정 시 품질 유지 원칙
+1. 수정은 문제가 있는 부분만 최소한으로 고치세요. 잘 쓴 부분을 건드리지 마세요.
+2. 수정 후에도 장면의 감정 흐름과 긴장감이 유지되어야 합니다.
+3. 캐릭터 말투와 성격이 바뀌면 안 됩니다.
+4. 수정으로 인해 새로운 문제(어미 반복, 감정 설명 등)가 생기지 않도록 주의하세요.
 
 ## 현재 씬
 ${sceneText}
 
-위 문제를 수정한 씬 텍스트만 출력하세요.`;
+위 문제를 수정한 완전한 씬 텍스트만 출력하세요.`;
 }

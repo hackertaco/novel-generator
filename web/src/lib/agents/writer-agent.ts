@@ -54,6 +54,13 @@ export class WriterAgent implements PipelineAgent {
           chapter: s.chapter,
           summary: s.summary,
         })),
+        // Pass tracking context to scene writer if available
+        ...(ctx.trackingContext ? {
+          memoryContext: ctx.trackingContext.memoryContext,
+          toneGuidance: ctx.trackingContext.toneGuidance,
+          progressContext: ctx.trackingContext.progressContext,
+          correctionContext: ctx.trackingContext.correctionContext,
+        } : {}),
       });
 
       ctx.totalUsage = accumulateUsage(ctx.totalUsage, sceneResult.usage);
@@ -82,9 +89,21 @@ export class WriterAgent implements PipelineAgent {
 
     // Fallback: single-shot generation (no blueprint or empty scenes)
     // Build context prompt
-    const context = blueprint
+    let context = blueprint
       ? buildBlueprintContext(seed, chapterNumber, previousSummaries, blueprint)
       : buildChapterContext(seed, chapterNumber, previousSummaries);
+
+    // Inject tracking context if available
+    if (ctx.trackingContext) {
+      const trackingSections: string[] = [];
+      if (ctx.trackingContext.memoryContext) trackingSections.push(ctx.trackingContext.memoryContext);
+      if (ctx.trackingContext.toneGuidance) trackingSections.push(ctx.trackingContext.toneGuidance);
+      if (ctx.trackingContext.progressContext) trackingSections.push(ctx.trackingContext.progressContext);
+      if (ctx.trackingContext.correctionContext) trackingSections.push(ctx.trackingContext.correctionContext);
+      if (trackingSections.length > 0) {
+        context = `${trackingSections.join("\n\n")}\n\n---\n\n${context}`;
+      }
+    }
 
     const blueprintInstructions = blueprint
       ? `\n목표 분량: ${blueprint.target_word_count}자

@@ -113,8 +113,28 @@ function checkAborted(signal?: AbortSignal): void {
 }
 
 /**
- * Build an ArcPlan for the target chapter from the seed's arc data.
+ * Generate a rising tension curve for an arc of the given length.
+ * Produces a gentle rise with a peak near the climax position.
  */
+function generateDefaultTensionCurve(
+  arcLength: number,
+  climaxChapter: number,
+  startChapter: number,
+): number[] {
+  const curve: number[] = [];
+  const climaxIndex = Math.max(0, climaxChapter - startChapter);
+  for (let i = 0; i < arcLength; i++) {
+    // Base rising tension from 3 to 7
+    const baseProgress = i / Math.max(1, arcLength - 1);
+    const base = 3 + baseProgress * 4;
+    // Boost near climax
+    const distFromClimax = Math.abs(i - climaxIndex) / Math.max(1, arcLength);
+    const climaxBoost = Math.max(0, (1 - distFromClimax * 2)) * 3;
+    curve.push(Math.min(10, Math.max(1, Math.round(base + climaxBoost))));
+  }
+  return curve;
+}
+
 function buildArcForChapter(seed: NovelSeed, chapterNumber: number): ArcPlan {
   const seedArc = seed.arcs.find(
     (a) => a.start_chapter <= chapterNumber && chapterNumber <= a.end_chapter,
@@ -122,6 +142,8 @@ function buildArcForChapter(seed: NovelSeed, chapterNumber: number): ArcPlan {
 
   if (!seedArc) {
     // Fallback: construct a minimal arc
+    const arcLength = seed.total_chapters;
+    const climax = Math.ceil(arcLength / 2);
     return {
       id: "arc_1",
       name: "도입",
@@ -129,13 +151,24 @@ function buildArcForChapter(seed: NovelSeed, chapterNumber: number): ArcPlan {
       start_chapter: 1,
       end_chapter: seed.total_chapters,
       summary: seed.logline,
-      theme: "",
+      theme: seed.logline.slice(0, 50),
       key_events: [],
-      climax_chapter: Math.ceil(seed.total_chapters / 2),
-      tension_curve: [],
+      climax_chapter: climax,
+      tension_curve: generateDefaultTensionCurve(arcLength, climax, 1),
       chapter_blueprints: [],
     };
   }
+
+  const arcLength = seedArc.end_chapter - seedArc.start_chapter + 1;
+
+  // Derive theme: use seed arc's theme if available, otherwise extract from summary
+  const theme = seedArc.theme || `${seedArc.name} — ${seedArc.summary.slice(0, 60)}`;
+
+  // Use seed arc's tension_curve if available and correct length, otherwise generate
+  const tensionCurve =
+    seedArc.tension_curve && seedArc.tension_curve.length === arcLength
+      ? seedArc.tension_curve
+      : generateDefaultTensionCurve(arcLength, seedArc.climax_chapter, seedArc.start_chapter);
 
   return {
     id: seedArc.id,
@@ -144,10 +177,10 @@ function buildArcForChapter(seed: NovelSeed, chapterNumber: number): ArcPlan {
     start_chapter: seedArc.start_chapter,
     end_chapter: seedArc.end_chapter,
     summary: seedArc.summary,
-    theme: "",
+    theme,
     key_events: seedArc.key_events,
     climax_chapter: seedArc.climax_chapter,
-    tension_curve: [],
+    tension_curve: tensionCurve,
     chapter_blueprints: [],
   };
 }
@@ -286,6 +319,9 @@ async function evaluateChapter(
       premise_clarity: clampScore(parsed.premise_clarity),
       coherence: clampScore(parsed.coherence),
       expression_variety: clampScore(parsed.expression_variety),
+      scene_pacing: clampScore(parsed.scene_pacing ?? 5),
+      sensory_detail: clampScore(parsed.sensory_detail ?? 5),
+      immersion: clampScore(parsed.immersion ?? 5),
       feedback: String(parsed.feedback ?? ""),
     };
   } catch {
@@ -296,6 +332,9 @@ async function evaluateChapter(
       premise_clarity: 5,
       coherence: 5,
       expression_variety: 5,
+      scene_pacing: 5,
+      sensory_detail: 5,
+      immersion: 5,
       feedback: "LLM 판정 파싱 실패 — 기본값 사용",
     };
   }
@@ -480,7 +519,7 @@ export async function runAutoResearchLoop(
   emit({
     iteration: 0,
     phase: "evaluate",
-    message: `베이스라인 점수: ${baselineEval.score.overall} (클릭:${j.next_chapter_click} 목소리:${j.character_voice_distinction} 전제:${j.premise_clarity} 개연:${j.coherence} 표현:${j.expression_variety})`,
+    message: `베이스라인 점수: ${baselineEval.score.overall} (클릭:${j.next_chapter_click} 목소리:${j.character_voice_distinction} 전제:${j.premise_clarity} 개연:${j.coherence} 표현:${j.expression_variety} 호흡:${j.scene_pacing} 감각:${j.sensory_detail} 몰입:${j.immersion})`,
     score: baselineEval.score,
   });
 

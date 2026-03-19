@@ -52,6 +52,12 @@ export interface LLMJudgement {
   coherence: number;
   /** "Are expressions varied (no repetition)?" (1-10) */
   expression_variety: number;
+  /** "Is scene pacing well-balanced?" (1-10) */
+  scene_pacing: number;
+  /** "Does the writing engage multiple senses?" (1-10) */
+  sensory_detail: number;
+  /** "Does the reader feel transported into the story?" (1-10) */
+  immersion: number;
   /** Specific feedback for improvement */
   feedback: string;
 }
@@ -115,15 +121,19 @@ export interface AutoResearchState {
 const QUALITY_WEIGHT = 0.9;
 const EFFICIENCY_WEIGHT = 0.1;
 
-// Quality sub-weights (code metrics: 40%, LLM judgement: 60%)
-const W_DIALOGUE = 0.10;
-const W_TELL_NOT_SHOW = 0.10;
-const W_ENDING_REPEAT = 0.10;
-const W_VAGUE = 0.10;
-const W_CLICK_NEXT = 0.20;
+// Quality sub-weights (code metrics: 30%, LLM judgement: 60%)
+const W_DIALOGUE = 0.08;
+const W_TELL_NOT_SHOW = 0.08;
+const W_ENDING_REPEAT = 0.07;
+const W_VAGUE = 0.07;
+const W_CLICK_NEXT = 0.15;
 const W_VOICE = 0.10;
-const W_COHERENCE = 0.15;
-const W_EXPRESSION = 0.15;
+const W_PREMISE = 0.05;
+const W_COHERENCE = 0.10;
+const W_EXPRESSION = 0.08;
+const W_SCENE_PACING = 0.05;
+const W_SENSORY_DETAIL = 0.04;
+const W_IMMERSION = 0.03;
 
 // Efficiency baselines (for normalization)
 const TOKEN_BASELINE = 150000; // realistic token usage for a full chapter pipeline
@@ -138,15 +148,21 @@ export function calculateScore(
   efficiency: EfficiencyMetrics,
 ): EvaluationScore {
   // Quality sub-scores (each 0-1)
+  // Code metrics (30%)
   const dialogueScore = Math.min(1, quality.dialogue_ratio / 0.5); // 50%+ = perfect
   const tellShowScore = Math.max(0, 1 - quality.tell_not_show_count * 0.2); // 5+ = 0
   const endingScore = Math.max(0, 1 - quality.ending_repetition_rate * 2); // 50%+ = 0
   const vagueScore = Math.max(0, 1 - quality.vague_narrative_count * 0.25); // 4+ = 0
+
+  // LLM judgement scores (60%)
   const clickScore = judgement.next_chapter_click / 10;
   const voiceScore = judgement.character_voice_distinction / 10;
-
+  const premiseScore = judgement.premise_clarity / 10;
   const coherenceScore = judgement.coherence / 10;
   const expressionScore = judgement.expression_variety / 10;
+  const pacingScore = judgement.scene_pacing / 10;
+  const sensoryScore = judgement.sensory_detail / 10;
+  const immersionScore = judgement.immersion / 10;
 
   const qualityScore =
     dialogueScore * W_DIALOGUE +
@@ -155,8 +171,12 @@ export function calculateScore(
     vagueScore * W_VAGUE +
     clickScore * W_CLICK_NEXT +
     voiceScore * W_VOICE +
+    premiseScore * W_PREMISE +
     coherenceScore * W_COHERENCE +
-    expressionScore * W_EXPRESSION;
+    expressionScore * W_EXPRESSION +
+    pacingScore * W_SCENE_PACING +
+    sensoryScore * W_SENSORY_DETAIL +
+    immersionScore * W_IMMERSION;
 
   // Efficiency sub-scores
   const tokenScore = Math.max(0, 1 - efficiency.total_tokens / TOKEN_BASELINE);
@@ -184,6 +204,7 @@ export function calculateScore(
  */
 export function buildJudgePrompt(chapterText: string, genre: string): string {
   return `당신은 카카오페이지 웹소설 품질 심사위원입니다. 다음 ${genre} 장르 1화를 읽고 평가해주세요.
+엄격하게 평가하세요. 7점 이상은 상위 작품 수준일 때만 부여합니다.
 
 [소설 텍스트]
 ${chapterText}
@@ -215,7 +236,22 @@ ${chapterText}
    - 5점: 가끔 반복이 보이지만 대체로 다양
    - 10점: 문장 구조, 어미, 묘사 방식이 풍부하고 지루하지 않음
 
-6. **feedback**: 가장 큰 약점 1개와 구체적 개선 방향
+6. **scene_pacing**: 장면의 호흡과 완급 조절이 적절합니까?
+   - 1점: 사건이 쏟아지듯 전개되어 숨 쉴 틈이 없거나, 반대로 아무 일도 없이 늘어짐
+   - 5점: 대체로 괜찮지만 일부 장면이 급하게 넘어가거나 불필요하게 길어짐
+   - 10점: 긴장과 이완의 리듬이 완벽하고, 각 장면에 충분한 호흡이 있으면서 지루하지 않음
+
+7. **sensory_detail**: 감각적 묘사가 풍부합니까?
+   - 1점: 시각적 정보만 있거나 감각 묘사가 거의 없음
+   - 5점: 시각 + 1가지 감각이 가끔 등장
+   - 10점: 시각, 청각, 촉각, 후각, 미각 중 장면마다 2개 이상의 감각이 자연스럽게 녹아있음
+
+8. **immersion**: 독자가 이야기 속으로 빠져드는 몰입감이 있습니까?
+   - 1점: 텍스트를 읽는 느낌만 남고, 장면이 머릿속에 그려지지 않음
+   - 5점: 가끔 몰입되지만 자주 현실로 돌아옴 (설명, 어색한 전환 등)
+   - 10점: 물리적 공간, 분위기, 캐릭터가 생생하게 느껴져서 읽는 동안 시간 감각을 잃음
+
+9. **feedback**: 가장 큰 약점 1개와 구체적 개선 방향
 
 ## 출력 형식 (JSON)
 {
@@ -224,6 +260,9 @@ ${chapterText}
   "premise_clarity": 8,
   "coherence": 6,
   "expression_variety": 7,
+  "scene_pacing": 6,
+  "sensory_detail": 5,
+  "immersion": 6,
   "feedback": "대사 비율이 낮아서 캐릭터 매력이 부족합니다. 호위와의 대화를 더 길게 전개하면..."
 }
 
@@ -272,6 +311,9 @@ export function buildModificationPrompt(
 - 전제 명확성: ${currentScore.llm_judgement.premise_clarity}/10
 - 개연성: ${currentScore.llm_judgement.coherence}/10
 - 표현 다양성: ${currentScore.llm_judgement.expression_variety}/10
+- 장면 호흡: ${currentScore.llm_judgement.scene_pacing}/10
+- 감각 묘사: ${currentScore.llm_judgement.sensory_detail}/10
+- 몰입감: ${currentScore.llm_judgement.immersion}/10
 - LLM 피드백: ${currentScore.llm_judgement.feedback}
 - 총 토큰: ${currentScore.efficiency_metrics.total_tokens}
 - 재시도 횟수: ${currentScore.efficiency_metrics.retry_count}

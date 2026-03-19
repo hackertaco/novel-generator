@@ -163,7 +163,7 @@ JSON 형식으로 출력하세요.`;
 
   const worldContext = JSON.stringify(world, null, 2);
 
-  const characterPrompt = `다음 세계관과 프리미스를 바탕으로 5~8명의 캐릭터를 설계하세요.
+  const characterPrompt = `다음 세계관과 프리미스를 바탕으로 8~12명의 캐릭터를 설계하세요.
 
 제목: ${title}
 로그라인: ${logline}
@@ -175,7 +175,7 @@ ${worldContext}
 - id: 고유 ID (예: "char_1", "char_2")
 - name: 한국식 이름
 - role: 역할 (주인공, 히로인, 악역, 조력자, 멘토 등)
-- introduction_chapter: 첫 등장 화수 (1~10 사이)
+- introduction_chapter: 첫 등장 화수 (주인공은 1, 나머지는 1~30 사이에 분산)
 - voice: 캐릭터 목소리 설정
   - tone: 전체적인 말투 톤
   - speech_patterns: 최소 3개 이상의 고유한 말투 패턴
@@ -232,15 +232,23 @@ ${characterSummary}
 
 다음을 설계하세요:
 
-1. arcs (플롯 아크) - 처음 60화를 커버하는 3~4개 아크:
-   - 1개의 대형 아크 (약 25~30화 분량)
-   - 2~3개의 소형/중형 아크
-   - 각 아크: id, name, start_chapter, end_chapter, summary, key_events (5개 이상), climax_chapter
+1. arcs (플롯 아크) - 처음 60화를 **6~8개 아크**로 분할:
+   - ⚠️ 각 아크는 반드시 **8~15화** 길이여야 합니다. 20화 이상의 아크는 금지!
+   - 예시: 아크1(1~10화), 아크2(11~20화), 아크3(21~28화), 아크4(29~38화), ...
+   - 각 아크: id, name, start_chapter, end_chapter, summary, key_events (3~5개), climax_chapter, theme, tension_curve
+   - theme: 아크의 주제적 핵심 (예: "신뢰와 배신", "각성과 대가")
+   - tension_curve: 아크 내 각 화의 긴장도 수치 배열 (1~10). 배열 길이 = end_chapter - start_chapter + 1
+   - 아크 간 전환이 자연스러워야 합니다 (이전 아크의 결말이 다음 아크의 시작을 유발)
 
 2. chapter_outlines (회차 개요) - 처음 10화:
    - 각 회차: chapter_number, title, arc_id, one_liner, key_points (3개 이상), characters_involved, tension_level (1~10)
-   - 각 회차의 존재 이유와 다음 회차로의 연결고리를 key_points에 명확히 서술하세요
+   - 1화는 캐릭터 2명 이하만 등장. 이후 화마다 1명씩 추가
    - tension_level은 1화에서 시작해 점진적으로 상승해야 합니다
+
+**아크 크기 규칙 (절대 준수)**:
+- 최소 8화, 최대 15화
+- 60화에 아크 1~2개만 있으면 틀린 것입니다
+- 카카오페이지 인기작처럼: 도입(10화) → 첫 위기(8화) → 성장(12화) → 대결(10화) → 전환(8화) → ...
 
 JSON 형식으로 다음 구조로 출력하세요:
 {
@@ -270,7 +278,7 @@ JSON 형식으로 다음 구조로 출력하세요:
     .map((a) => `- ${a.name} (${a.start_chapter}~${a.end_chapter}화): ${a.summary}`)
     .join("\n");
 
-  const foreshadowingPrompt = `다음 스토리 구조를 바탕으로 3~5개의 복선(foreshadowing)을 설계하세요.
+  const foreshadowingPrompt = `다음 스토리 구조를 바탕으로 5~8개의 복선(foreshadowing)을 설계하세요.
 
 제목: ${title}
 로그라인: ${logline}
@@ -286,13 +294,26 @@ ${characterSummary}
 - name: 복선의 짧은 이름
 - description: 복선의 구체적 내용
 - importance: "critical" 또는 "normal" 또는 "minor"
-- planted_at: 복선을 심는 화수 (1~10 사이)
-- hints_at: 힌트를 주는 화수 배열 (2~4개)
-- reveal_at: 복선을 회수하는 화수 (아크의 클라이맥스 근처)
+- planted_at: 복선을 심는 화수
+- hints_at: 힌트를 주는 화수 배열 (3~5개, 5~8화 간격으로 분산)
+- reveal_at: 복선을 회수하는 화수
 - status: "pending"
 - hint_count: 0
 
-복선은 아크를 가로질러 연결되어야 합니다. 최소 1개는 importance가 "critical"이어야 합니다.
+**복선 설계 규칙 (절대 준수)**:
+1. 심기(planted_at)와 회수(reveal_at) 사이에 최소 3개 힌트가 있어야 합니다
+2. 힌트 간격은 5~8화입니다 (2화에 심고 48화에 회수하면서 힌트 없이 방치하는 것은 금지!)
+3. 회수(reveal_at)가 전부 같은 화에 몰리면 안 됩니다. 복선마다 다른 아크에서 회수
+4. 복선은 반드시 아크를 가로질러야 합니다 (같은 아크 안에서 심고 회수하는 건 복선이 아님)
+5. 최소 2개는 importance가 "critical"이어야 합니다
+
+**나쁜 예 (금지)**:
+  fs_1: planted_at=2, hints_at=[10], reveal_at=48  → 힌트 1개, 간격 38화 = 독자가 까먹음
+  fs_2: planted_at=4, hints_at=[], reveal_at=48    → 힌트 0개, 회수가 fs_1과 같은 화 = 금지
+
+**좋은 예**:
+  fs_1: planted_at=2, hints_at=[8, 14, 20], reveal_at=25     → 힌트 3개, 균일 간격
+  fs_2: planted_at=5, hints_at=[12, 19, 27, 34], reveal_at=38 → 힌트 4개, 다른 아크에서 회수
 
 JSON 배열 형식으로 출력하세요.`;
 

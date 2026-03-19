@@ -18,7 +18,15 @@ export const PlotArcSchema = z.object({
   summary: z.string().describe("Arc summary"),
   key_events: z.array(z.string()).describe("Major events in this arc"),
   climax_chapter: z.number().int().describe("Chapter with arc climax"),
-});
+  theme: z.string().optional().describe("Thematic summary for this arc"),
+  tension_curve: z.array(z.number()).optional().describe("Tension level (1-10) per chapter in this arc"),
+}).refine(
+  (arc) => {
+    const length = arc.end_chapter - arc.start_chapter + 1;
+    return length <= 20; // warn but don't block for legacy seeds
+  },
+  { message: "아크 길이가 20화를 초과합니다. 8~15화가 이상적입니다." },
+);
 
 export type PlotArc = z.infer<typeof PlotArcSchema>;
 

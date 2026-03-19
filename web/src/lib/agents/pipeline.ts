@@ -6,6 +6,18 @@ import type { TokenUsage } from "@/lib/agents/types";
 /** Lightweight summary passed between pipeline stages (not the full ChapterSummary). */
 export type PreviousChapterSummary = { chapter: number; title: string; summary: string };
 
+/** Extra context injected by the tracking/memory/feedback systems. */
+export interface TrackingInjection {
+  /** Hierarchical memory snapshot formatted as prompt text */
+  memoryContext?: string;
+  /** Tone guidance from ToneManager */
+  toneGuidance?: string;
+  /** Progress/pacing context from ProgressMonitor */
+  progressContext?: string;
+  /** Correction context from FeedbackAccumulator post-processing */
+  correctionContext?: string;
+}
+
 // --- Issue types ---
 
 export interface RuleIssue {
@@ -50,6 +62,8 @@ export interface ChapterContext {
   ruleIssues: RuleIssue[];
   critiqueHistory: CriticReport[];
   totalUsage: TokenUsage;
+  /** Extra context from tracking/memory/feedback systems */
+  trackingContext?: TrackingInjection;
 }
 
 // --- LifecycleEvent (defined here to avoid circular imports; chapter-lifecycle.ts re-exports from here) ---
@@ -65,7 +79,9 @@ export type LifecycleEvent =
   | { type: "revert"; reason: string; to: number }
   | { type: "complete"; summary: ChapterSummary; final_score: number }
   | { type: "error"; message: string }
-  | { type: "done" };
+  | { type: "done" }
+  | { type: "tracking_context"; context: string }
+  | { type: "post_process"; feedbacks: object[]; correctionLevel: string };
 
 // --- PipelineAgent ---
 

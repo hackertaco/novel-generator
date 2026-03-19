@@ -9,6 +9,12 @@ const ChapterBlueprintResponseSchema = z.object({
   chapter_blueprints: z.array(ChapterBlueprintSchema),
 });
 
+/**
+ * Regex that checks for at least one Korean proper-noun-like pattern
+ * (2+ Hangul chars followed by a particle). Used as a non-blocking quality check.
+ */
+const KOREAN_NAME_PATTERN = /[가-힣]{2,}[이가은는을를에의과와]/;
+
 export async function generateChapterBlueprints(
   seed: NovelSeed,
   arc: ArcPlan,
@@ -26,6 +32,17 @@ export async function generateChapterBlueprints(
     format: "json",
     taskId: `chapter-blueprints-${arc.id}`,
   });
+
+  // Post-validation: warn (but don't fail) if scene purposes lack Korean names
+  for (const bp of result.data.chapter_blueprints) {
+    for (const scene of bp.scenes) {
+      if (!KOREAN_NAME_PATTERN.test(scene.purpose)) {
+        console.warn(
+          `[chapter-planner] 경고: ${bp.chapter_number}화 씬 purpose에 한국어 인물명이 없습니다: "${scene.purpose.slice(0, 60)}..."`,
+        );
+      }
+    }
+  }
 
   return { data: result.data.chapter_blueprints, usage: result.usage };
 }

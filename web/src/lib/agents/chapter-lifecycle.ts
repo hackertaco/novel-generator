@@ -2,7 +2,7 @@ import { extractSummaryRuleBased } from "@/lib/evaluators/summary";
 import type { NovelSeed } from "@/lib/schema/novel";
 import type { ChapterBlueprint } from "@/lib/schema/planning";
 import type { ChapterSummary } from "@/lib/schema/chapter";
-import type { ChapterContext, PipelineAgent } from "./pipeline";
+import type { ChapterContext, PipelineAgent, TrackingInjection } from "./pipeline";
 import { WriterAgent } from "./writer-agent";
 import { RuleGuardAgent } from "./rule-guard";
 import { QualityLoop } from "./quality-loop";
@@ -25,6 +25,8 @@ export interface ChapterLifecycleOptions {
   maxAttempts?: number;
   useHybridEval?: boolean;
   blueprint?: ChapterBlueprint;
+  /** Structured tracking context from memory/tone/feedback systems */
+  trackingContext?: TrackingInjection;
 }
 
 // --- Main lifecycle generator ---
@@ -43,6 +45,7 @@ export async function* runChapterLifecycle(
     ruleIssues: [],
     critiqueHistory: [],
     totalUsage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 },
+    trackingContext: options.trackingContext,
   };
 
   const pipeline: PipelineAgent[] = [

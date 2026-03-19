@@ -118,6 +118,18 @@ function makeEvalResult(scores: {
       issues: ga < 1.0 ? [`장르 문제: score=${ga}`] : [],
     },
 
+    scene_specificity: {
+      overall_score: 1.0,
+      pass: true,
+      issues: [],
+      details: {
+        avgPurposeLength: 40,
+        shortPurposeCount: 0,
+        genericPurposeCount: 0,
+        totalScenes: 3,
+      },
+    },
+
     issues: [
       ...(pq < 1.0 ? [`페이싱 문제: score=${pq}`] : []),
       ...(fu < 1.0 ? [`복선 문제: score=${fu}`] : []),
