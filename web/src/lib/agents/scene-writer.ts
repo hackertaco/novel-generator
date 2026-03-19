@@ -39,6 +39,8 @@ export interface SceneWriterOptions {
   correctionContext?: string;
   /** Last ~500 chars of the previous chapter's actual text */
   previousChapterEnding?: string;
+  /** Skip beat-by-beat writing and generate each scene in one call (faster) */
+  fastMode?: boolean;
 }
 
 export interface SceneWriterResult {
@@ -306,6 +308,7 @@ export async function writeChapterByScenes(
     threadReminders,
     correctionContext,
     previousChapterEnding,
+    fastMode,
   } = options;
 
   const agent = getAgent();
@@ -334,25 +337,46 @@ export async function writeChapterByScenes(
   for (let i = 0; i < blueprint.scenes.length; i++) {
     const scene = blueprint.scenes[i];
 
-    // 1. Generate scene using beat-by-beat structured writing
-    const beats = planBeats(scene, seed);
-    // For the first scene, use previous chapter's ending as context for continuity
+    // 1. Generate scene
     const previousText = sceneTexts.length > 0
       ? sceneTexts[sceneTexts.length - 1]
       : (previousChapterEnding || "");
-    const beatResult = await writeSceneByBeats({
-      beats,
-      scene,
-      seed,
-      chapterNumber,
-      previousText,
-      systemPrompt,
-      model,
-      previousChapterEnding: i === 0 ? previousChapterEnding : undefined,
-    });
-    totalUsage = addUsage(totalUsage, beatResult.usage);
 
-    let sceneText = beatResult.text;
+    let sceneText: string;
+
+    if (fastMode) {
+      // Fast mode: generate entire scene in one LLM call (no beats)
+      const scenePrompt = buildScenePrompt(
+        seed, chapterNumber, blueprint, scene, i,
+        sceneTexts, previousSummaries,
+        { memoryContext, toneGuidance, progressContext, threadReminders, correctionContext, previousChapterEnding: i === 0 ? previousChapterEnding : undefined },
+      );
+      const result = await agent.call({
+        prompt: scenePrompt,
+        system: systemPrompt,
+        model,
+        temperature: 0.5,
+        maxTokens: Math.max(2000, Math.ceil(scene.estimated_chars * 1.5)),
+        taskId: `chapter-${chapterNumber}-scene-${i + 1}-fast`,
+      });
+      totalUsage = addUsage(totalUsage, result.usage);
+      sceneText = result.data.trim();
+    } else {
+      // Normal mode: beat-by-beat structured writing
+      const beats = planBeats(scene, seed);
+      const beatResult = await writeSceneByBeats({
+        beats,
+        scene,
+        seed,
+        chapterNumber,
+        previousText,
+        systemPrompt,
+        model,
+        previousChapterEnding: i === 0 ? previousChapterEnding : undefined,
+      });
+      totalUsage = addUsage(totalUsage, beatResult.usage);
+      sceneText = beatResult.text;
+    }
 
     // 2. Code validation + strict retry loop (up to 3 attempts)
     const MAX_REPAIR_ATTEMPTS = 3;

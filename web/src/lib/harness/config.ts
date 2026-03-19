@@ -152,6 +152,9 @@ export interface HarnessConfig {
     min: number;
     max: number;
   };
+
+  /** Skip beat-by-beat writing — generate each scene in one call (faster, less structured) */
+  fastMode: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -189,6 +192,7 @@ export function getDefaultConfig(name = "default"): HarnessConfig {
     tracking: DEFAULT_TRACKING,
     output: { mode: "stream", verbose: true },
     chapterLength: { min: 3000, max: 4000 },
+    fastMode: false,
   };
 }
 
@@ -204,14 +208,16 @@ export function getBudgetConfig(name = "budget"): HarnessConfig {
 
 export function getFastConfig(name = "fast"): HarnessConfig {
   const pipeline = lazyPipeline();
-  // Disable polisher for speed
-  pipeline[3].enabled = false;
+  // Disable polisher and quality loop for speed
+  pipeline[2].enabled = false; // QualityLoop
+  pipeline[3].enabled = false; // Polisher
   return {
     ...getDefaultConfig(name),
     name,
     models: BUDGET_MODELS,
     pipeline,
     qualityThreshold: 0.70,
-    maxAttempts: 2,
+    maxAttempts: 1,
+    fastMode: true,
   };
 }

@@ -66,6 +66,8 @@ export interface ChapterContext {
   trackingContext?: TrackingInjection;
   /** Last ~500 chars of the previous chapter's actual text */
   previousChapterEnding?: string;
+  /** Skip beat-by-beat writing for speed */
+  fastMode?: boolean;
 }
 
 // --- LifecycleEvent (defined here to avoid circular imports; chapter-lifecycle.ts re-exports from here) ---
