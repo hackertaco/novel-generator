@@ -20,8 +20,10 @@ import {
   ThreadTracker,
   ToneManager,
   ProgressMonitor,
+  EventTimeline,
   extractThreads,
 } from "@/lib/tracking";
+import type { StoryEvent } from "@/lib/tracking";
 import { FeedbackAccumulator, postProcessChapter } from "@/lib/feedback";
 
 // --- Pipeline stages ---
@@ -76,6 +78,7 @@ export class Orchestrator {
   private threadTracker?: ThreadTracker;
   private toneManager?: ToneManager;
   private progressMonitor?: ProgressMonitor;
+  private eventTimeline?: EventTimeline;
   private feedbackAccumulator?: FeedbackAccumulator;
 
   /** Correction context carried over from post-processing of the previous chapter */
@@ -117,6 +120,7 @@ export class Orchestrator {
     this.threadTracker = new ThreadTracker();
     this.toneManager = ToneManager.fromSeed(seed);
     this.progressMonitor = new ProgressMonitor(seed);
+    this.eventTimeline = new EventTimeline();
     this.feedbackAccumulator = new FeedbackAccumulator();
   }
 
@@ -175,6 +179,19 @@ export class Orchestrator {
         injection.correctionContext = injection.correctionContext
           ? `${injection.correctionContext}\n\n${threadSection}`
           : threadSection;
+      }
+    }
+
+    // Event timeline context (unresolved events + recent major events)
+    if (this.eventTimeline && this.eventTimeline.size > 0) {
+      // Get characters likely in this chapter from blueprint or seed
+      const chapterOutline = seed.chapter_outlines.find((o) => o.chapter_number === chapterNumber);
+      const charIds = chapterOutline?.characters_involved || seed.characters.slice(0, 3).map((c) => c.id);
+      const timelineContext = this.eventTimeline.buildContextForScene(charIds);
+      if (timelineContext) {
+        injection.correctionContext = injection.correctionContext
+          ? `${injection.correctionContext}\n\n${timelineContext}`
+          : timelineContext;
       }
     }
 
@@ -272,7 +289,21 @@ export class Orchestrator {
       }
     }
 
-    // 4. Update progress monitor
+    // 4. Update event timeline from key_events
+    if (this.eventTimeline && chapterMemory.key_events.length > 0) {
+      const chapterChars = chapterMemory.character_changes.map((c) => c.characterId);
+      const events: StoryEvent[] = chapterMemory.key_events.map((desc) => ({
+        chapter: chapterNumber,
+        description: desc,
+        characters: chapterChars,
+        type: "action" as const,
+        impact: "moderate" as const,
+        resolved: false,
+      }));
+      this.eventTimeline.addEvents(chapterNumber, events);
+    }
+
+    // 5. Update progress monitor
     if (this.progressMonitor) {
       this.progressMonitor.recordChapter(
         chapterNumber,

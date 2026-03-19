@@ -22,3 +22,6 @@ export type {
 
 export { ProgressMonitor } from "./progress-monitor";
 export type { ArcProgress, ProgressFeedback } from "./progress-monitor";
+
+export { EventTimeline } from "./event-timeline";
+export type { StoryEvent } from "./event-timeline";
