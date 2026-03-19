@@ -76,5 +76,36 @@ export async function generateMasterPlan(
     };
   }
 
-  return { data: result.data, usage: result.usage };
+  // Validate: must have at least 3 parts
+  const plan = result.data;
+  if (plan.parts.length < 3) {
+    console.warn(`[master-plan] 대막이 ${plan.parts.length}개만 생성됨, 자동 보완`);
+    const totalChapters = plan.estimated_total_chapters.max || seed.total_chapters;
+    const existingEnd = plan.parts[plan.parts.length - 1]?.end_chapter || 60;
+
+    // Fill remaining parts
+    const remaining = totalChapters - existingEnd;
+    if (remaining > 0) {
+      const partsNeeded = Math.max(2, Math.ceil(remaining / 70));
+      const perPart = Math.ceil(remaining / partsNeeded);
+      for (let i = 0; i < partsNeeded; i++) {
+        const start = existingEnd + 1 + i * perPart;
+        const end = Math.min(start + perPart - 1, totalChapters);
+        plan.parts.push({
+          id: `part_${plan.parts.length + 1}`,
+          name: `${plan.parts.length + 1}부`,
+          start_chapter: start,
+          end_chapter: end,
+          theme: "자동 생성된 대막 (아크 플래닝 시 상세 설계)",
+          core_conflict: "",
+          resolution_target: "",
+          estimated_chapter_count: end - start + 1,
+          arcs: [],
+          transition_to_next: "",
+        });
+      }
+    }
+  }
+
+  return { data: plan, usage: result.usage };
 }
