@@ -20,6 +20,7 @@ export interface ChapterLifecycleOptions {
     chapter: number;
     title: string;
     summary: string;
+    cliffhanger?: string | null;
   }>;
   qualityThreshold?: number;
   maxAttempts?: number;
@@ -27,6 +28,8 @@ export interface ChapterLifecycleOptions {
   blueprint?: ChapterBlueprint;
   /** Structured tracking context from memory/tone/feedback systems */
   trackingContext?: TrackingInjection;
+  /** Last ~500 chars of the previous chapter's actual text for continuity */
+  previousChapterEnding?: string;
 }
 
 // --- Main lifecycle generator ---
@@ -46,6 +49,7 @@ export async function* runChapterLifecycle(
     critiqueHistory: [],
     totalUsage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 },
     trackingContext: options.trackingContext,
+    previousChapterEnding: options.previousChapterEnding,
   };
 
   const pipeline: PipelineAgent[] = [

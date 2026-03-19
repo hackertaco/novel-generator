@@ -74,6 +74,10 @@ export const CharacterSchema = z.object({
   id: z.string().describe("Unique character identifier"),
   name: z.string().describe("Character name"),
   role: z.string().describe("Role in story (주인공, 히로인, 악역, etc.)"),
+  gender: z
+    .enum(["male", "female", "other"])
+    .optional()
+    .describe("Character gender — controls pronouns (그/그녀) and honorifics. Defaults to 'male' if omitted."),
   introduction_chapter: z
     .preprocess((v) => {
       if (typeof v === "number") return v;

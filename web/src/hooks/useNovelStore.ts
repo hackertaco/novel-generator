@@ -137,12 +137,42 @@ export const useNovelStore = create<NovelState>()(
       appendStreamingText: (chunk) =>
         set((s) => ({ streamingText: s.streamingText + chunk })),
       saveChapter: (chapterNumber, content) =>
-        set((s) => ({
-          chapters: { ...s.chapters, [chapterNumber]: content },
-          currentChapter: Math.max(s.currentChapter, chapterNumber),
-        })),
+        set((s) => {
+          // If regenerating an earlier chapter, clear all subsequent chapters and summaries
+          const isRegeneration = chapterNumber <= s.currentChapter;
+          if (isRegeneration) {
+            const filteredChapters: Record<number, string> = {};
+            for (const [key, val] of Object.entries(s.chapters)) {
+              const num = Number(key);
+              if (num < chapterNumber) filteredChapters[num] = val;
+            }
+            filteredChapters[chapterNumber] = content;
+            return {
+              chapters: filteredChapters,
+              currentChapter: chapterNumber,
+              summaries: s.summaries.filter(
+                (sum) => sum.chapter_number < chapterNumber,
+              ),
+            };
+          }
+          return {
+            chapters: { ...s.chapters, [chapterNumber]: content },
+            currentChapter: Math.max(s.currentChapter, chapterNumber),
+          };
+        }),
       addSummary: (summary) =>
-        set((s) => ({ summaries: [...s.summaries, summary] })),
+        set((s) => {
+          // Replace existing summary for the same chapter, or append if new
+          const existing = s.summaries.findIndex(
+            (sum) => sum.chapter_number === summary.chapter_number,
+          );
+          if (existing >= 0) {
+            const updated = [...s.summaries];
+            updated[existing] = summary;
+            return { summaries: updated };
+          }
+          return { summaries: [...s.summaries, summary] };
+        }),
       recordUsage: (phase, usage) =>
         set((s) => ({
           tokenUsage: {

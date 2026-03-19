@@ -8,6 +8,7 @@ export function useStreamingGeneration() {
   const {
     seed,
     summaries,
+    chapters,
     currentChapter,
     setIsGenerating,
     setStreamingText,
@@ -51,6 +52,7 @@ export function useStreamingGeneration() {
               chapter: s.chapter_number,
               title: s.title,
               summary: s.plot_summary,
+              cliffhanger: s.cliffhanger || null,
             })),
           }),
           signal: abortRef.current.signal,
@@ -139,6 +141,11 @@ export function useStreamingGeneration() {
         return;
       }
 
+      // Prevent double invocation (StrictMode, rapid clicks)
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+
       const targetChapter = chapterNumber ?? currentChapter + 1;
       setIsGenerating(true);
       setStreamingText("");
@@ -147,6 +154,12 @@ export function useStreamingGeneration() {
       resetPipelineState();
 
       abortRef.current = new AbortController();
+
+      // Get the last 500 chars of the previous chapter for continuity
+      const prevChapterText = targetChapter > 1 ? chapters[targetChapter - 1] : undefined;
+      const previousChapterEnding = prevChapterText
+        ? prevChapterText.slice(-500)
+        : undefined;
 
       try {
         const response = await fetch("/api/orchestrate", {
@@ -159,7 +172,9 @@ export function useStreamingGeneration() {
               chapter: s.chapter_number,
               title: s.title,
               summary: s.plot_summary,
+              cliffhanger: s.cliffhanger || null,
             })),
+            previousChapterEnding,
             options,
             masterPlan,
           }),
@@ -251,7 +266,12 @@ export function useStreamingGeneration() {
                     addPipelineLog("플래닝 데이터 업데이트", "info");
                     break;
                   case "evaluation":
-                    setEvaluationResult(parsed.result);
+                    // Support both formats:
+                    // - /api/chapter sends { result: { style: ... } }
+                    // - orchestrate/QualityLoop sends { report: CriticReport, overall_score }
+                    setEvaluationResult(
+                      parsed.result || parsed.report || { overall_score: parsed.overall_score },
+                    );
                     {
                       const score = Math.round((parsed.overall_score ?? 0) * 100);
                       const passed = score >= 85;

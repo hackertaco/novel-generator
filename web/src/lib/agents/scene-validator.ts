@@ -158,6 +158,7 @@ export function validateScene(
   const vagueNarrativeCount = countVagueNarrative(text);
 
   // Length checks
+  const ABSOLUTE_MAX_CHARS = 4000; // Hard cap per chapter (all scenes combined should not exceed this)
   if (charCount < targetChars * 0.3) {
     issues.push({
       type: "too_short",
@@ -167,8 +168,14 @@ export function validateScene(
   } else if (charCount > targetChars * 2) {
     issues.push({
       type: "too_long",
-      message: `씬이 너무 깁니다 (${charCount}자, 목표 ${targetChars}자의 2배 초과). 핵심에 집중하세요.`,
-      severity: "warning",
+      message: `씬이 너무 깁니다 (${charCount}자, 목표 ${targetChars}자의 2배 초과). 불필요한 묘사와 긴 회상을 줄이세요.`,
+      severity: "error",
+    });
+  } else if (charCount > ABSOLUTE_MAX_CHARS) {
+    issues.push({
+      type: "too_long",
+      message: `씬이 절대 상한(${ABSOLUTE_MAX_CHARS}자)을 초과합니다 (${charCount}자). 반드시 줄이세요.`,
+      severity: "error",
     });
   }
 

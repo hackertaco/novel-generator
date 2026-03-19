@@ -34,7 +34,7 @@ export class WriterAgent implements PipelineAgent {
   name = "writer";
 
   async *run(ctx: ChapterContext): AsyncGenerator<LifecycleEvent> {
-    const { seed, chapterNumber, previousSummaries, blueprint } = ctx;
+    const { seed, chapterNumber, previousSummaries, blueprint, previousChapterEnding } = ctx;
     const agent = getAgent();
     const tier = selectModelTier(seed, chapterNumber);
     const model = getModelForTier(tier);
@@ -54,6 +54,7 @@ export class WriterAgent implements PipelineAgent {
           chapter: s.chapter,
           summary: s.summary,
         })),
+        previousChapterEnding,
         // Pass tracking context to scene writer if available
         ...(ctx.trackingContext ? {
           memoryContext: ctx.trackingContext.memoryContext,
@@ -92,6 +93,17 @@ export class WriterAgent implements PipelineAgent {
     let context = blueprint
       ? buildBlueprintContext(seed, chapterNumber, previousSummaries, blueprint)
       : buildChapterContext(seed, chapterNumber, previousSummaries);
+
+    // Inject previous chapter ending for continuity
+    if (previousChapterEnding && chapterNumber > 1) {
+      context = `# ⚠️ 직전 화(${chapterNumber - 1}화) 마지막 장면
+---
+${previousChapterEnding}
+---
+위 내용은 이미 독자가 읽었습니다. 이 직후부터 이어서 쓰세요. 같은 장면을 반복하지 마세요.
+
+${context}`;
+    }
 
     // Inject tracking context if available
     if (ctx.trackingContext) {

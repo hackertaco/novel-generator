@@ -168,8 +168,19 @@ export function planBeats(scene: SceneSpec, seed: NovelSeed): Beat[] {
       });
       break;
     }
+    case "flashback": {
+      // Flashback — short and tight, max 300 chars
+      beats.push({
+        type: "internal",
+        instruction: `회상 장면. 현재 상황과 직접 연결되는 과거 기억을 **300자 이내**로 짧게 보여주세요. 길어지면 안 됩니다.\n- 감각(소리, 냄새, 촉감) 위주로 편집된 기억처럼 쓰세요\n- 회상이 끝나면 즉시 현재로 돌아오세요\n씬 목적: ${scene.purpose}`,
+        characters: [mcName],
+        emotionalTarget: getEmotionalTarget(1, 2),
+        microTension: "과거의 기억에서 현재를 뒤흔들 한 가지 디테일을 남기세요",
+      });
+      break;
+    }
     default: {
-      // exposition, flashback, transition — simple structure
+      // exposition, transition — simple structure
       beats.push({
         type: "reaction",
         instruction: `씬의 핵심 내용을 행동과 대화로 전달하세요. 설명체 금지. (3-5문장)\n씬 목적: ${scene.purpose}`,
@@ -225,17 +236,23 @@ export async function writeSceneByBeats(options: {
   previousText: string; // text from previous scenes in this chapter
   systemPrompt: string;
   model?: string;
+  previousChapterEnding?: string; // actual text from previous chapter for continuity
 }): Promise<BeatWriterResult> {
-  const { beats, scene, seed, chapterNumber, previousText, systemPrompt, model } = options;
+  const { beats, scene, seed, chapterNumber, previousText, systemPrompt, model, previousChapterEnding } = options;
   const agent = getAgent();
   let totalUsage: TokenUsage = { ...ZERO_USAGE };
   const beatTexts: string[] = [];
 
-  // Character voice reference
+  // Character voice reference (with gender/pronouns)
   const charVoices = scene.characters
     .map((id) => seed.characters.find((c) => c.id === id))
     .filter(Boolean)
-    .map((c) => `${c!.name}: ${c!.voice.tone} / 말투: "${c!.voice.sample_dialogues[0] || ""}"`)
+    .map((c) => {
+      const gender = c!.gender || "male";
+      const pronoun = gender === "female" ? "그녀" : "그";
+      const genderLabel = gender === "female" ? "여" : gender === "male" ? "남" : "기타";
+      return `${c!.name}(${genderLabel}/${pronoun}): ${c!.voice.tone} / 말투: "${c!.voice.sample_dialogues[0] || ""}"`;
+    })
     .join("\n");
 
   for (let i = 0; i < beats.length; i++) {
@@ -249,6 +266,14 @@ export async function writeSceneByBeats(options: {
       ? `미세 긴장: ${beat.microTension}`
       : "";
 
+    // For the first beat of the first scene, add continuity from previous chapter
+    const continuityBlock = (i === 0 && previousChapterEnding && !beatTexts.length)
+      ? `# ⚠️ 직전 화 마지막 장면 (이 직후부터 이어쓰세요!)
+${previousChapterEnding}
+→ 위 내용은 ${chapterNumber - 1}화의 끝입니다. 같은 장면을 반복하지 말고, 바로 다음 순간부터 시작하세요.
+`
+      : "";
+
     const prompt = `# 소설 정보
 제목: ${seed.title} | 장르: ${seed.world.genre} | ${chapterNumber}화
 감정톤: ${scene.emotional_tone}
@@ -257,7 +282,7 @@ ${emotionalLine}
 # 캐릭터 목소리
 ${charVoices}
 
-${previousText ? `# 이전 씬 (마지막 부분)\n${previousText.slice(-500)}\n` : ""}
+${continuityBlock}${previousText ? `# 이전 씬 (마지막 부분)\n${previousText.slice(-500)}\n` : ""}
 ${accumulatedText ? `# 현재 씬 (여기까지 작성됨)\n${accumulatedText}\n` : ""}
 # 지금 쓸 비트: [${beat.type}] (${i + 1}/${beats.length})
 ${beat.instruction}

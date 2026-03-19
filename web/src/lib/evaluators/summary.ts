@@ -86,10 +86,21 @@ export function extractSummaryRuleBased(
   const paragraphs = content.split("\n\n").filter((p) => p.trim());
   const cliffhanger =
     paragraphs.length > 0
-      ? paragraphs[paragraphs.length - 1].slice(0, 100)
+      ? paragraphs[paragraphs.length - 1].slice(0, 200)
       : null;
-  const sentences = content.split(/[.!?]\s+/);
-  const plotSummary = sentences.slice(0, 2).join(". ").slice(0, 200) + ".";
+
+  // Build a summary that captures beginning, middle, and end of the chapter
+  const sentences = content.split(/[.!?。]\s+/).filter((s) => s.trim().length > 10);
+  const summaryParts: string[] = [];
+  // Beginning (first 2 sentences)
+  if (sentences.length > 0) summaryParts.push(sentences.slice(0, 2).join(". "));
+  // End (last 2 sentences — critical for continuity with next chapter)
+  if (sentences.length > 4) {
+    summaryParts.push("... " + sentences.slice(-2).join(". "));
+  } else if (sentences.length > 2) {
+    summaryParts.push("... " + sentences[sentences.length - 1]);
+  }
+  const plotSummary = summaryParts.join("").slice(0, 400) + ".";
 
   return {
     chapter_number: chapterNumber,

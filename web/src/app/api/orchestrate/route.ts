@@ -8,14 +8,16 @@ export const maxDuration = 120;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { seed, chapterNumber, previousSummaries, options, batch, masterPlan } = body as {
+    const { seed, chapterNumber, previousSummaries, previousChapterEnding, options, batch, masterPlan } = body as {
       seed: NovelSeed;
       chapterNumber: number;
       previousSummaries: Array<{
         chapter: number;
         title: string;
         summary: string;
+        cliffhanger?: string | null;
       }>;
+      previousChapterEnding?: string;
       options?: {
         qualityThreshold?: number;
         maxAttempts?: number;
@@ -24,6 +26,8 @@ export async function POST(request: NextRequest) {
       batch?: { startChapter: number; endChapter: number };
       masterPlan?: MasterPlan;
     };
+
+    console.log(`[orchestrate] 요청: ${chapterNumber}화 생성 (${new Date().toISOString()})`);
 
     if (!seed || !chapterNumber) {
       return new Response(
@@ -60,6 +64,7 @@ export async function POST(request: NextRequest) {
                 seed,
                 chapterNumber,
                 previousSummaries || [],
+                previousChapterEnding,
               );
 
           for await (const event of events) {

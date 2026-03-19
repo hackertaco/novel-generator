@@ -26,7 +26,7 @@ export interface SceneWriterOptions {
   /** Previously written scenes in this chapter (for continuity) */
   previousSceneTexts?: string[];
   /** Summaries of previous chapters */
-  previousSummaries?: Array<{ chapter: number; summary: string }>;
+  previousSummaries?: Array<{ chapter: number; summary: string; cliffhanger?: string | null }>;
   /** Hierarchical memory context (replaces previousSummaries when available) */
   memoryContext?: string;
   /** Tone guidance for this chapter */
@@ -37,6 +37,8 @@ export interface SceneWriterOptions {
   threadReminders?: string[];
   /** Correction context from feedback system */
   correctionContext?: string;
+  /** Last ~500 chars of the previous chapter's actual text */
+  previousChapterEnding?: string;
 }
 
 export interface SceneWriterResult {
@@ -67,6 +69,7 @@ export function buildScenePrompt(
     progressContext?: string;
     threadReminders?: string[];
     correctionContext?: string;
+    previousChapterEnding?: string;
   },
 ): string {
   const parts: string[] = [];
@@ -125,12 +128,16 @@ ${chapterOutline.one_liner}${keyPtsStr}
       if (!char) continue;
       const dialogues = char.voice.sample_dialogues.slice(0, 3);
       const speechPatterns = char.voice.speech_patterns?.slice(0, 3) || [];
-      parts.push(`**${char.name}** (${char.role}): ${char.voice.personality_core}
+      const gender = char.gender || "male";
+      const pronoun = gender === "female" ? "그녀" : gender === "other" ? "그" : "그";
+      const genderLabel = gender === "female" ? "여성" : gender === "male" ? "남성" : "기타";
+      parts.push(`**${char.name}** (${char.role}, ${genderLabel}) — 대명사: "${pronoun}"
+성격: ${char.voice.personality_core}
 말투: ${char.voice.tone}
 ${speechPatterns.length > 0 ? `말투 특징: ${speechPatterns.join(", ")}` : ""}
 대사 예시:
 ${dialogues.map((d) => `  "${d}"`).join("\n") || '  (없음)'}
-⚠️ ${char.name}의 대사는 반드시 위 말투를 따라야 합니다. 다른 캐릭터와 말투가 겹치면 안 됩니다.
+⚠️ ${char.name}은(는) ${genderLabel}입니다. 반드시 "${pronoun}"로 지칭하세요. 대사는 위 말투를 따라야 합니다.
 `);
     }
     if (sceneChars.length >= 2) {
@@ -149,9 +156,26 @@ ${dialogues.map((d) => `  "${d}"`).join("\n") || '  (없음)'}
     const recent = previousSummaries.slice(-2);
     parts.push("# 이전 내용");
     for (const s of recent) {
-      parts.push(`- ${s.chapter}화: ${s.summary.slice(0, 80)}`);
+      parts.push(`- ${s.chapter}화: ${s.summary.slice(0, 300)}`);
     }
     parts.push("");
+  }
+
+  // For scene 0 (first scene of a new chapter), include previous chapter's ending
+  // to prevent content overlap and ensure continuity
+  if (sceneIndex === 0 && chapterNumber > 1) {
+    const endingText = extras?.previousChapterEnding;
+    if (endingText) {
+      parts.push(`# 직전 화 마지막 장면 (이 내용 바로 다음부터 이어서 쓰세요!)
+---
+${endingText}
+---
+⚠️ 위는 ${chapterNumber - 1}화의 마지막 부분입니다. 이미 독자가 읽은 내용입니다.
+- 이 장면의 **직후**부터 시작하세요.
+- 위 내용을 반복하거나 같은 상황을 다시 묘사하지 마세요.
+- 인물의 위치, 감정, 상황이 위 장면과 자연스럽게 이어져야 합니다.
+`);
+    }
   }
 
   // Progress/pacing context
@@ -191,6 +215,16 @@ ${lastScene.slice(-800)}
   // Tone guidance (before scene instruction)
   if (extras?.toneGuidance) {
     parts.push(`# 톤 가이드\n${extras.toneGuidance}\n`);
+  }
+
+  // Warn about already-covered content from previous chapters
+  if (sceneIndex === 0 && previousSummaries.length > 0) {
+    const lastSummary = previousSummaries[previousSummaries.length - 1];
+    parts.push(`# ⚠️ 이전 화에서 이미 다룬 내용 (절대 반복 금지)
+${lastSummary.summary.slice(0, 300)}
+→ 위 내용은 이미 독자가 읽었습니다. 같은 장면, 같은 사건, 같은 감정을 다시 쓰지 마세요.
+→ 이번 화는 위 내용의 **직후**부터 시작해야 합니다.
+`);
   }
 
   // Scene instruction
@@ -271,6 +305,7 @@ export async function writeChapterByScenes(
     progressContext,
     threadReminders,
     correctionContext,
+    previousChapterEnding,
   } = options;
 
   const agent = getAgent();
@@ -301,7 +336,10 @@ export async function writeChapterByScenes(
 
     // 1. Generate scene using beat-by-beat structured writing
     const beats = planBeats(scene, seed);
-    const previousText = sceneTexts.length > 0 ? sceneTexts[sceneTexts.length - 1] : "";
+    // For the first scene, use previous chapter's ending as context for continuity
+    const previousText = sceneTexts.length > 0
+      ? sceneTexts[sceneTexts.length - 1]
+      : (previousChapterEnding || "");
     const beatResult = await writeSceneByBeats({
       beats,
       scene,
@@ -310,6 +348,7 @@ export async function writeChapterByScenes(
       previousText,
       systemPrompt,
       model,
+      previousChapterEnding: i === 0 ? previousChapterEnding : undefined,
     });
     totalUsage = addUsage(totalUsage, beatResult.usage);
 

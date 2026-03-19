@@ -64,6 +64,8 @@ export interface ChapterContext {
   totalUsage: TokenUsage;
   /** Extra context from tracking/memory/feedback systems */
   trackingContext?: TrackingInjection;
+  /** Last ~500 chars of the previous chapter's actual text */
+  previousChapterEnding?: string;
 }
 
 // --- LifecycleEvent (defined here to avoid circular imports; chapter-lifecycle.ts re-exports from here) ---

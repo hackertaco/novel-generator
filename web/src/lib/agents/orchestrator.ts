@@ -285,12 +285,12 @@ export class Orchestrator {
       chapter: number;
       title: string;
       summary: string;
+      cliffhanger?: string | null;
     }>,
+    previousChapterEnding?: string,
   ): AsyncGenerator<OrchestratorEvent> {
-    // Initialize tracking if enabled and not yet initialized
-    if (this.options.enableTracking) {
-      this.initTracking(seed);
-    }
+    // Always initialize tracking for chapter continuity
+    this.initTracking(seed);
 
     let blueprint: ChapterBlueprint | undefined;
 
@@ -361,6 +361,7 @@ export class Orchestrator {
       maxAttempts: this.options.maxAttemptsPerChapter,
       blueprint,
       trackingContext,
+      previousChapterEnding,
     });
 
     let completedSummary: ChapterSummary | undefined;
