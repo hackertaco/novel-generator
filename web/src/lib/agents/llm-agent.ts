@@ -249,6 +249,15 @@ export class LLMAgent {
       }
     }
 
+    // Log all attempts for debugging
+    console.error(`[callStructured] FAILED after ${maxRetries} attempts for task: ${options.taskId ?? "unknown"}`);
+    for (const [i, att] of attempts.entries()) {
+      console.error(`  Attempt ${i + 1}: ${att.error}`);
+      if (att.response) {
+        console.error(`  Response (first 300 chars): ${att.response.slice(0, 300)}`);
+      }
+    }
+
     throw new AgentCallError(
       `Structured call failed after ${maxRetries} attempts`,
       attempts

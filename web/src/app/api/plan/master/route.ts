@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateMasterPlan } from "@/lib/planning/master-planner";
 import type { NovelSeed } from "@/lib/schema/novel";
 
+export const maxDuration = 300;
+
 export async function POST(request: NextRequest) {
   try {
     const { seed } = (await request.json()) as { seed: NovelSeed };
