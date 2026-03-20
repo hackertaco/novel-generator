@@ -25,6 +25,7 @@ import {
 } from "@/lib/tracking";
 import type { StoryEvent } from "@/lib/tracking";
 import { FeedbackAccumulator, postProcessChapter } from "@/lib/feedback";
+import { ConstraintChecker } from "@/lib/evaluators/constraint-checker";
 
 // --- Pipeline stages ---
 
@@ -51,6 +52,7 @@ export type OrchestratorEvent =
       budget_remaining_usd: number | null;
     }
   | { type: "plan_update"; plan: MasterPlan }
+  | { type: "constraint_violation"; violations: Array<{ type: string; message: string; characterId?: string }> }
   | LifecycleEvent;
 
 // --- Options ---
@@ -79,6 +81,7 @@ export class Orchestrator {
   private toneManager?: ToneManager;
   private progressMonitor?: ProgressMonitor;
   private eventTimeline?: EventTimeline;
+  private constraintChecker?: ConstraintChecker;
   private feedbackAccumulator?: FeedbackAccumulator;
 
   /** Correction context carried over from post-processing of the previous chapter */
@@ -121,6 +124,7 @@ export class Orchestrator {
     this.toneManager = ToneManager.fromSeed(seed);
     this.progressMonitor = new ProgressMonitor(seed);
     this.eventTimeline = new EventTimeline();
+    this.constraintChecker = new ConstraintChecker(seed);
     this.feedbackAccumulator = new FeedbackAccumulator();
   }
 
@@ -289,7 +293,32 @@ export class Orchestrator {
       }
     }
 
-    // 4. Update event timeline from key_events
+    // 4. Constraint check (mathematical — no LLM)
+    if (this.constraintChecker && chapterMemory.character_changes.length > 0) {
+      const violations = this.constraintChecker.validateChapter(
+        chapterNumber,
+        chapterMemory.character_changes,
+        seed,
+      );
+      if (violations.length > 0) {
+        const errorViolations = violations.filter((v) => v.severity === "error");
+        if (errorViolations.length > 0) {
+          yield {
+            type: "constraint_violation" as const,
+            violations: errorViolations.map((v) => ({
+              type: v.type,
+              message: v.message,
+              characterId: v.characterId,
+            })),
+          };
+        }
+        for (const v of violations) {
+          console.warn(`[constraint] ${v.severity}: ${v.message}`);
+        }
+      }
+    }
+
+    // 5. Update event timeline from key_events
     if (this.eventTimeline && chapterMemory.key_events.length > 0) {
       const chapterChars = chapterMemory.character_changes.map((c) => c.characterId);
       const events: StoryEvent[] = chapterMemory.key_events.map((desc) => ({
