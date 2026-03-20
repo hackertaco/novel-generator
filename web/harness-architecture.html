@@ -106,32 +106,52 @@
 <!-- ============================================================ -->
 
 <div class="section-flow">
-  <div class="flow">
-    <div class="flow-item active">🎭 장르 선택</div>
-    <span class="flow-arrow">→</span>
-    <div class="flow-item active">📝 플롯 생성</div>
-    <span class="flow-arrow">→</span>
-    <div class="flow-item active">🌱 시드 생성</div>
-    <span class="flow-arrow">→</span>
-    <div class="flow-item active">🔍 개연성 검증</div>
-    <span class="flow-arrow">→</span>
-    <div class="flow-item active">📋 마스터플랜</div>
-    <span class="flow-arrow">→</span>
-    <div class="flow-item active">⚡ 챕터 생성</div>
-    <span class="flow-arrow">→</span>
-    <div class="flow-item">📖 소설 출력</div>
+  <!-- Step-by-step flow with user checkpoints -->
+  <div style="display:grid; grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr; gap:0; align-items:center; margin-bottom:16px;">
+    <div class="flow-item active" style="text-align:center; border-color:#7c3aed;">
+      <div style="font-size:11px; color:#a78bfa;">Step 1</div>
+      <div>🎭 stepPlots</div>
+      <div style="font-size:10px; color:#6b7280;">플롯 3개 생성</div>
+    </div>
+    <div style="text-align:center;">
+      <span class="flow-arrow">→</span><br>
+      <span style="font-size:9px; color:#fbbf24;">사용자 선택</span>
+    </div>
+    <div class="flow-item active" style="text-align:center; border-color:#7c3aed;">
+      <div style="font-size:11px; color:#a78bfa;">Step 2</div>
+      <div>🌱 stepSeed</div>
+      <div style="font-size:10px; color:#6b7280;">3온도 진화 + 교차</div>
+    </div>
+    <div style="text-align:center;">
+      <span class="flow-arrow">→</span><br>
+      <span style="font-size:9px; color:#fbbf24;">사용자 확인</span>
+    </div>
+    <div class="flow-item active" style="text-align:center; border-color:#7c3aed;">
+      <div style="font-size:11px; color:#a78bfa;">Step 3</div>
+      <div>📋 stepPlan</div>
+      <div style="font-size:10px; color:#6b7280;">개연성 + 마스터플랜</div>
+    </div>
+    <div style="text-align:center;">
+      <span class="flow-arrow">→</span><br>
+      <span style="font-size:9px; color:#fbbf24;">사용자 확인</span>
+    </div>
+    <div class="flow-item active" style="text-align:center; border-color:#7c3aed;">
+      <div style="font-size:11px; color:#a78bfa;">Step 4</div>
+      <div>⚡ stepChapters</div>
+      <div style="font-size:10px; color:#6b7280;">챕터 N화 생성</div>
+    </div>
   </div>
-  <div style="margin-top: 12px; padding: 12px; background: #7c3aed11; border: 1px solid #7c3aed33; border-radius: 8px; font-size: 12px;">
-    <strong style="color: #a78bfa;">runFullPipeline()</strong> — 장르만 주면 전체 자동 실행<br>
+
+  <div style="padding: 12px; background: #7c3aed11; border: 1px solid #7c3aed33; border-radius: 8px; font-size: 12px;">
+    <strong style="color: #a78bfa;">NovelHarness — 단계별 오케스트레이션</strong><br>
     <span style="color: #6b7280;">
-      하네스가 플롯 생성 → 시드 진화 → 개연성 검증 → 마스터플랜 → 챕터 생성까지 전부 오케스트레이션.<br>
-      모든 단계를 SSE 이벤트로 스트리밍.
+      사용자가 매 단계 사이에 결과를 확인/수정. 하네스가 모든 단계의 모델·검증·프리셋을 일관 관리.<br>
+      <code>getState()</code>로 중간 상태(plots, seed, masterPlan)를 읽고, 다음 단계에 수정된 데이터 전달 가능.
     </span>
   </div>
   <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
-    Full: <code>harness.runFullPipeline("판타지", { endChapter: 10 })</code><br>
-    Partial: <code>harness.run(seed, 1, 10, { masterPlan })</code> — 시드부터 시작<br>
-    CLI: <code>npm run generate -- --genre 판타지 --chapters 1-10</code>
+    단계별: <code>stepPlots() → stepSeed() → stepPlan() → stepChapters()</code><br>
+    자동: <code>runFullPipeline("판타지", { endChapter: 10 })</code> — CLI/테스트용
   </div>
 </div>
 

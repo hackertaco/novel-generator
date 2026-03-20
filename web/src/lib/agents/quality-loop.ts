@@ -4,9 +4,14 @@ import { SurgeonAgent } from "./surgeon-agent";
 import { sanitize } from "./rule-guard";
 import { segmentText } from "./segmenter";
 import { accumulateUsage } from "./pipeline";
+import { computeDeterministicScores } from "../evaluators/deterministic-scorer";
 
 const MAX_ITERATIONS = 5;
 const QUALITY_THRESHOLD = 0.85;
+
+/** Deterministic gate thresholds */
+const GATE_REJECT = 0.70;    // Below → skip LLM, needs rewrite
+const GATE_PASS = 0.85;      // Above → skip LLM, pass through
 
 export class QualityLoop implements PipelineAgent {
   name = "quality-loop";
@@ -19,7 +24,72 @@ export class QualityLoop implements PipelineAgent {
   }
 
   async *run(ctx: ChapterContext): AsyncGenerator<LifecycleEvent> {
-    // Initial evaluation
+    // --- Deterministic gate: fast, $0 pre-filter ---
+    yield { type: "stage_change", stage: "deterministic_gate" };
+
+    const detScores = computeDeterministicScores(
+      ctx.text,
+      ctx.seed,
+      ctx.chapterNumber,
+      undefined,
+      ctx.blueprint,
+    );
+
+    yield {
+      type: "deterministic_scores",
+      scores: detScores,
+    } as LifecycleEvent;
+
+    // Gate decision
+    if (detScores.overall >= GATE_PASS) {
+      // High quality — skip LLM evaluation entirely
+      ctx.bestScore = detScores.overall;
+      ctx.snapshots.push({ text: ctx.text, score: detScores.overall, iteration: 0 });
+      yield {
+        type: "gate_decision",
+        decision: "pass",
+        deterministicScore: detScores.overall,
+        message: `결정적 점수 ${(detScores.overall * 100).toFixed(0)}점 — LLM 평가 스킵`,
+      } as LifecycleEvent;
+      return;
+    }
+
+    if (detScores.overall < GATE_REJECT) {
+      // Low quality — signal for regeneration without wasting LLM on evaluation
+      ctx.bestScore = detScores.overall;
+      yield {
+        type: "gate_decision",
+        decision: "reject",
+        deterministicScore: detScores.overall,
+        message: `결정적 점수 ${(detScores.overall * 100).toFixed(0)}점 — LLM 없이 재생성 권고`,
+      } as LifecycleEvent;
+
+      // Provide specific feedback from deterministic scores
+      const weakDimensions: string[] = [];
+      if (detScores.narrativeInformation < 0.5) weakDimensions.push("서사 구조(정보이론)");
+      if (detScores.rhythm < 0.5) weakDimensions.push("문장 리듬");
+      if (detScores.hookEnding < 0.3) weakDimensions.push("후킹 엔딩");
+      if (detScores.characterVoice < 0.5) weakDimensions.push("캐릭터 음성");
+      if (detScores.antiRepetition < 0.5) weakDimensions.push("반복");
+
+      if (weakDimensions.length > 0) {
+        yield {
+          type: "error",
+          message: `약한 차원: ${weakDimensions.join(", ")}`,
+        };
+      }
+      return;
+    }
+
+    // --- Middle zone: proceed with LLM evaluation ---
+    yield {
+      type: "gate_decision",
+      decision: "evaluate",
+      deterministicScore: detScores.overall,
+      message: `결정적 점수 ${(detScores.overall * 100).toFixed(0)}점 — LLM 정밀 평가 진행`,
+    } as LifecycleEvent;
+
+    // Initial LLM evaluation
     yield { type: "stage_change", stage: "critiquing" };
     const initialReport = await this.critic.evaluate(ctx);
     if (!initialReport) {

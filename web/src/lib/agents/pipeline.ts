@@ -87,7 +87,9 @@ export type LifecycleEvent =
   | { type: "error"; message: string }
   | { type: "done" }
   | { type: "tracking_context"; context: string }
-  | { type: "post_process"; feedbacks: object[]; correctionLevel: string };
+  | { type: "post_process"; feedbacks: object[]; correctionLevel: string }
+  | { type: "deterministic_scores"; scores: object }
+  | { type: "gate_decision"; decision: "pass" | "reject" | "evaluate"; deterministicScore: number; message: string };
 
 // --- PipelineAgent ---
 
