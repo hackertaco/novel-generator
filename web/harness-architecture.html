@@ -107,23 +107,31 @@
 
 <div class="section-flow">
   <div class="flow">
-    <div class="flow-item">🎭 장르 선택</div>
+    <div class="flow-item active">🎭 장르 선택</div>
     <span class="flow-arrow">→</span>
-    <div class="flow-item">📝 플롯 생성</div>
+    <div class="flow-item active">📝 플롯 생성</div>
     <span class="flow-arrow">→</span>
-    <div class="flow-item">🌱 시드 생성</div>
+    <div class="flow-item active">🌱 시드 생성</div>
     <span class="flow-arrow">→</span>
-    <div class="flow-item new">🔍 개연성 검증</div>
+    <div class="flow-item active">🔍 개연성 검증</div>
     <span class="flow-arrow">→</span>
-    <div class="flow-item">📋 마스터플랜</div>
+    <div class="flow-item active">📋 마스터플랜</div>
     <span class="flow-arrow">→</span>
-    <div class="flow-item active">⚡ 하네스 실행</div>
+    <div class="flow-item active">⚡ 챕터 생성</div>
     <span class="flow-arrow">→</span>
     <div class="flow-item">📖 소설 출력</div>
   </div>
-  <div style="margin-top: 16px; font-size: 12px; color: #6b7280;">
-    UI 경로: /genre → /plot → /seed → /plan → /reader<br>
-    CLI 경로: seed.json → <code>npm run generate -- --seed seed.json --chapters 1-10</code>
+  <div style="margin-top: 12px; padding: 12px; background: #7c3aed11; border: 1px solid #7c3aed33; border-radius: 8px; font-size: 12px;">
+    <strong style="color: #a78bfa;">runFullPipeline()</strong> — 장르만 주면 전체 자동 실행<br>
+    <span style="color: #6b7280;">
+      하네스가 플롯 생성 → 시드 진화 → 개연성 검증 → 마스터플랜 → 챕터 생성까지 전부 오케스트레이션.<br>
+      모든 단계를 SSE 이벤트로 스트리밍.
+    </span>
+  </div>
+  <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
+    Full: <code>harness.runFullPipeline("판타지", { endChapter: 10 })</code><br>
+    Partial: <code>harness.run(seed, 1, 10, { masterPlan })</code> — 시드부터 시작<br>
+    CLI: <code>npm run generate -- --genre 판타지 --chapters 1-10</code>
   </div>
 </div>
 

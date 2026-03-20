@@ -20,6 +20,13 @@ import { generateMasterPlan } from "../planning/master-planner";
 import { extractSummaryRuleBased } from "../evaluators/summary";
 import { checkPlausibility, fixPlausibilityIssues } from "../evaluators/plausibility";
 
+// Full pipeline imports
+import { runPlotPipeline } from "../agents/plot-pipeline";
+import { generateSeedCandidates } from "../planning/seed-evolver";
+import { evaluateCandidate } from "../evolution/candidate-evaluator";
+import { crossoverSeeds } from "../evolution/seed-crossover";
+import type { PlotOption } from "../schema/plot";
+
 // Tracking imports
 import { HierarchicalMemory, summarizeChapter } from "../memory";
 import {
@@ -60,7 +67,12 @@ export type HarnessEvent =
   | { type: "plausibility_check"; passed: boolean; issues: Array<{ severity: string; category: string; description: string; suggestion: string }> }
   | { type: "plausibility_fixed"; fixes: string[] }
   | { type: "error"; chapter: number; message: string }
-  | { type: "done"; result: HarnessResult };
+  | { type: "done"; result: HarnessResult }
+  // Full pipeline events
+  | { type: "stage"; stage: "plots" | "seed" | "plausibility" | "master_plan" | "chapters" }
+  | { type: "plots_generated"; plots: PlotOption[] }
+  | { type: "plot_selected"; plot: PlotOption }
+  | { type: "seed_generated"; seed: NovelSeed };
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -434,5 +446,96 @@ export class NovelHarness {
         totalCostUsd: totalUsage.cost_usd,
       },
     };
+  }
+
+  // -----------------------------------------------------------------------
+  // Full pipeline: genre → plots → seed → plan → chapters
+  // -----------------------------------------------------------------------
+
+  /**
+   * Run the complete novel generation pipeline from genre selection.
+   *
+   * @param genre - Genre string (e.g. "로맨스", "판타지")
+   * @param plotIndex - Which plot to pick (0-based). If omitted, picks the first.
+   * @param chapterRange - How many chapters to generate (default: 1-3)
+   */
+  async *runFullPipeline(
+    genre: string,
+    options?: {
+      plotIndex?: number;
+      startChapter?: number;
+      endChapter?: number;
+    },
+  ): AsyncGenerator<HarnessEvent> {
+    const startChapter = options?.startChapter ?? 1;
+    const endChapter = options?.endChapter ?? 3;
+    const plotIndex = options?.plotIndex ?? 0;
+
+    // --- Stage 1: Plot generation ---
+    yield { type: "stage", stage: "plots" };
+    let plots: PlotOption[];
+    try {
+      const plotResult = await runPlotPipeline(genre);
+      plots = plotResult.plots;
+      yield { type: "plots_generated", plots };
+    } catch (err) {
+      yield { type: "error", chapter: 0, message: `플롯 생성 실패: ${err instanceof Error ? err.message : err}` };
+      return;
+    }
+
+    if (plots.length === 0) {
+      yield { type: "error", chapter: 0, message: "생성된 플롯이 없습니다" };
+      return;
+    }
+
+    const selectedPlot = plots[Math.min(plotIndex, plots.length - 1)];
+    yield { type: "plot_selected", plot: selectedPlot };
+
+    // --- Stage 2: Seed generation ---
+    yield { type: "stage", stage: "seed" };
+
+    const archetypeInfo = selectedPlot.male_archetype || selectedPlot.female_archetype
+      ? `\n남주 아키타입: ${selectedPlot.male_archetype || "미지정"}\n여주 아키타입: ${selectedPlot.female_archetype || "미지정"}`
+      : "";
+
+    const interviewResult = `장르: ${genre}
+
+## 선택한 플롯
+제목: ${selectedPlot.title}
+로그라인: ${selectedPlot.logline}
+훅: ${selectedPlot.hook}
+전개:
+${selectedPlot.arc_summary.map((a: string) => `- ${a}`).join("\n")}
+핵심 반전: ${selectedPlot.key_twist}${archetypeInfo}`;
+
+    let seed: NovelSeed;
+    try {
+      const { candidates, usage: genUsage } = await generateSeedCandidates(interviewResult);
+
+      const scored = candidates.map((c) => ({
+        candidate: c,
+        score: evaluateCandidate(c.seed),
+      }));
+      scored.sort((a, b) => b.score.overall_score - a.score.overall_score);
+
+      const best = scored[0];
+      const secondBest = scored[1];
+
+      if (secondBest) {
+        const crossResult = await crossoverSeeds(best.candidate, best.score, secondBest.candidate, secondBest.score);
+        seed = crossResult.seed;
+      } else {
+        seed = best.candidate.seed;
+      }
+
+      yield { type: "seed_generated", seed };
+    } catch (err) {
+      yield { type: "error", chapter: 0, message: `시드 생성 실패: ${err instanceof Error ? err.message : err}` };
+      return;
+    }
+
+    // --- Stage 3+: Delegate to existing run() which handles plan + plausibility + chapters ---
+    yield { type: "stage", stage: "chapters" };
+    yield* this.run(seed, startChapter, endChapter);
   }
 }
