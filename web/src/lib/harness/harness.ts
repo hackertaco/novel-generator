@@ -324,6 +324,7 @@ export class NovelHarness {
       trackingContext,
       previousChapterEnding,
       fastMode: this.config.fastMode,
+      parallelMode: this.config.parallelMode,
     };
 
     // Run pipeline

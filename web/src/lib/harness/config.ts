@@ -155,6 +155,8 @@ export interface HarnessConfig {
 
   /** Skip beat-by-beat writing — generate each scene in one call (faster, less structured) */
   fastMode: boolean;
+  /** Generate scenes in parallel + bridge stitching (fastest) */
+  parallelMode: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +198,7 @@ export function getDefaultConfig(name = "default"): HarnessConfig {
     output: { mode: "stream", verbose: true },
     chapterLength: { min: 3000, max: 4000 },
     fastMode: false,
+    parallelMode: false,
   };
 }
 
@@ -223,5 +226,6 @@ export function getFastConfig(name = "fast"): HarnessConfig {
     qualityThreshold: 0.70,
     maxAttempts: 1,
     fastMode: true,
+    parallelMode: true,
   };
 }

@@ -4,7 +4,7 @@ import { buildChapterContext, buildBlueprintContext } from "@/lib/context/builde
 import { selectModelTier, getModelForTier } from "@/lib/llm/tier";
 import { sanitize } from "./rule-guard";
 import { accumulateUsage } from "./pipeline";
-import { writeChapterByScenes } from "./scene-writer";
+import { writeChapterByScenes, writeChapterParallel } from "./scene-writer";
 import type { PipelineAgent, ChapterContext, LifecycleEvent } from "./pipeline";
 
 /**
@@ -34,7 +34,7 @@ export class WriterAgent implements PipelineAgent {
   name = "writer";
 
   async *run(ctx: ChapterContext): AsyncGenerator<LifecycleEvent> {
-    const { seed, chapterNumber, previousSummaries, blueprint, previousChapterEnding, fastMode } = ctx;
+    const { seed, chapterNumber, previousSummaries, blueprint, previousChapterEnding, fastMode, parallelMode } = ctx;
     const agent = getAgent();
     const tier = selectModelTier(seed, chapterNumber);
     const model = getModelForTier(tier);
@@ -44,7 +44,8 @@ export class WriterAgent implements PipelineAgent {
     if (blueprint && blueprint.scenes.length > 0) {
       yield { type: "stage_change", stage: "writing" };
 
-      const sceneResult = await writeChapterByScenes({
+      const writeFunc = parallelMode ? writeChapterParallel : writeChapterByScenes;
+      const sceneResult = await writeFunc({
         seed,
         chapterNumber,
         blueprint,

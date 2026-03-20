@@ -70,6 +70,8 @@ export interface ChapterContext {
   previousChapterEnding?: string;
   /** Skip beat-by-beat writing for speed */
   fastMode?: boolean;
+  /** Generate scenes in parallel + bridge stitching (fastest) */
+  parallelMode?: boolean;
 }
 
 // --- LifecycleEvent (defined here to avoid circular imports; chapter-lifecycle.ts re-exports from here) ---

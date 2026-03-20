@@ -41,6 +41,8 @@ export interface SceneWriterOptions {
   previousChapterEnding?: string;
   /** Skip beat-by-beat writing and generate each scene in one call (faster) */
   fastMode?: boolean;
+  /** Generate scenes in parallel + bridge stitching (fastest) */
+  parallelMode?: boolean;
 }
 
 export interface SceneWriterResult {
@@ -467,4 +469,200 @@ export async function writeChapterByScenes(
   const fullText = sceneTexts.join("\n\n");
 
   return { fullText, sceneTexts, usage: totalUsage, remainingIssues };
+}
+
+// ---------------------------------------------------------------------------
+// Parallel scene generation + bridge stitching
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate all scenes in parallel, then stitch with bridge passes.
+ * ~2-3x faster than sequential for 3+ scenes.
+ */
+export async function writeChapterParallel(
+  options: SceneWriterOptions,
+): Promise<SceneWriterResult> {
+  const {
+    seed,
+    chapterNumber,
+    blueprint,
+    systemPrompt,
+    model,
+    previousSummaries = [],
+    memoryContext,
+    toneGuidance,
+    progressContext,
+    threadReminders,
+    correctionContext,
+    previousChapterEnding,
+  } = options;
+
+  const agent = getAgent();
+  let totalUsage: TokenUsage = { ...ZERO_USAGE };
+  const remainingIssues: string[] = [];
+
+  if (blueprint.scenes.length === 0) {
+    const result = await agent.call({
+      prompt: `${chapterNumber}화를 작성해주세요. ${blueprint.one_liner}\n\n출력: 소설 본문만`,
+      system: systemPrompt,
+      model,
+      temperature: 0.5,
+      maxTokens: 8000,
+      taskId: `chapter-${chapterNumber}-write`,
+    });
+    return {
+      fullText: result.data,
+      sceneTexts: [result.data],
+      usage: result.usage,
+      remainingIssues: [],
+    };
+  }
+
+  // --- Phase 1: Generate all scenes in parallel ---
+  const scenePromises = blueprint.scenes.map((scene, i) => {
+    // For parallel mode, each scene gets the previous chapter ending (scene 0)
+    // or a brief hint from the blueprint about the previous scene's purpose
+    const prevSceneHint = i > 0
+      ? `[직전 씬 요약: "${blueprint.scenes[i - 1].purpose}" — 이 씬의 감정톤은 ${blueprint.scenes[i - 1].emotional_tone}이었습니다. 자연스럽게 이어서 시작하세요.]`
+      : undefined;
+
+    const scenePrompt = buildScenePrompt(
+      seed, chapterNumber, blueprint, scene, i,
+      [], // no previous scene texts in parallel mode
+      previousSummaries,
+      {
+        memoryContext,
+        toneGuidance,
+        progressContext,
+        threadReminders: i >= blueprint.scenes.length - 2 ? threadReminders : undefined,
+        correctionContext,
+        previousChapterEnding: i === 0 ? previousChapterEnding : prevSceneHint,
+      },
+    );
+
+    return agent.call({
+      prompt: scenePrompt,
+      system: systemPrompt,
+      model,
+      temperature: 0.5,
+      maxTokens: Math.max(2000, Math.ceil(scene.estimated_chars * 1.5)),
+      taskId: `chapter-${chapterNumber}-scene-${i + 1}-parallel`,
+    });
+  });
+
+  const sceneResults = await Promise.all(scenePromises);
+  const sceneTexts = sceneResults.map((r) => r.data.trim());
+  for (const r of sceneResults) {
+    totalUsage = addUsage(totalUsage, r.usage);
+  }
+
+  // --- Phase 2: Bridge stitching ---
+  // For each seam between scenes, take the last 2 sentences of scene N
+  // and first 2 sentences of scene N+1, and ask LLM to smooth the transition.
+  if (sceneTexts.length >= 2) {
+    for (let i = 0; i < sceneTexts.length - 1; i++) {
+      const endOfCurrent = extractLastSentences(sceneTexts[i], 3);
+      const startOfNext = extractFirstSentences(sceneTexts[i + 1], 3);
+
+      const bridgePrompt = `다음은 소설의 연속된 두 씬의 이음새입니다. 자연스럽게 연결되도록 수정해주세요.
+
+## 씬 ${i + 1} 끝부분
+${endOfCurrent}
+
+## 씬 ${i + 2} 시작부분
+${startOfNext}
+
+## 규칙
+- 두 부분이 자연스럽게 이어지도록 수정
+- 시간/공간 전환이 있으면 짧은 전환 문장 추가 가능
+- 감정 흐름이 끊기지 않도록
+- 기존 내용을 최대한 유지하되 이음새만 다듬기
+- 출력: 수정된 "씬 ${i + 1} 끝부분" + "씬 ${i + 2} 시작부분" (구분선 --- 으로 구분)`;
+
+      try {
+        const bridgeResult = await agent.call({
+          prompt: bridgePrompt,
+          system: "당신은 소설 편집자입니다. 씬 간 이음새를 자연스럽게 다듬어주세요.",
+          model,
+          temperature: 0.3,
+          maxTokens: 1000,
+          taskId: `chapter-${chapterNumber}-bridge-${i + 1}`,
+        });
+        totalUsage = addUsage(totalUsage, bridgeResult.usage);
+
+        // Parse bridge result: split by --- separator
+        const parts = bridgeResult.data.split(/---+/).map((p: string) => p.trim()).filter((p: string) => p.length > 0);
+        if (parts.length >= 2) {
+          // Replace the end of current scene and start of next scene
+          sceneTexts[i] = replaceEndSentences(sceneTexts[i], 3, parts[0]);
+          sceneTexts[i + 1] = replaceStartSentences(sceneTexts[i + 1], 3, parts[1]);
+        }
+      } catch (err) {
+        // Bridge failure is non-critical — just use the raw join
+        remainingIssues.push(`[브릿지 ${i + 1}-${i + 2}] 이음새 다듬기 실패: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+  }
+
+  // --- Phase 3: Validation (same as sequential) ---
+  for (let i = 0; i < sceneTexts.length; i++) {
+    const scene = blueprint.scenes[i];
+    const validation = validateScene(sceneTexts[i], scene.estimated_chars, scene.type);
+    if (!validation.passed) {
+      for (const issue of validation.issues.filter((iss) => iss.severity === "error")) {
+        remainingIssues.push(`[씬${i + 1}] ${issue.message}`);
+      }
+    }
+  }
+
+  const fullText = sceneTexts.join("\n\n");
+  return { fullText, sceneTexts, usage: totalUsage, remainingIssues };
+}
+
+// ---------------------------------------------------------------------------
+// Bridge helpers
+// ---------------------------------------------------------------------------
+
+function splitIntoSentences(text: string): string[] {
+  return text.split(/(?<=[.!?。])\s+/).filter((s) => s.trim().length > 0);
+}
+
+function extractLastSentences(text: string, n: number): string {
+  const paragraphs = text.split("\n").filter((p) => p.trim());
+  // Take last paragraph(s) that contain at least n sentences total
+  const allSentences: string[] = [];
+  for (let i = paragraphs.length - 1; i >= 0 && allSentences.length < n; i--) {
+    const sentences = splitIntoSentences(paragraphs[i]);
+    allSentences.unshift(...sentences);
+  }
+  return allSentences.slice(-n).join(" ");
+}
+
+function extractFirstSentences(text: string, n: number): string {
+  const paragraphs = text.split("\n").filter((p) => p.trim());
+  const allSentences: string[] = [];
+  for (let i = 0; i < paragraphs.length && allSentences.length < n; i++) {
+    const sentences = splitIntoSentences(paragraphs[i]);
+    allSentences.push(...sentences);
+  }
+  return allSentences.slice(0, n).join(" ");
+}
+
+function replaceEndSentences(text: string, n: number, replacement: string): string {
+  const lastSentences = extractLastSentences(text, n);
+  const idx = text.lastIndexOf(lastSentences.split(" ")[0]);
+  if (idx > 0) {
+    return text.slice(0, idx) + replacement;
+  }
+  return text;
+}
+
+function replaceStartSentences(text: string, n: number, replacement: string): string {
+  const firstSentences = extractFirstSentences(text, n);
+  const lastWord = firstSentences.split(" ").pop() || "";
+  const idx = text.indexOf(lastWord);
+  if (idx >= 0) {
+    return replacement + text.slice(idx + lastWord.length);
+  }
+  return text;
 }
