@@ -13,6 +13,8 @@
  */
 
 import type { NovelSeed } from "../schema/novel";
+import type { ChapterBlueprint } from "../schema/planning";
+import { computeNarrativeInformationScores, type NarrativeInformationScores } from "./narrative-information-scorer";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,10 +39,14 @@ export interface DeterministicScores {
   narrative: number;
   /** 몰입감 (0~1) — 구체성, 장면 접지, 심리적 거리, 대화 모멘텀 */
   immersion: number;
+  /** 정보이론 기반 서사 구조 (0~1) — 엔트로피, JSD, 아크 상관 */
+  narrativeInformation: number;
   /** 종합 (가중 평균) */
   overall: number;
   /** 상세 데이터 */
   details: Record<string, unknown>;
+  /** 정보이론 상세 */
+  informationTheory?: NarrativeInformationScores;
 }
 
 // ---------------------------------------------------------------------------
@@ -503,15 +509,16 @@ function scoreImmersion(text: string): { score: number; details: Record<string, 
 // ---------------------------------------------------------------------------
 
 const WEIGHTS = {
-  rhythm: 0.12,
-  hookEnding: 0.10,
-  characterVoice: 0.15,
-  dialogueRatio: 0.08,
-  lengthScore: 0.05,
-  antiRepetition: 0.10,
-  sensoryDiversity: 0.05,
-  narrative: 0.20,
-  immersion: 0.15,
+  rhythm: 0.10,
+  hookEnding: 0.08,
+  characterVoice: 0.12,
+  dialogueRatio: 0.06,
+  lengthScore: 0.04,
+  antiRepetition: 0.08,
+  sensoryDiversity: 0.04,
+  narrative: 0.15,
+  immersion: 0.12,
+  narrativeInformation: 0.21,
 };
 
 export function computeDeterministicScores(
@@ -519,6 +526,7 @@ export function computeDeterministicScores(
   seed: NovelSeed,
   chapterNumber: number,
   lengthRange?: { min: number; max: number },
+  blueprint?: ChapterBlueprint | null,
 ): DeterministicScores {
   const rhythmResult = scoreRhythm(text);
   const hookResult = scoreHookEnding(text);
@@ -531,6 +539,9 @@ export function computeDeterministicScores(
   const narrativeResult = scoreNarrative(text, seed, chapterNumber);
   const immersionResult = scoreImmersion(text);
 
+  // Information-theoretic analysis
+  const infoScores = computeNarrativeInformationScores(text, blueprint);
+
   const scores = {
     rhythm: rhythmResult.score,
     hookEnding: hookResult.score,
@@ -541,6 +552,7 @@ export function computeDeterministicScores(
     sensoryDiversity: sensoryResult.score,
     narrative: narrativeResult.score,
     immersion: immersionResult.score,
+    narrativeInformation: infoScores.overall,
   };
 
   const overall = Object.entries(WEIGHTS).reduce(
@@ -562,5 +574,6 @@ export function computeDeterministicScores(
       narrative: narrativeResult.details,
       immersion: immersionResult.details,
     },
+    informationTheory: infoScores,
   };
 }
