@@ -82,6 +82,11 @@ export class NovelHarness {
   private config: HarnessConfig;
   private masterPlan?: MasterPlan;
 
+  // Staged state — persists across step-by-step calls
+  private _plots?: PlotOption[];
+  private _selectedPlot?: PlotOption;
+  private _seed?: NovelSeed;
+
   // Tracking subsystems
   private memory?: HierarchicalMemory;
   private characterTracker?: CharacterTracker;
@@ -97,6 +102,16 @@ export class NovelHarness {
 
   getConfig(): HarnessConfig {
     return this.config;
+  }
+
+  /** Get current staged state (for UI to read between steps) */
+  getState() {
+    return {
+      plots: this._plots,
+      selectedPlot: this._selectedPlot,
+      seed: this._seed,
+      masterPlan: this.masterPlan,
+    };
   }
 
   // -----------------------------------------------------------------------
@@ -449,15 +464,143 @@ export class NovelHarness {
   }
 
   // -----------------------------------------------------------------------
+  // Step-by-step API — user controls progression, harness manages quality
+  // -----------------------------------------------------------------------
+
+  /**
+   * Step 1: Generate plot candidates.
+   * Uses the harness model config for consistency.
+   */
+  async *stepPlots(genre: string): AsyncGenerator<HarnessEvent> {
+    yield { type: "stage", stage: "plots" };
+    try {
+      const result = await runPlotPipeline(genre);
+      this._plots = result.plots;
+      yield { type: "plots_generated", plots: result.plots };
+    } catch (err) {
+      yield { type: "error", chapter: 0, message: `플롯 생성 실패: ${err instanceof Error ? err.message : err}` };
+    }
+  }
+
+  /**
+   * Step 2: Generate seed from selected plot.
+   * Runs 3-temperature evolution + crossover + code-based evaluation.
+   */
+  async *stepSeed(genre: string, plot: PlotOption): AsyncGenerator<HarnessEvent> {
+    yield { type: "stage", stage: "seed" };
+    this._selectedPlot = plot;
+
+    const archetypeInfo = plot.male_archetype || plot.female_archetype
+      ? `\n남주 아키타입: ${plot.male_archetype || "미지정"}\n여주 아키타입: ${plot.female_archetype || "미지정"}`
+      : "";
+
+    const interviewResult = `장르: ${genre}
+
+## 선택한 플롯
+제목: ${plot.title}
+로그라인: ${plot.logline}
+훅: ${plot.hook}
+전개:
+${plot.arc_summary.map((a: string) => `- ${a}`).join("\n")}
+핵심 반전: ${plot.key_twist}${archetypeInfo}`;
+
+    try {
+      const { candidates } = await generateSeedCandidates(interviewResult);
+
+      const scored = candidates.map((c) => ({
+        candidate: c,
+        score: evaluateCandidate(c.seed),
+      }));
+      scored.sort((a, b) => b.score.overall_score - a.score.overall_score);
+
+      const best = scored[0];
+      const secondBest = scored[1];
+
+      if (secondBest) {
+        const crossResult = await crossoverSeeds(best.candidate, best.score, secondBest.candidate, secondBest.score);
+        this._seed = crossResult.seed;
+      } else {
+        this._seed = best.candidate.seed;
+      }
+
+      yield { type: "seed_generated", seed: this._seed };
+    } catch (err) {
+      yield { type: "error", chapter: 0, message: `시드 생성 실패: ${err instanceof Error ? err.message : err}` };
+    }
+  }
+
+  /**
+   * Step 3: Generate master plan + plausibility check.
+   * Can accept an externally modified seed (user may have edited it in UI).
+   */
+  async *stepPlan(seed?: NovelSeed): AsyncGenerator<HarnessEvent> {
+    const s = seed || this._seed;
+    if (!s) {
+      yield { type: "error", chapter: 0, message: "시드가 없습니다. stepSeed를 먼저 호출하세요." };
+      return;
+    }
+    this._seed = s; // Update with possibly user-edited seed
+
+    yield { type: "stage", stage: "master_plan" };
+
+    // Plausibility check
+    try {
+      const plausibility = await checkPlausibility(s);
+      yield { type: "plausibility_check", passed: plausibility.passed, issues: plausibility.issues };
+
+      if (!plausibility.passed) {
+        const critical = plausibility.issues.filter((i) => i.severity === "critical");
+        if (critical.length > 0) {
+          const fixResult = await fixPlausibilityIssues(s, critical);
+          if (fixResult.seed.logline !== s.logline) {
+            s.logline = fixResult.seed.logline;
+          }
+          yield { type: "plausibility_fixed", fixes: fixResult.fixes };
+        }
+      }
+    } catch (err) {
+      console.warn(`[harness] 개연성 검증 실패, 건너뜀: ${err instanceof Error ? err.message : err}`);
+    }
+
+    // Master plan
+    try {
+      const planResult = await generateMasterPlan(s);
+      this.masterPlan = planResult.data;
+      yield { type: "plan_generated", plan: this.masterPlan };
+    } catch (err) {
+      yield { type: "error", chapter: 0, message: `마스터플랜 생성 실패: ${err instanceof Error ? err.message : err}` };
+    }
+  }
+
+  /**
+   * Step 4: Generate chapters.
+   * Can accept externally provided seed/plan (user may have edited).
+   * Delegates to existing run().
+   */
+  async *stepChapters(
+    startChapter: number,
+    endChapter: number,
+    overrides?: { seed?: NovelSeed; masterPlan?: MasterPlan },
+  ): AsyncGenerator<HarnessEvent> {
+    const s = overrides?.seed || this._seed;
+    const plan = overrides?.masterPlan || this.masterPlan;
+
+    if (!s) {
+      yield { type: "error", chapter: 0, message: "시드가 없습니다." };
+      return;
+    }
+
+    yield { type: "stage", stage: "chapters" };
+    yield* this.run(s, startChapter, endChapter, { masterPlan: plan });
+  }
+
+  // -----------------------------------------------------------------------
   // Full pipeline: genre → plots → seed → plan → chapters
   // -----------------------------------------------------------------------
 
   /**
-   * Run the complete novel generation pipeline from genre selection.
-   *
-   * @param genre - Genre string (e.g. "로맨스", "판타지")
-   * @param plotIndex - Which plot to pick (0-based). If omitted, picks the first.
-   * @param chapterRange - How many chapters to generate (default: 1-3)
+   * Run the complete pipeline automatically (CLI/test use).
+   * Reuses step methods internally.
    */
   async *runFullPipeline(
     genre: string,
@@ -471,71 +614,22 @@ export class NovelHarness {
     const endChapter = options?.endChapter ?? 3;
     const plotIndex = options?.plotIndex ?? 0;
 
-    // --- Stage 1: Plot generation ---
-    yield { type: "stage", stage: "plots" };
-    let plots: PlotOption[];
-    try {
-      const plotResult = await runPlotPipeline(genre);
-      plots = plotResult.plots;
-      yield { type: "plots_generated", plots };
-    } catch (err) {
-      yield { type: "error", chapter: 0, message: `플롯 생성 실패: ${err instanceof Error ? err.message : err}` };
-      return;
-    }
+    // Step 1: Plots
+    yield* this.stepPlots(genre);
+    if (!this._plots?.length) return;
 
-    if (plots.length === 0) {
-      yield { type: "error", chapter: 0, message: "생성된 플롯이 없습니다" };
-      return;
-    }
+    const selected = this._plots[Math.min(plotIndex, this._plots.length - 1)];
+    yield { type: "plot_selected", plot: selected };
 
-    const selectedPlot = plots[Math.min(plotIndex, plots.length - 1)];
-    yield { type: "plot_selected", plot: selectedPlot };
+    // Step 2: Seed
+    yield* this.stepSeed(genre, selected);
+    if (!this._seed) return;
 
-    // --- Stage 2: Seed generation ---
-    yield { type: "stage", stage: "seed" };
+    // Step 3: Plan
+    yield* this.stepPlan();
+    if (!this.masterPlan) return;
 
-    const archetypeInfo = selectedPlot.male_archetype || selectedPlot.female_archetype
-      ? `\n남주 아키타입: ${selectedPlot.male_archetype || "미지정"}\n여주 아키타입: ${selectedPlot.female_archetype || "미지정"}`
-      : "";
-
-    const interviewResult = `장르: ${genre}
-
-## 선택한 플롯
-제목: ${selectedPlot.title}
-로그라인: ${selectedPlot.logline}
-훅: ${selectedPlot.hook}
-전개:
-${selectedPlot.arc_summary.map((a: string) => `- ${a}`).join("\n")}
-핵심 반전: ${selectedPlot.key_twist}${archetypeInfo}`;
-
-    let seed: NovelSeed;
-    try {
-      const { candidates, usage: genUsage } = await generateSeedCandidates(interviewResult);
-
-      const scored = candidates.map((c) => ({
-        candidate: c,
-        score: evaluateCandidate(c.seed),
-      }));
-      scored.sort((a, b) => b.score.overall_score - a.score.overall_score);
-
-      const best = scored[0];
-      const secondBest = scored[1];
-
-      if (secondBest) {
-        const crossResult = await crossoverSeeds(best.candidate, best.score, secondBest.candidate, secondBest.score);
-        seed = crossResult.seed;
-      } else {
-        seed = best.candidate.seed;
-      }
-
-      yield { type: "seed_generated", seed };
-    } catch (err) {
-      yield { type: "error", chapter: 0, message: `시드 생성 실패: ${err instanceof Error ? err.message : err}` };
-      return;
-    }
-
-    // --- Stage 3+: Delegate to existing run() which handles plan + plausibility + chapters ---
-    yield { type: "stage", stage: "chapters" };
-    yield* this.run(seed, startChapter, endChapter);
+    // Step 4: Chapters
+    yield* this.stepChapters(startChapter, endChapter);
   }
 }
