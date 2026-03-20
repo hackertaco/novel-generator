@@ -120,6 +120,79 @@ const EMOTION_LEXICON: Record<string, EmotionEntry> = {
   "장엄": { valence: 0.5, arousal: 0.6 },
   "놀랍": { valence: 0.3, arousal: 0.6 },
   "경이": { valence: 0.6, arousal: 0.5 },
+
+  // --- 간접 긴장/위기 (행동/감각으로 표현된 감정) ---
+  "떨": { valence: -0.4, arousal: 0.6 },
+  "멈": { valence: -0.2, arousal: 0.5 },
+  "숨": { valence: -0.3, arousal: 0.5 },
+  "움찔": { valence: -0.3, arousal: 0.6 },
+  "얼어": { valence: -0.4, arousal: 0.5 },
+  "굳": { valence: -0.3, arousal: 0.5 },
+  "깨물": { valence: -0.3, arousal: 0.5 },
+  "삼키": { valence: -0.2, arousal: 0.4 },
+  "움켜": { valence: -0.3, arousal: 0.6 },
+  "날카로": { valence: -0.4, arousal: 0.7 },
+  "서늘": { valence: -0.4, arousal: 0.5 },
+  "차가": { valence: -0.3, arousal: 0.4 },
+  "싸늘": { valence: -0.5, arousal: 0.4 },
+  "흔들": { valence: -0.3, arousal: 0.5 },
+  "뒤틀": { valence: -0.5, arousal: 0.6 },
+  "조여": { valence: -0.4, arousal: 0.6 },
+
+  // --- 간접 안정/친밀 ---
+  "끄덕": { valence: 0.2, arousal: 0.2 },
+  "고개를": { valence: 0.0, arousal: 0.2 },
+  "가만히": { valence: 0.1, arousal: 0.1 },
+  "조용히": { valence: 0.1, arousal: 0.1 },
+  "천천히": { valence: 0.1, arousal: 0.1 },
+  "부드럽": { valence: 0.4, arousal: 0.2 },
+  "살며시": { valence: 0.3, arousal: 0.2 },
+  "나지막": { valence: 0.0, arousal: 0.3 },
+
+  // --- 물리적 환경/분위기 ---
+  "어둠": { valence: -0.3, arousal: 0.4 },
+  "어두": { valence: -0.3, arousal: 0.4 },
+  "그림자": { valence: -0.2, arousal: 0.4 },
+  "횃불": { valence: -0.1, arousal: 0.3 },
+  "냄새": { valence: -0.2, arousal: 0.3 },
+  "소리": { valence: 0.0, arousal: 0.4 },
+  "빛": { valence: 0.2, arousal: 0.3 },
+  "바람": { valence: 0.0, arousal: 0.3 },
+  "축축": { valence: -0.2, arousal: 0.2 },
+  "녹": { valence: -0.2, arousal: 0.2 },
+  "먼지": { valence: -0.1, arousal: 0.1 },
+
+  // --- 대사 톤 마커 ---
+  "낮은 목소리": { valence: -0.2, arousal: 0.5 },
+  "속삭이": { valence: -0.1, arousal: 0.4 },
+  "외치": { valence: -0.3, arousal: 0.9 },
+  "소리치": { valence: -0.3, arousal: 0.9 },
+  "중얼": { valence: -0.1, arousal: 0.2 },
+  "읊": { valence: 0.1, arousal: 0.2 },
+  "내뱉": { valence: -0.4, arousal: 0.7 },
+  "경고": { valence: -0.5, arousal: 0.7 },
+
+  // --- 시선/관찰 (관찰자 시점의 긴장) ---
+  "눈빛": { valence: -0.1, arousal: 0.5 },
+  "시선": { valence: -0.1, arousal: 0.4 },
+  "응시": { valence: -0.2, arousal: 0.5 },
+  "노려": { valence: -0.5, arousal: 0.7 },
+  "훑": { valence: -0.2, arousal: 0.4 },
+  "흘깃": { valence: -0.1, arousal: 0.3 },
+  "바라보": { valence: 0.0, arousal: 0.3 },
+  "지켜보": { valence: -0.1, arousal: 0.4 },
+
+  // --- 동작/전투 ---
+  "뽑": { valence: -0.3, arousal: 0.7 },
+  "찔": { valence: -0.7, arousal: 0.9 },
+  "베": { valence: -0.6, arousal: 0.8 },
+  "막": { valence: -0.2, arousal: 0.6 },
+  "피하": { valence: -0.3, arousal: 0.7 },
+  "쓰러": { valence: -0.6, arousal: 0.7 },
+  "무릎을 꿇": { valence: -0.5, arousal: 0.5 },
+  "달려": { valence: -0.1, arousal: 0.7 },
+  "쫓": { valence: -0.4, arousal: 0.8 },
+  "도망": { valence: -0.5, arousal: 0.8 },
 };
 
 const LEXICON_KEYS = Object.keys(EMOTION_LEXICON);
@@ -248,7 +321,6 @@ function extractEmotionDistribution(text: string): number[] {
 
   for (const keyword of LEXICON_KEYS) {
     const entry = EMOTION_LEXICON[keyword];
-    // Count occurrences
     let idx = 0;
     let occurrences = 0;
     while ((idx = text.indexOf(keyword, idx)) !== -1) {
@@ -261,6 +333,24 @@ function extractEmotionDistribution(text: string): number[] {
       if (catIndex >= 0) {
         counts[catIndex] += occurrences;
       }
+    }
+  }
+
+  // Fallback: if no emotion keywords detected, infer from structural cues
+  const total = counts.reduce((a, b) => a + b, 0);
+  if (total === 0) {
+    const hasDialogue = /[""「」]/.test(text);
+    const hasQuestion = /[?？]/.test(text);
+    const hasExclamation = /[!！]/.test(text);
+    const hasEllipsis = /[…]|\.{3}/.test(text);
+    const isShort = text.length < 50;
+
+    // Weak fallback: punctuation cues (lower weight to avoid false positives)
+    // These all map to the SAME category so JSD stays low between fallback paragraphs
+    if (hasQuestion || hasExclamation || hasEllipsis || hasDialogue || isShort) {
+      counts[3] += 1; // always tension — same category prevents fake JSD spikes
+    } else {
+      counts[6] += 1; // peace/relief for pure narration
     }
   }
 
