@@ -19,20 +19,24 @@ import type { NovelSeed } from "../schema/novel";
 // ---------------------------------------------------------------------------
 
 export interface DeterministicScores {
-  /** 문장 리듬 (0~1) — sentence length variety + ending diversity */
+  /** 문장 리듬 (0~1) */
   rhythm: number;
-  /** 후킹 엔딩 (0~1) — does the last paragraph create curiosity? */
+  /** 후킹 엔딩 (0~1) */
   hookEnding: number;
-  /** 캐릭터 음성 일관성 (0~1) — do characters speak as defined? */
+  /** 캐릭터 음성 일관성 (0~1) */
   characterVoice: number;
-  /** 대사 비율 (0~1) — dialogue percentage */
+  /** 대사 비율 (0~1) */
   dialogueRatio: number;
-  /** 분량 적정성 (0~1) — within target range? */
+  /** 분량 적정성 (0~1) */
   lengthScore: number;
-  /** 반복 회피 (0~1) — avoids repetitive patterns? */
+  /** 반복 회피 (0~1) */
   antiRepetition: number;
-  /** 감각 다양성 (0~1) — uses multiple senses? */
+  /** 감각 다양성 (0~1) */
   sensoryDiversity: number;
+  /** 서사 전개 (0~1) — 정보밀도, 인과관계, 긴장 에스컬레이션 */
+  narrative: number;
+  /** 몰입감 (0~1) — 구체성, 장면 접지, 심리적 거리, 대화 모멘텀 */
+  immersion: number;
   /** 종합 (가중 평균) */
   overall: number;
   /** 상세 데이터 */
@@ -329,17 +333,185 @@ function scoreSensoryDiversity(text: string): { score: number; senses: string[] 
 }
 
 // ---------------------------------------------------------------------------
+// 8. Narrative progression (서사 전개)
+// ---------------------------------------------------------------------------
+
+const CAUSAL_CONNECTORS = [
+  "그래서", "때문에", "덕분에", "결국", "하지만", "그러나",
+  "그런데", "그렇지만", "따라서", "그러자", "그러면서",
+  "바람에", "탓에", "까닭에", "이유로",
+];
+
+const NEGATIVE_TENSION_WORDS = [
+  "위험", "죽", "피", "배신", "분노", "공포", "두려",
+  "비명", "칼", "검", "상처", "고통", "절망", "긴장",
+  "추격", "함정", "적", "공격", "위기", "불안",
+];
+
+function scoreNarrative(
+  text: string,
+  seed: NovelSeed,
+  chapterNumber: number,
+): { score: number; details: Record<string, unknown> } {
+  const paragraphs = text.split("\n\n").filter((p) => p.trim().length > 0);
+  if (paragraphs.length < 3) return { score: 0.5, details: { reason: "문단 수 부족" } };
+
+  // a) Information density curve — new named entities per paragraph
+  const knownNames = seed.characters.map((c) => c.name);
+  const knownLocations = Object.keys(seed.world.key_locations || {});
+  const allEntities = [...knownNames, ...knownLocations];
+
+  const entityDensity: number[] = [];
+  const seenEntities = new Set<string>();
+  for (const para of paragraphs) {
+    let newEntities = 0;
+    for (const entity of allEntities) {
+      if (para.includes(entity) && !seenEntities.has(entity)) {
+        seenEntities.add(entity);
+        newEntities++;
+      }
+    }
+    entityDensity.push(newEntities);
+  }
+
+  // Optimal: 1-2 new entities in first 30%, then tapering off
+  const firstThird = entityDensity.slice(0, Math.ceil(paragraphs.length / 3));
+  const avgFirstThird = firstThird.reduce((a, b) => a + b, 0) / firstThird.length;
+  const entityScore = avgFirstThird > 0 && avgFirstThird <= 3 ? 1 : avgFirstThird === 0 ? 0.3 : 0.5;
+
+  // b) Causal connectors — story events are linked, not just listed
+  const causalCount = CAUSAL_CONNECTORS.reduce(
+    (count, word) => count + (text.match(new RegExp(word, "g"))?.length || 0),
+    0,
+  );
+  const causalDensity = causalCount / paragraphs.length;
+  // Optimal: 0.5-2 causal connectors per paragraph
+  const causalScore = causalDensity >= 0.3 && causalDensity <= 2.5 ? 1 :
+    causalDensity < 0.3 ? causalDensity / 0.3 : 0.7;
+
+  // c) Tension escalation — negative/tense words should increase toward the end
+  const halfPoint = Math.floor(paragraphs.length / 2);
+  const firstHalf = paragraphs.slice(0, halfPoint).join(" ");
+  const secondHalf = paragraphs.slice(halfPoint).join(" ");
+
+  const tensionFirst = NEGATIVE_TENSION_WORDS.reduce(
+    (count, word) => count + (firstHalf.match(new RegExp(word, "g"))?.length || 0), 0,
+  );
+  const tensionSecond = NEGATIVE_TENSION_WORDS.reduce(
+    (count, word) => count + (secondHalf.match(new RegExp(word, "g"))?.length || 0), 0,
+  );
+
+  // Second half should have equal or more tension
+  const escalationScore = tensionSecond >= tensionFirst ? 1 :
+    tensionSecond >= tensionFirst * 0.7 ? 0.7 : 0.4;
+
+  const score = entityScore * 0.3 + causalScore * 0.4 + escalationScore * 0.3;
+
+  return {
+    score: Math.min(score, 1),
+    details: {
+      entityDensity: entityDensity.slice(0, 5),
+      causalDensity: Math.round(causalDensity * 100) / 100,
+      tensionFirst,
+      tensionSecond,
+      escalation: tensionSecond >= tensionFirst,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 9. Immersion (몰입감)
+// ---------------------------------------------------------------------------
+
+const CONCRETE_NOUNS = /[칼검문손돌벽불촛바닥천장창문지붕탁자의자잔컵접시그릇책종이옷신발장갑모자열쇠반지목걸이]/g;
+const ABSTRACT_NOUNS = /[상황감정생각마음기분느낌의미이유목적결과사실진실비밀]/g;
+const SENSORY_VERBS = /[보았|봤|바라봤|훑었|살폈|들었|들렸|울렸|느꼈|닿았|스쳤|맡았|냄새|향|맛]/g;
+const THOUGHT_MARKERS = /[생각했|알았|깨달았|이해했|짐작했|느꼈다|판단했]/g;
+
+function scoreImmersion(text: string): { score: number; details: Record<string, unknown> } {
+  const paragraphs = text.split("\n\n").filter((p) => p.trim().length > 0);
+  if (paragraphs.length < 3) return { score: 0.5, details: {} };
+
+  // a) Concreteness ratio
+  const concreteCount = (text.match(CONCRETE_NOUNS) || []).length;
+  const abstractCount = (text.match(ABSTRACT_NOUNS) || []).length;
+  const total = concreteCount + abstractCount;
+  const concreteRatio = total > 0 ? concreteCount / total : 0.5;
+  // Optimal: 70%+ concrete
+  const concretenessScore = concreteRatio >= 0.6 ? 1 : concreteRatio >= 0.4 ? 0.7 : 0.4;
+
+  // b) Scene grounding — first 2 sentences of each scene-break have physical setting?
+  let groundedScenes = 0;
+  let totalScenes = 0;
+  for (const para of paragraphs) {
+    if (para.length > 100) { // likely a scene start
+      totalScenes++;
+      const firstTwoSentences = para.split(/[.!?]/g).slice(0, 2).join("");
+      const hasSetting = SENSORY_VERBS.test(firstTwoSentences) ||
+        /장소|방|복도|거리|숲|성|궁|관|실|문|길|바닥/g.test(firstTwoSentences);
+      if (hasSetting) groundedScenes++;
+    }
+  }
+  const groundingScore = totalScenes > 0 ? groundedScenes / totalScenes : 0.5;
+
+  // c) Psychic distance — sensory verbs + internal thoughts
+  const sensoryCount = (text.match(SENSORY_VERBS) || []).length;
+  const thoughtCount = (text.match(THOUGHT_MARKERS) || []).length;
+  const psychicDensity = (sensoryCount + thoughtCount) / paragraphs.length;
+  // Optimal: 1-3 per paragraph
+  const psychicScore = psychicDensity >= 0.5 && psychicDensity <= 4 ? 1 :
+    psychicDensity < 0.5 ? psychicDensity * 2 : 0.7;
+
+  // d) Dialogue momentum — narration sentences between dialogue lines
+  const lines = text.split("\n").filter((l) => l.trim());
+  const isDialogue = lines.map((l) => /^[""「]/.test(l.trim()) || /[""」]\s*$/.test(l.trim()));
+  let totalGaps = 0;
+  let gapCount = 0;
+  let currentGap = 0;
+  for (let i = 0; i < isDialogue.length; i++) {
+    if (isDialogue[i]) {
+      if (currentGap > 0) {
+        totalGaps += currentGap;
+        gapCount++;
+      }
+      currentGap = 0;
+    } else {
+      currentGap++;
+    }
+  }
+  const avgGap = gapCount > 0 ? totalGaps / gapCount : 3;
+  // Optimal: 1-3 narration lines between dialogues
+  const momentumScore = avgGap >= 1 && avgGap <= 3 ? 1 :
+    avgGap < 1 ? 0.7 : avgGap <= 5 ? 0.6 : 0.3;
+
+  const score = concretenessScore * 0.25 + groundingScore * 0.25 +
+    psychicScore * 0.25 + momentumScore * 0.25;
+
+  return {
+    score: Math.min(score, 1),
+    details: {
+      concreteRatio: Math.round(concreteRatio * 100) + "%",
+      groundedScenes: `${groundedScenes}/${totalScenes}`,
+      psychicDensity: Math.round(psychicDensity * 100) / 100,
+      avgDialogueGap: Math.round(avgGap * 10) / 10,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Main scoring function
 // ---------------------------------------------------------------------------
 
 const WEIGHTS = {
-  rhythm: 0.20,
-  hookEnding: 0.15,
-  characterVoice: 0.20,
-  dialogueRatio: 0.15,
+  rhythm: 0.12,
+  hookEnding: 0.10,
+  characterVoice: 0.15,
+  dialogueRatio: 0.08,
   lengthScore: 0.05,
-  antiRepetition: 0.15,
-  sensoryDiversity: 0.10,
+  antiRepetition: 0.10,
+  sensoryDiversity: 0.05,
+  narrative: 0.20,
+  immersion: 0.15,
 };
 
 export function computeDeterministicScores(
@@ -356,6 +528,9 @@ export function computeDeterministicScores(
   const repetitionResult = scoreAntiRepetition(text);
   const sensoryResult = scoreSensoryDiversity(text);
 
+  const narrativeResult = scoreNarrative(text, seed, chapterNumber);
+  const immersionResult = scoreImmersion(text);
+
   const scores = {
     rhythm: rhythmResult.score,
     hookEnding: hookResult.score,
@@ -364,16 +539,14 @@ export function computeDeterministicScores(
     lengthScore: lengthResult.score,
     antiRepetition: repetitionResult.score,
     sensoryDiversity: sensoryResult.score,
+    narrative: narrativeResult.score,
+    immersion: immersionResult.score,
   };
 
-  const overall =
-    scores.rhythm * WEIGHTS.rhythm +
-    scores.hookEnding * WEIGHTS.hookEnding +
-    scores.characterVoice * WEIGHTS.characterVoice +
-    scores.dialogueRatio * WEIGHTS.dialogueRatio +
-    scores.lengthScore * WEIGHTS.lengthScore +
-    scores.antiRepetition * WEIGHTS.antiRepetition +
-    scores.sensoryDiversity * WEIGHTS.sensoryDiversity;
+  const overall = Object.entries(WEIGHTS).reduce(
+    (sum, [key, weight]) => sum + (scores[key as keyof typeof scores] || 0) * weight,
+    0,
+  );
 
   return {
     ...scores,
@@ -386,6 +559,8 @@ export function computeDeterministicScores(
       length: { charCount: lengthResult.charCount },
       repetition: repetitionResult.details,
       sensory: { senses: sensoryResult.senses },
+      narrative: narrativeResult.details,
+      immersion: immersionResult.details,
     },
   };
 }
