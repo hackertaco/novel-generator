@@ -286,16 +286,41 @@
     </div>
   </div>
 
-  <div class="pipeline-step">
+  <div class="pipeline-step" style="background:#1a1a2a; border:1px solid #2563eb33; border-radius:8px;">
     <div class="step-num" style="background:#2563eb33; color:#93c5fd;">5</div>
     <div class="step-content">
-      <div class="step-name">QualityLoop <span class="tag tag-blue">품질</span></div>
-      <div class="step-desc">
-        CriticAgent (5차원 평가) → SurgeonAgent (문단별 수술) → 재평가. 최대 5회 반복.<br>
-        <strong>평가 차원:</strong> 서사(25%) · 캐릭터 음성(25%) · 리듬(20%) · 후킹(15%) · 몰입(15%)<br>
-        85점 이상 통과, 미만이면 수술 후 재평가.
+      <div class="step-name">QualityLoop <span class="tag tag-blue">품질 게이트</span></div>
+      <div class="step-desc" style="margin-bottom:12px;">
+        DeterministicScorer가 먼저 실행 → 점수에 따라 분기:
       </div>
-      <div class="file-list"><code>quality-loop.ts</code> → <code>critic-agent.ts</code> + <code>surgeon-agent.ts</code></div>
+
+      <!-- Gate flow inside QualityLoop -->
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+        <div style="flex:1; min-width:160px; padding:10px; background:#ec489911; border:1px solid #ec489933; border-radius:8px; font-size:12px;">
+          <div style="color:#f9a8d4; font-weight:600;">5a. DeterministicScorer</div>
+          <div style="color:#6b7280; margin-top:4px;">10차원 코드 평가<br><strong>$0, &lt;1ms</strong></div>
+        </div>
+        <div style="display:flex; align-items:center; color:#4a4a5a;">→</div>
+        <div style="flex:2; min-width:200px; display:flex; flex-direction:column; gap:6px;">
+          <div style="padding:8px; background:#05966911; border:1px solid #05966933; border-radius:6px; font-size:11px;">
+            <span style="color:#6ee7b7; font-weight:600;">0.85+</span>
+            <span style="color:#6b7280;"> → 통과 (LLM 스킵)</span>
+          </div>
+          <div style="padding:8px; background:#2563eb11; border:1px solid #2563eb33; border-radius:6px; font-size:11px;">
+            <span style="color:#93c5fd; font-weight:600;">0.70~0.85</span>
+            <span style="color:#6b7280;"> → 5b. CriticAgent(LLM) → 5c. SurgeonAgent → 재평가 (최대 5회)</span>
+          </div>
+          <div style="padding:8px; background:#dc262611; border:1px solid #dc262633; border-radius:6px; font-size:11px;">
+            <span style="color:#fca5a5; font-weight:600;">&lt;0.70</span>
+            <span style="color:#6b7280;"> → reject + 약한 차원 피드백 (LLM 스킵, 재생성 권고)</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="font-size:11px; color:#6b7280;">
+        ~70%의 챕터가 게이트에서 처리됨 → LLM CriticAgent 호출 70% 감소
+      </div>
+      <div class="file-list"><code>quality-loop.ts</code> → <code>deterministic-scorer.ts</code> + <code>critic-agent.ts</code> + <code>surgeon-agent.ts</code></div>
     </div>
   </div>
 
