@@ -98,11 +98,22 @@ export class WriterAgent implements PipelineAgent {
 
     // Inject previous chapter ending for continuity
     if (previousChapterEnding && chapterNumber > 1) {
+      // Extract who was present in the last scene
+      const prevChars = seed.characters
+        .filter((c) => previousChapterEnding.includes(c.name))
+        .map((c) => c.name);
+
       context = `# ⚠️ 직전 화(${chapterNumber - 1}화) 마지막 장면
 ---
 ${previousChapterEnding}
 ---
 위 내용은 이미 독자가 읽었습니다. 이 직후부터 이어서 쓰세요. 같은 장면을 반복하지 마세요.
+${prevChars.length > 0 ? `
+## 등장인물 제약 (필수!)
+직전 장면에 있던 인물: ${prevChars.join(", ")}
+- 첫 장면에는 위 인물만 등장할 수 있습니다.
+- 새 인물이 등장하려면 반드시 "들어오는 장면"을 먼저 쓰세요 (문이 열리고, 전갈이 오고 등).
+- 이미 그 자리에 있던 것처럼 쓰면 안 됩니다.` : ""}
 
 ${context}`;
     }
