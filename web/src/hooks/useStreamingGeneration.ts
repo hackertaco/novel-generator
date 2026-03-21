@@ -103,6 +103,11 @@ export function useStreamingGeneration() {
                   });
                 } else if (parsed.type === "error") {
                   setError(parsed.message);
+                  // Save partial text on error so currentChapter updates
+                  // and the button shows "N+1화 생성" instead of "1화 생성"
+                  if (fullText.length > 500) {
+                    saveChapter(targetChapter, fullText);
+                  }
                 }
               } catch {
                 // ignore parse errors for partial SSE data
@@ -372,6 +377,11 @@ export function useStreamingGeneration() {
                   case "error":
                     setError(parsed.message);
                     addPipelineLog(parsed.message, "warn");
+                    // Save partial text on error so user can continue from here
+                    if (fullText.length > 500) {
+                      saveChapter(targetChapter, fullText);
+                      addPipelineLog(`부분 저장: ${fullText.length.toLocaleString()}자`, "info");
+                    }
                     break;
                 }
               } catch {
