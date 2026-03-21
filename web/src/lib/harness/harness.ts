@@ -319,7 +319,44 @@ export class NovelHarness {
           const bpResult = await generateChapterBlueprints(seed, arc, previousSummaries, previousChapterEnding);
           arc.chapter_blueprints = bpResult.data;
         } catch (err) {
-          console.warn(`[harness] 블루프린트 생성 실패, 없이 진행: ${err instanceof Error ? err.message : err}`);
+          console.warn(`[harness] 블루프린트 생성 실패, 최소 블루프린트 생성: ${err instanceof Error ? err.message : err}`);
+
+          // Generate a minimal blueprint from seed data so we don't fall back to
+          // uncontrolled single-shot generation
+          const outline = seed.chapter_outlines.find((o) => o.chapter_number === chapterNumber);
+          const prevCharNames = previousChapterEnding
+            ? seed.characters.filter((c) => previousChapterEnding.includes(c.name)).map((c) => c.id)
+            : seed.characters.filter((c) => c.introduction_chapter <= chapterNumber).slice(0, 3).map((c) => c.id);
+
+          arc.chapter_blueprints = [{
+            chapter_number: chapterNumber,
+            title: outline?.title || `${chapterNumber}화`,
+            arc_id: arc.id,
+            one_liner: outline?.one_liner || arc.summary,
+            role_in_arc: chapterNumber <= arc.start_chapter + 2 ? "setup" : "development",
+            scenes: [
+              {
+                purpose: outline?.key_points?.[0] || `${chapterNumber}화 전개`,
+                type: "dialogue" as const,
+                characters: prevCharNames,
+                estimated_chars: 1500,
+                emotional_tone: outline?.tension_level && outline.tension_level > 6 ? "긴장" : "일상",
+              },
+              {
+                purpose: outline?.key_points?.[1] || "후반 전개 + 후킹",
+                type: "hook" as const,
+                characters: prevCharNames,
+                estimated_chars: 1500,
+                emotional_tone: "긴장",
+              },
+            ],
+            emotional_arc: "",
+            key_points: outline?.key_points || [],
+            characters_involved: prevCharNames,
+            tension_level: outline?.tension_level || 5,
+            foreshadowing_actions: [],
+            dependencies: [],
+          }];
         }
       }
 
