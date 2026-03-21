@@ -406,29 +406,30 @@ export class NovelHarness {
       yield { type: "plan_generated", plan: this.masterPlan };
     }
 
-    // Plausibility check — catch logical holes before writing
-    try {
-      const plausibility = await checkPlausibility(seed);
-      yield {
-        type: "plausibility_check",
-        passed: plausibility.passed,
-        issues: plausibility.issues,
-      };
+    // Plausibility check — only when generating a fresh plan (not on continuation)
+    if (!options?.masterPlan) {
+      try {
+        const plausibility = await checkPlausibility(seed);
+        yield {
+          type: "plausibility_check",
+          passed: plausibility.passed,
+          issues: plausibility.issues,
+        };
 
-      // Auto-fix critical issues
-      if (!plausibility.passed) {
-        const criticalIssues = plausibility.issues.filter((i) => i.severity === "critical");
-        if (criticalIssues.length > 0) {
-          const fixResult = await fixPlausibilityIssues(seed, criticalIssues);
-          // Apply fixes to seed (logline update, etc.)
-          if (fixResult.seed.logline !== seed.logline) {
-            seed.logline = fixResult.seed.logline;
+        // Auto-fix critical issues
+        if (!plausibility.passed) {
+          const criticalIssues = plausibility.issues.filter((i) => i.severity === "critical");
+          if (criticalIssues.length > 0) {
+            const fixResult = await fixPlausibilityIssues(seed, criticalIssues);
+            if (fixResult.seed.logline !== seed.logline) {
+              seed.logline = fixResult.seed.logline;
+            }
+            yield { type: "plausibility_fixed", fixes: fixResult.fixes };
           }
-          yield { type: "plausibility_fixed", fixes: fixResult.fixes };
         }
+      } catch (err) {
+        console.warn(`[harness] 개연성 검증 실패, 건너뜀: ${err instanceof Error ? err.message : err}`);
       }
-    } catch (err) {
-      console.warn(`[harness] 개연성 검증 실패, 건너뜀: ${err instanceof Error ? err.message : err}`);
     }
 
     const chapters: ChapterResult[] = [];
