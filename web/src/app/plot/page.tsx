@@ -46,11 +46,15 @@ export default function PlotPage() {
     }
   };
 
-  // Auto-generate on first visit (always fetch fresh plots)
+  // Auto-generate on first visit — always fetch fresh plots
   const didFetch = useRef(false);
   useEffect(() => {
     if (!loading && genre && !didFetch.current) {
       didFetch.current = true;
+      // Clear stale plots from previous session before fetching
+      if (plots.length > 0) {
+        setPlots([]);
+      }
       generatePlots();
     }
   }, [genre]); // eslint-disable-line react-hooks/exhaustive-deps
