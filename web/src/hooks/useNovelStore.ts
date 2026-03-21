@@ -225,7 +225,7 @@ export const useNovelStore = create<NovelState>()(
         currentChapter: state.currentChapter,
         tokenUsage: state.tokenUsage,
         arcSummaries: state.arcSummaries,
-        viewingChapter: state.viewingChapter,
+        // viewingChapter excluded — managed by URL param, not persist
         // Excluded from persistence: isGenerating, streamingText, error,
         // pipelineStage, pipelineRetries, pipelineLogs, evaluationResult
       }),
