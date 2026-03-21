@@ -16,6 +16,12 @@ export function sanitize(text: string): string {
   // Remove editor note bracket lines like "[편집자 노트: ...]"
   result = result.replace(/^\[편집[^\]]*\]$/gm, "");
 
+  // Remove LLM meta commentary that leaks into novel text
+  result = result.replace(/^.*(수정본|정리했습니다|교정[된하]|다듬[었어]|윤문[했된]|아래는.*본문).{0,30}$/gm, "");
+
+  // Remove editorial headers: "## 교정 결과", "### 수정 사항" etc.
+  result = result.replace(/^#{1,3}\s*(교정|수정|편집|윤문|개선).*$/gm, "");
+
   // Collapse multiple blank lines left behind by removals
   result = result.replace(/\n{3,}/g, "\n\n");
 
