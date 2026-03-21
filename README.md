@@ -40,7 +40,9 @@ PolisherAgent      → Final style pass
 | Sensory diversity | 4% | 5 senses coverage |
 | Length | 4% | Target character count adherence |
 
-**Gate logic:** Score < 0.70 → reject (no LLM). Score > 0.85 → pass (no LLM). Middle → LLM critic. Expected ~70% LLM cost reduction.
+**Gate logic:** Score > 0.85 → pass (skip LLM). Score 0.70~0.85 → LLM critic. Score < 0.70 → escalate to LLM with weak-dimension hints (not silently rejected — that would be an anti-pattern).
+
+**Honest limitations:** These are statistical proxies, not literary judgment. A text with many emotion keywords but no coherent story can score well on entropy. A minimalist Hemingway-style chapter may score low. The scorer catches "definitely bad" structural issues — it does not measure "genuinely good" writing. LLM critic remains necessary for the 30% of chapters in the middle zone.
 
 ### Information Theory Scorer
 
@@ -62,6 +64,8 @@ Sources: [Narrative Information Theory](https://arxiv.org/abs/2411.12907), [Fabu
 - **ProgressMonitor** — pacing feedback (too fast/slow)
 - **FeedbackAccumulator** — bottom-up correction planning
 
+**Known risk:** Trackers depend on LLM extraction, which can hallucinate. A single missed state change (e.g., "dropped the sword" not tracked) snowballs across subsequent chapters. Mitigations: sanity checks reject suspicious bulk changes, and users can manually correct tracker state between chapters.
+
 ### Presets
 
 | Preset | Model | Pipeline | Speed |
@@ -69,6 +73,8 @@ Sources: [Narrative Information Theory](https://arxiv.org/abs/2411.12907), [Fabu
 | Default | gpt-5.4 | Full (6 agents) | ~2 min/ch |
 | Budget | gpt-4o | Full | ~1.5 min/ch |
 | Fast | gpt-4o-mini | Writer + Guard + Constraint | ~15s/ch (parallel) |
+
+**Parallel mode trade-off (Fast only):** Scenes are generated simultaneously via `Promise.all` and stitched with bridge passes. This is 2-3x faster but sacrifices inter-scene causal coherence — a detail in Scene A won't influence Scene B. Use only when speed matters more than tight scene-to-scene continuity. Default and Budget presets use sequential generation.
 
 ## Usage
 

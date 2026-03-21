@@ -55,30 +55,33 @@ export class QualityLoop implements PipelineAgent {
     }
 
     if (detScores.overall < GATE_REJECT) {
-      // Low quality — signal for regeneration without wasting LLM on evaluation
-      ctx.bestScore = detScores.overall;
+      // Low quality — but instead of silently returning (which does nothing),
+      // escalate to LLM critic. The deterministic gate is a cost optimization,
+      // not a brick wall. If we just return, the bad text passes through unchanged.
+      //
+      // Rationale: "reject without LLM" sounds good in theory, but the caller
+      // doesn't retry. So reject = pass with bad score = worst outcome.
+      // Better: escalate to LLM so at least SurgeonAgent can try to fix it.
       yield {
         type: "gate_decision",
         decision: "reject",
         deterministicScore: detScores.overall,
-        message: `결정적 점수 ${(detScores.overall * 100).toFixed(0)}점 — LLM 없이 재생성 권고`,
+        message: `결정적 점수 ${(detScores.overall * 100).toFixed(0)}점 — 품질 미달, LLM 수술로 에스컬레이션`,
       } as LifecycleEvent;
 
-      // Provide specific feedback from deterministic scores
+      // Log weak dimensions for the LLM critic to focus on
       const weakDimensions: string[] = [];
-      if (detScores.narrativeInformation < 0.5) weakDimensions.push("서사 구조(정보이론)");
+      if (detScores.narrativeInformation < 0.5) weakDimensions.push("서사 구조");
       if (detScores.rhythm < 0.5) weakDimensions.push("문장 리듬");
       if (detScores.hookEnding < 0.3) weakDimensions.push("후킹 엔딩");
       if (detScores.characterVoice < 0.5) weakDimensions.push("캐릭터 음성");
       if (detScores.antiRepetition < 0.5) weakDimensions.push("반복");
 
       if (weakDimensions.length > 0) {
-        yield {
-          type: "error",
-          message: `약한 차원: ${weakDimensions.join(", ")}`,
-        };
+        yield { type: "error", message: `약한 차원: ${weakDimensions.join(", ")}` };
       }
-      return;
+
+      // Fall through to LLM evaluation instead of returning
     }
 
     // --- Middle zone: proceed with LLM evaluation ---

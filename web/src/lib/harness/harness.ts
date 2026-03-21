@@ -178,7 +178,24 @@ export class NovelHarness {
     this.memory.addChapter(chapterMemory);
 
     if (this.characterTracker && chapterMemory.character_changes.length > 0) {
-      for (const change of chapterMemory.character_changes) {
+      // Sanity check: reject suspicious state changes to prevent snowball errors
+      const MAX_RELATIONSHIP_CHANGES_PER_CHAPTER = 5;
+      const validChanges = chapterMemory.character_changes.filter((change) => {
+        // Reject if too many relationship changes at once (likely hallucination)
+        const relUpdates = (change as Record<string, unknown>).relationship_updates as Record<string, string> | undefined;
+        if (relUpdates && Object.keys(relUpdates).length > MAX_RELATIONSHIP_CHANGES_PER_CHAPTER) {
+          console.warn(`[harness] 트래커 sanity check: ${change.characterId}의 관계 변화 ${Object.keys(relUpdates).length}개 — 환각 가능성, 건너뜀`);
+          return false;
+        }
+        // Reject if character ID doesn't exist in seed
+        if (!seed.characters.some((c) => c.id === change.characterId)) {
+          console.warn(`[harness] 트래커 sanity check: 알 수 없는 캐릭터 ${change.characterId} — 건너뜀`);
+          return false;
+        }
+        return true;
+      });
+
+      for (const change of validChanges) {
         const state = this.characterTracker.getCurrentState(change.characterId);
         if (state) {
           const updatedRelationships = { ...state.relationships };
