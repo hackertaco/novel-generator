@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { runPlotPipeline } from "@/lib/agents/plot-pipeline";
+import { NovelHarness, getDefaultConfig } from "@/lib/harness";
 import type { PlotOption } from "@/lib/schema/plot";
 
 // Mock plots for when no API key is available
@@ -117,12 +117,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ plots, mock: true });
     }
 
-    const result = await runPlotPipeline(genre);
+    const harness = new NovelHarness(getDefaultConfig());
+    let plots: PlotOption[] = [];
 
-    return NextResponse.json({
-      plots: result.plots,
-      usage: result.usage,
-    });
+    for await (const event of harness.stepPlots(genre)) {
+      if (event.type === "plots_generated") {
+        plots = event.plots;
+      }
+    }
+
+    return NextResponse.json({ plots });
   } catch (err) {
     console.error("[plots] Error:", err);
     // Last resort fallback to mock
