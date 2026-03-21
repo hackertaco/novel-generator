@@ -188,7 +188,20 @@ ${dialogues.map((d) => `  "${d}"`).join("\n") || '  (없음)'}${stateBlock}
   if (sceneIndex === 0 && chapterNumber > 1) {
     const endingText = extras?.previousChapterEnding;
     if (endingText) {
+      // Extract scene state from ending text for continuity
+      const sceneState = extractSceneState(endingText, seed);
+
       parts.push(`# 직전 화 마지막 장면 (이 내용 바로 다음부터 이어서 쓰세요!)
+
+## 직전 화 상태 (반드시 이어서!)
+- 시간대: ${sceneState.timeOfDay}
+- 장소: ${sceneState.location}
+- 등장인물: ${sceneState.characters.join(", ")}
+${sceneState.characters.length > 0 ? `⚠️ 직전 화 마지막에 위 인물들이 있었습니다.
+- 같은 장면이 이어지면 새 인물이 갑자기 등장하면 안 됩니다.
+- 새 인물이 등장하려면 반드시 이유가 있어야 합니다 (문을 열고 들어오는 장면, 전갈이 오는 장면 등).
+- 이미 그 자리에 있던 것처럼 묘사하면 안 됩니다 — "등장하는 순간"을 보여주세요.` : ""}
+
 ---
 ${endingText}
 ---
@@ -291,6 +304,65 @@ ${threadReminderSection}
 출력: 씬 본문만 (메타 정보 없이)`);
 
   return parts.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Extract scene state from text for continuity
+// ---------------------------------------------------------------------------
+
+function extractSceneState(
+  text: string,
+  seed: NovelSeed,
+): { timeOfDay: string; location: string; characters: string[] } {
+  // Time of day detection
+  const timePatterns: Array<{ pattern: RegExp; label: string }> = [
+    { pattern: /아침|새벽|해가 뜨|일어나|기상|아침 식사|조식/, label: "아침" },
+    { pattern: /점심|낮|오후|한낮|정오/, label: "낮" },
+    { pattern: /저녁|해질|석양|만찬|저녁 식사|석식/, label: "저녁" },
+    { pattern: /밤|야간|달빛|어둠|자정|취침|잠/, label: "밤" },
+  ];
+  let timeOfDay = "불명";
+  for (const { pattern, label } of timePatterns) {
+    if (pattern.test(text)) {
+      timeOfDay = label;
+      break;
+    }
+  }
+
+  // Location detection from seed's key_locations
+  let location = "불명";
+  const keyLocations = seed.world.key_locations;
+  if (keyLocations) {
+    for (const [name] of Object.entries(keyLocations)) {
+      if (text.includes(name)) {
+        location = name;
+        break;
+      }
+    }
+  }
+  // Fallback: common location words
+  if (location === "불명") {
+    const locationWords = [
+      "식당", "서재", "침실", "복도", "정원", "거리", "광장", "성",
+      "숲", "마차", "객실", "연회장", "무도회장", "궁", "왕좌",
+    ];
+    for (const word of locationWords) {
+      if (text.includes(word)) {
+        location = word;
+        break;
+      }
+    }
+  }
+
+  // Character detection from seed
+  const characters: string[] = [];
+  for (const char of seed.characters) {
+    if (text.includes(char.name)) {
+      characters.push(char.name);
+    }
+  }
+
+  return { timeOfDay, location, characters };
 }
 
 const ZERO_USAGE: TokenUsage = {
