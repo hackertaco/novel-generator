@@ -19,6 +19,7 @@ import { generateChapterBlueprints } from "../planning/chapter-planner";
 import { generateMasterPlan } from "../planning/master-planner";
 import { extractSummaryRuleBased } from "../evaluators/summary";
 import { checkPlausibility, fixPlausibilityIssues } from "../evaluators/plausibility";
+import { ConstraintChecker } from "../evaluators/constraint-checker";
 
 // Full pipeline imports
 import { runPlotPipeline } from "../agents/plot-pipeline";
@@ -94,6 +95,7 @@ export class NovelHarness {
   private toneManager?: ToneManager;
   private progressMonitor?: ProgressMonitor;
   private feedbackAccumulator?: FeedbackAccumulator;
+  private constraintChecker?: ConstraintChecker;
   private pendingCorrectionContext?: string;
 
   constructor(config?: Partial<HarnessConfig>) {
@@ -127,6 +129,7 @@ export class NovelHarness {
     if (t.tone) this.toneManager = ToneManager.fromSeed(seed);
     if (t.progress) this.progressMonitor = new ProgressMonitor(seed);
     if (t.feedback) this.feedbackAccumulator = new FeedbackAccumulator();
+    this.constraintChecker = new ConstraintChecker(seed);
   }
 
   private buildTrackingContext(seed: NovelSeed, chapterNumber: number) {
@@ -363,6 +366,22 @@ export class NovelHarness {
 
     // Post-chapter tracking
     await this.updateTracking(seed, chapterNumber, completedText, summary);
+
+    // Validate character appearances against blueprint
+    if (this.constraintChecker && blueprint) {
+      const charViolations = this.constraintChecker.validateCharacterAppearances(
+        completedText,
+        chapterNumber,
+        seed,
+        blueprint.characters_involved,
+      );
+      for (const v of charViolations) {
+        yield { type: "pipeline_event", chapter: chapterNumber, event: {
+          type: "error",
+          message: `[${v.type}] ${v.message}`,
+        } };
+      }
+    }
 
     const result: ChapterResult = {
       chapterNumber,

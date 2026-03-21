@@ -245,6 +245,80 @@ export class ConstraintChecker {
     return this.characters.get(characterId)?.alive ?? false;
   }
 
+  /**
+   * Validate that only expected characters appear in the text.
+   * Compares characters found in text against blueprint's characters_involved.
+   *
+   * @param text - Generated chapter text
+   * @param chapterNumber - Current chapter number
+   * @param seed - Novel seed with character data
+   * @param blueprintCharacters - Character IDs from blueprint.characters_involved (optional)
+   */
+  validateCharacterAppearances(
+    text: string,
+    chapterNumber: number,
+    seed: NovelSeed,
+    blueprintCharacters?: string[],
+  ): ConstraintViolation[] {
+    const violations: ConstraintViolation[] = [];
+
+    // Find all seed characters that appear in the text (by name)
+    const appearsInText: string[] = [];
+    for (const char of seed.characters) {
+      if (text.includes(char.name)) {
+        appearsInText.push(char.id);
+      }
+    }
+
+    // Check 1: Characters in text but not in blueprint
+    if (blueprintCharacters && blueprintCharacters.length > 0) {
+      for (const charId of appearsInText) {
+        if (!blueprintCharacters.includes(charId)) {
+          const char = seed.characters.find((c) => c.id === charId);
+          const charName = char?.name || charId;
+
+          // Skip if character was in a previous chapter (might be referenced in dialogue/memory)
+          // Only flag if character has dialogue or action (not just mentioned)
+          const charNamePattern = new RegExp(
+            `${charName}[은는이가을를의에]|"[^"]*"[^"]*${charName}|${charName}[^\n]{0,10}(말했|물었|대답|외치|속삭|웃|소리)`,
+          );
+          if (charNamePattern.test(text)) {
+            violations.push({
+              type: "missing_character" as ConstraintViolation["type"],
+              severity: "warning",
+              message: `${charName}(이)가 ${chapterNumber}화에 등장하지만 블루프린트에 포함되지 않음 (예정: ${blueprintCharacters.join(", ")})`,
+              chapter: chapterNumber,
+              characterId: charId,
+            });
+          }
+        }
+      }
+    }
+
+    // Check 2: Characters not yet introduced appearing in text
+    for (const charId of appearsInText) {
+      const seedChar = seed.characters.find((c) => c.id === charId);
+      if (seedChar && chapterNumber < seedChar.introduction_chapter) {
+        // Check if they have dialogue or action (not just name-dropped)
+        const hasAction = new RegExp(
+          `${seedChar.name}[은는이가]\\s|"[^"]*"[^\\n]*${seedChar.name}`,
+        ).test(text);
+        if (hasAction) {
+          violations.push({
+            type: "premature_introduction",
+            severity: "error",
+            message: `${seedChar.name}(은)는 ${seedChar.introduction_chapter}화 등장 예정이지만 ${chapterNumber}화에서 대사/행동이 있음`,
+            chapter: chapterNumber,
+            characterId: charId,
+          });
+        }
+      }
+    }
+
+    this.violations.push(...violations);
+    return violations;
+  }
+
   private getLastLocation(
     char: CharacterKnowledge,
   ): { chapter: number; location: string } | null {
