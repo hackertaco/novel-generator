@@ -186,11 +186,12 @@ ${seed.arcs.map((a) => `- ${a.name}: ${a.summary}`).join("\n")}
     taskId: "plausibility-fix",
   });
 
-  // Parse fixes from the response (rule-based extraction)
+  // Parse fixes from the response (flexible extraction)
   const fixLines = result.data
     .split("\n")
-    .filter((line: string) => line.match(/^\d+\.\s/))
-    .map((line: string) => line.replace(/^\d+\.\s*/, "").trim());
+    .filter((line: string) => line.match(/^\d+[\.\)]\s/) || line.match(/^[-•]\s/) || line.match(/^#{1,3}\s.*수정/))
+    .map((line: string) => line.replace(/^\d+[\.\)]\s*/, "").replace(/^[-•]\s*/, "").replace(/^#{1,3}\s*/, "").trim())
+    .filter((line: string) => line.length > 5);
 
   // Update seed logline if a revised one is found
   const revisedSeed = { ...seed };
