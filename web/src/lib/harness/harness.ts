@@ -326,6 +326,23 @@ export class NovelHarness {
       blueprint = scheduler.getBlueprint(chapterNumber);
     }
 
+    // Enforce character continuity: first scene must only have characters
+    // that were present in the previous chapter's ending
+    if (blueprint && previousChapterEnding && blueprint.scenes.length > 0) {
+      const prevCharNames = seed.characters
+        .filter((c) => previousChapterEnding.includes(c.name))
+        .map((c) => c.id);
+
+      if (prevCharNames.length > 0) {
+        const firstScene = blueprint.scenes[0];
+        const removed = firstScene.characters.filter((id) => !prevCharNames.includes(id));
+        if (removed.length > 0) {
+          firstScene.characters = firstScene.characters.filter((id) => prevCharNames.includes(id));
+          console.log(`[harness] 첫 씬 캐릭터 필터: ${removed.join(", ")} 제거 (이전 화에 없었음)`);
+        }
+      }
+    }
+
     // Build tracking context
     const trackingContext = this.buildTrackingContext(seed, chapterNumber);
 
