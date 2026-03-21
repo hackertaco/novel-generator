@@ -78,7 +78,11 @@ export async function POST(request: NextRequest) {
             const startCh = batch?.startChapter ?? chapterNumber;
             const endCh = batch?.endChapter ?? chapterNumber;
 
-            for await (const event of harness.run(seed, startCh, endCh, { masterPlan })) {
+            for await (const event of harness.run(seed, startCh, endCh, {
+              masterPlan,
+              previousSummaries,
+              previousChapterEnding,
+            })) {
               switch (event.type) {
                 case "chapter_start":
                   send({ type: "pipeline_stage", stage: "generating_chapter" });

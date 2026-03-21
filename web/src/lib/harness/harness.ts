@@ -388,7 +388,11 @@ export class NovelHarness {
     seed: NovelSeed,
     startChapter: number,
     endChapter: number,
-    options?: { masterPlan?: MasterPlan },
+    options?: {
+      masterPlan?: MasterPlan;
+      previousSummaries?: Array<{ chapter: number; title: string; summary: string }>;
+      previousChapterEnding?: string;
+    },
   ): AsyncGenerator<HarnessEvent> {
     const totalStart = Date.now();
     this.initTracking(seed);
@@ -428,7 +432,10 @@ export class NovelHarness {
     }
 
     const chapters: ChapterResult[] = [];
-    const summaries: Array<{ chapter: number; title: string; summary: string }> = [];
+    // Seed summaries from caller (for continuation from previous chapters)
+    const summaries: Array<{ chapter: number; title: string; summary: string }> = [
+      ...(options?.previousSummaries || []),
+    ];
     let totalUsage: TokenUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 };
 
     for (let ch = startChapter; ch <= endChapter; ch++) {
@@ -440,7 +447,7 @@ export class NovelHarness {
 
       const previousEnding = chapters.length > 0
         ? chapters[chapters.length - 1].text.slice(-500)
-        : undefined;
+        : options?.previousChapterEnding;
 
       try {
         for await (const event of this.generateChapter(seed, ch, summaries, previousEnding)) {
