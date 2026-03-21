@@ -175,6 +175,7 @@ export function getChapterBlueprintPrompt(
   seed: NovelSeed,
   arc: ArcPlan,
   previousChapterSummaries: Array<{ chapter: number; title: string; summary: string }>,
+  previousChapterEnding?: string,
 ): string {
   const recentSummaries = previousChapterSummaries.slice(-5);
 
@@ -202,6 +203,13 @@ ${seed.foreshadowing
   .join("\n") || "없음"}
 
 ${recentSummaries.length > 0 ? `## 이전 내용 요약\n${recentSummaries.map((s) => `- ${s.chapter}화: ${s.summary}`).join("\n")}` : ""}
+
+${previousChapterEnding ? `## ⚠️ 직전 화 마지막 장면 (연속성 필수!)
+${previousChapterEnding}
+
+위 장면에 등장한 인물만 다음 화 첫 씬에 포함하세요.
+새 인물이 등장하려면 반드시 "도착/등장하는 순간"을 씬으로 만들어야 합니다.
+이미 그 자리에 있던 것처럼 배치하면 안 됩니다.` : ""}
 
 ## 지시사항
 

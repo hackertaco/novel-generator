@@ -316,7 +316,7 @@ export class NovelHarness {
       const arc = scheduler.getArcForChapter(chapterNumber);
       if (arc && scheduler.needsChapterBlueprint(chapterNumber)) {
         try {
-          const bpResult = await generateChapterBlueprints(seed, arc, previousSummaries);
+          const bpResult = await generateChapterBlueprints(seed, arc, previousSummaries, previousChapterEnding);
           arc.chapter_blueprints = bpResult.data;
         } catch (err) {
           console.warn(`[harness] 블루프린트 생성 실패, 없이 진행: ${err instanceof Error ? err.message : err}`);
