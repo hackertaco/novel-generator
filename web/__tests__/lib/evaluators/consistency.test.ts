@@ -137,6 +137,7 @@ describe("evaluateConsistency", () => {
         plot_summary: "요약",
         emotional_beat: "긴장",
         cliffhanger: "검은 그림자가 다가온다",
+        ending_scene_state: null,
         word_count: 1000,
         style_score: null,
       };

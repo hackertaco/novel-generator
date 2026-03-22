@@ -66,6 +66,15 @@ export const ChapterSummarySchema = z.object({
     .default(null)
     .describe("Cliffhanger if any"),
 
+  // Scene state at chapter end — used to enforce continuity in the next chapter
+  ending_scene_state: z.object({
+    time_of_day: z.string().describe("시간대: 아침/낮/저녁/밤"),
+    location: z.string().describe("마지막 장면의 장소"),
+    characters_present: z.array(z.string()).describe("마지막 장면에 있던 캐릭터 이름"),
+    ongoing_action: z.string().describe("진행 중이던 행동/상황 (예: 쪽지를 꺼내려는 순간)"),
+    unresolved_tension: z.string().describe("아직 해소되지 않은 긴장/질문"),
+  }).nullable().default(null).describe("화 마지막 시점의 장면 상태 — 다음 화 연속성 보장용"),
+
   // Validation
   word_count: z
     .number()

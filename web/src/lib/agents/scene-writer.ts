@@ -169,6 +169,28 @@ ${dialogues.map((d) => `  "${d}"`).join("\n") || '  (없음)'}${stateBlock}
 - 같은 상황에서도 캐릭터마다 다르게 반응해야 합니다
 `);
     }
+
+    // Identify characters NOT present in the previous chapter
+    // They need explicit entrance scenes (not just appear as if always there)
+    if (chapterNumber > 1 && extras?.previousChapterEnding) {
+      const prevEndingText = extras.previousChapterEnding;
+      const newChars = sceneChars.filter(
+        (c) => c && !prevEndingText.includes(c.name),
+      );
+      if (newChars.length > 0) {
+        const newCharNames = newChars.map((c) => c!.name);
+        parts.push(`## 캐릭터 등장 제약 (필수!)
+다음 인물은 **이전 화에 직접 등장하지 않았습니다**: ${newCharNames.join(", ")}
+
+**규칙:**
+- 이 인물이 이 씬에서 직접 등장(대사/행동)하려면, 반드시 **등장하는 순간**을 묘사하세요.
+  예: 문이 열리고 들어온다, 전갈이 도착한다, 길에서 마주친다 등.
+- 이미 그 자리에 있던 것처럼 갑자기 대사하면 절대 안 됩니다.
+- 다른 인물의 대화 속 **언급**이나 **회상**은 자유롭게 가능합니다.
+- 가능하면 이 씬에서는 이전 화에 있던 인물 위주로 쓰고, 위 인물은 자연스러운 계기가 있을 때만 등장시키세요.
+`);
+      }
+    }
   }
 
   // Previous context: hierarchical memory (preferred) or chapter summaries (fallback)
@@ -441,7 +463,7 @@ export async function writeChapterByScenes(
       const scenePrompt = buildScenePrompt(
         seed, chapterNumber, blueprint, scene, i,
         sceneTexts, previousSummaries,
-        { memoryContext, toneGuidance, progressContext, threadReminders, correctionContext, previousChapterEnding: i === 0 ? previousChapterEnding : undefined },
+        { memoryContext, toneGuidance, progressContext, threadReminders, correctionContext, previousChapterEnding },
       );
       const result = await agent.call({
         prompt: scenePrompt,
@@ -464,7 +486,7 @@ export async function writeChapterByScenes(
         previousText,
         systemPrompt,
         model,
-        previousChapterEnding: i === 0 ? previousChapterEnding : undefined,
+        previousChapterEnding,
       });
       totalUsage = addUsage(totalUsage, beatResult.usage);
       sceneText = beatResult.text;
@@ -608,7 +630,7 @@ export async function writeChapterParallel(
         progressContext,
         threadReminders: i >= blueprint.scenes.length - 2 ? threadReminders : undefined,
         correctionContext,
-        previousChapterEnding: i === 0 ? previousChapterEnding : prevSceneHint,
+        previousChapterEnding: previousChapterEnding,
       },
     );
 

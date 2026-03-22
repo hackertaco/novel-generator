@@ -289,6 +289,7 @@ export class NovelHarness {
     chapterNumber: number,
     previousSummaries: Array<{ chapter: number; title: string; summary: string }>,
     previousChapterEnding?: string,
+    endingSceneState?: ChapterSummary["ending_scene_state"],
   ): AsyncGenerator<HarnessEvent> {
     yield { type: "chapter_start", chapter: chapterNumber };
 
@@ -314,9 +315,21 @@ export class NovelHarness {
       }
 
       const arc = scheduler.getArcForChapter(chapterNumber);
+      // Force blueprint regeneration when we have ending scene state from previous chapter
+      // This ensures the blueprint accounts for where the previous chapter actually ended
+      const needsRegeneration = endingSceneState && chapterNumber > 1 && arc?.chapter_blueprints?.some(
+        (bp) => bp.chapter_number === chapterNumber,
+      );
+      if (needsRegeneration && arc) {
+        // Remove existing blueprint for this chapter so it gets regenerated with context
+        arc.chapter_blueprints = arc.chapter_blueprints.filter(
+          (bp) => bp.chapter_number !== chapterNumber,
+        );
+        console.log(`[harness] ${chapterNumber}화 블루프린트 재생성 (이전 화 장면 상태 반영)`);
+      }
       if (arc && scheduler.needsChapterBlueprint(chapterNumber)) {
         try {
-          const bpResult = await generateChapterBlueprints(seed, arc, previousSummaries, previousChapterEnding);
+          const bpResult = await generateChapterBlueprints(seed, arc, previousSummaries, previousChapterEnding, endingSceneState);
           arc.chapter_blueprints = bpResult.data;
         } catch (err) {
           console.warn(`[harness] 블루프린트 생성 실패, 최소 블루프린트 생성: ${err instanceof Error ? err.message : err}`);
@@ -333,7 +346,7 @@ export class NovelHarness {
             title: outline?.title || `${chapterNumber}화`,
             arc_id: arc.id,
             one_liner: outline?.one_liner || arc.summary,
-            role_in_arc: chapterNumber <= arc.start_chapter + 2 ? "setup" : "development",
+            role_in_arc: chapterNumber <= arc.start_chapter + 2 ? "setup" : "rising_action",
             scenes: [
               {
                 purpose: outline?.key_points?.[0] || `${chapterNumber}화 전개`,
@@ -354,6 +367,7 @@ export class NovelHarness {
             key_points: outline?.key_points || [],
             characters_involved: prevCharNames,
             tension_level: outline?.tension_level || 5,
+            target_word_count: 3000,
             foreshadowing_actions: [],
             dependencies: [],
           }];
@@ -415,7 +429,7 @@ export class NovelHarness {
     // Extract summary
     const outline = seed.chapter_outlines.find((o) => o.chapter_number === chapterNumber);
     const title = blueprint?.title || outline?.title || `${chapterNumber}화`;
-    const summary = extractSummaryRuleBased(chapterNumber, title, completedText);
+    const summary = extractSummaryRuleBased(chapterNumber, title, completedText, seed);
     summary.style_score = ctx.bestScore;
 
     // Post-chapter tracking
@@ -523,8 +537,13 @@ export class NovelHarness {
         ? chapters[chapters.length - 1].text.slice(-500)
         : options?.previousChapterEnding;
 
+      // Pass structured scene state from the previous chapter for blueprint continuity
+      const prevSceneState = chapters.length > 0
+        ? chapters[chapters.length - 1].summary.ending_scene_state
+        : undefined;
+
       try {
-        for await (const event of this.generateChapter(seed, ch, summaries, previousEnding)) {
+        for await (const event of this.generateChapter(seed, ch, summaries, previousEnding, prevSceneState)) {
           yield event;
           if (event.type === "chapter_complete") {
             chapters.push(event.result);

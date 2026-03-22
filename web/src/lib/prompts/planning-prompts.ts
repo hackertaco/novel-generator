@@ -176,6 +176,13 @@ export function getChapterBlueprintPrompt(
   arc: ArcPlan,
   previousChapterSummaries: Array<{ chapter: number; title: string; summary: string }>,
   previousChapterEnding?: string,
+  endingSceneState?: {
+    time_of_day: string;
+    location: string;
+    characters_present: string[];
+    ongoing_action: string;
+    unresolved_tension: string;
+  } | null,
 ): string {
   const recentSummaries = previousChapterSummaries.slice(-5);
 
@@ -204,7 +211,20 @@ ${seed.foreshadowing
 
 ${recentSummaries.length > 0 ? `## 이전 내용 요약\n${recentSummaries.map((s) => `- ${s.chapter}화: ${s.summary}`).join("\n")}` : ""}
 
-${previousChapterEnding ? `## ⚠️ 직전 화 마지막 장면 (연속성 필수!)
+${endingSceneState ? `## ⚠️ 직전 화 종료 시점 상태 (다음 화는 반드시 이 상태에서 이어져야 합니다!)
+- 시간: ${endingSceneState.time_of_day}
+- 장소: ${endingSceneState.location}
+- 그 자리에 있던 인물: ${endingSceneState.characters_present.join(", ") || "불명"}
+- 진행 중이던 상황: ${endingSceneState.ongoing_action}
+- 미해결 긴장: ${endingSceneState.unresolved_tension}
+
+### 연속성 규칙 (위반 시 치명적 결함!)
+1. 다음 화 첫 씬은 위 상황의 **직후**여야 합니다. 시간을 건너뛰지 마세요.
+2. 첫 씬 캐릭터는 위 인물만 포함하세요. 새 인물은 반드시 "등장하는 순간" 씬을 별도로 만드세요.
+3. 이미 다룬 사건을 반복하지 마세요. 위 상황에서 이어서 전개하세요.
+4. 시간대가 바뀌려면 시간 경과를 명시하는 씬이 필요합니다.` : ""}
+
+${previousChapterEnding && !endingSceneState ? `## ⚠️ 직전 화 마지막 장면 (연속성 필수!)
 ${previousChapterEnding}
 
 위 장면에 등장한 인물만 다음 화 첫 씬에 포함하세요.
