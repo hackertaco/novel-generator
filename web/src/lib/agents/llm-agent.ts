@@ -179,7 +179,7 @@ export class LLMAgent {
   async callStructured<T>(
     options: StructuredCallOptions<T>
   ): Promise<AgentCallResult<T>> {
-    const maxRetries = options.retryCount ?? 3;
+    const maxRetries = options.retryCount ?? 5;
     const attempts: Array<{ error: string; response?: string }> = [];
     let totalUsage: TokenUsage = {
       prompt_tokens: 0,
@@ -222,7 +222,7 @@ export class LLMAgent {
         const errMsg =
           parseErr instanceof Error ? parseErr.message : String(parseErr);
         attempts.push({ error: `Parse error: ${errMsg}`, response: rawText });
-        currentPrompt = `${options.prompt}\n\n이전 출력에서 파싱 오류 발생: ${errMsg}. 올바른 ${options.format === "json" ? "JSON" : "YAML"} 형식으로 다시 출력하세요.`;
+        currentPrompt = `${options.prompt}\n\n⚠️ 이전 출력에서 파싱 오류 발생 (시도 ${attempt}/${maxRetries}): ${errMsg}\n\n반드시 유효한 ${options.format === "json" ? "JSON" : "YAML"}만 출력하세요. 설명이나 마크다운 코드블록(\`\`\`) 없이 순수 데이터만 출력하세요.`;
         continue;
       }
 
@@ -245,7 +245,7 @@ export class LLMAgent {
       });
 
       if (attempt < maxRetries) {
-        currentPrompt = `${options.prompt}\n\n이전 출력에서 검증 오류가 발생했습니다. 다음 필드를 수정해주세요:\n${zodErrorMsg}\n\n${options.repairPrompt ?? "모든 필수 필드를 빠짐없이 포함하여 올바른 형식으로 다시 출력하세요."}`;
+        currentPrompt = `${options.prompt}\n\n⚠️ 이전 출력에서 검증 오류가 발생했습니다 (시도 ${attempt}/${maxRetries}).\n\n오류 내용:\n${zodErrorMsg}\n\n${options.repairPrompt ?? "위 오류를 정확히 수정하세요. 필수 필드를 빠뜨리지 말고, 타입(문자열/숫자/배열)을 정확히 맞추세요."}\n\n코드블록 없이 순수 JSON만 출력하세요.`;
       }
     }
 
