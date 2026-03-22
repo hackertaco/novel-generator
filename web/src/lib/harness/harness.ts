@@ -435,7 +435,7 @@ export class NovelHarness {
     // Post-chapter tracking
     await this.updateTracking(seed, chapterNumber, completedText, summary);
 
-    // Validate character appearances against blueprint
+    // Validate character appearances against blueprint — fix premature introductions
     if (this.constraintChecker && blueprint) {
       const charViolations = this.constraintChecker.validateCharacterAppearances(
         completedText,
@@ -443,7 +443,34 @@ export class NovelHarness {
         seed,
         blueprint.characters_involved,
       );
-      for (const v of charViolations) {
+
+      const prematureChars = charViolations
+        .filter((v) => v.type === "premature_introduction" && v.severity === "error")
+        .map((v) => {
+          const nameMatch = v.message.match(/^(.+?)\(/);
+          return nameMatch ? nameMatch[1] : null;
+        })
+        .filter(Boolean) as string[];
+
+      if (prematureChars.length > 0) {
+        // Replace premature character names with generic descriptions
+        for (const name of prematureChars) {
+          // Replace dialogue lines containing the character's name as speaker
+          // "마렐이 말했다" → remove the line or replace name
+          const namePattern = new RegExp(name, "g");
+          const beforeLen = completedText.length;
+          completedText = completedText.replace(namePattern, "누군가");
+          if (completedText.length !== beforeLen) {
+            console.log(`[harness] premature character "${name}" replaced with "누군가" in ${chapterNumber}화`);
+          }
+        }
+        yield { type: "pipeline_event", chapter: chapterNumber, event: {
+          type: "stage_change",
+          stage: `premature_char_fix: ${prematureChars.join(", ")} → "누군가"`,
+        } };
+      }
+
+      for (const v of charViolations.filter((v) => v.type !== "premature_introduction" || v.severity !== "error")) {
         yield { type: "pipeline_event", chapter: chapterNumber, event: {
           type: "error",
           message: `[${v.type}] ${v.message}`,
