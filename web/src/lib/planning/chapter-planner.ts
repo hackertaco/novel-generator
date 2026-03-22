@@ -41,15 +41,40 @@ export async function generateChapterBlueprints(
     taskId: `chapter-blueprints-${arc.id}`,
   });
 
-  // Post-validation: warn (but don't fail) if scene purposes lack Korean names
+  // Post-validation
   for (const bp of result.data.chapter_blueprints) {
+    // Warn if scene purposes lack Korean names
     for (const scene of bp.scenes) {
       if (!KOREAN_NAME_PATTERN.test(scene.purpose)) {
         console.warn(
           `[chapter-planner] 경고: ${bp.chapter_number}화 씬 purpose에 한국어 인물명이 없습니다: "${scene.purpose.slice(0, 60)}..."`,
         );
       }
+
+      // Remove characters who shouldn't appear yet (introduction_chapter > this chapter)
+      const before = scene.characters.length;
+      scene.characters = scene.characters.filter((charId) => {
+        const seedChar = seed.characters.find((c) => c.id === charId);
+        if (seedChar && bp.chapter_number < seedChar.introduction_chapter) {
+          console.log(
+            `[chapter-planner] ${bp.chapter_number}화 씬에서 ${seedChar.name}(${charId}) 제거 — ${seedChar.introduction_chapter}화 등장 예정`,
+          );
+          return false;
+        }
+        return true;
+      });
+      if (scene.characters.length === 0 && before > 0) {
+        // Don't leave a scene with no characters — add the protagonist
+        const mc = seed.characters.find((c) => c.role === "주인공" || c.role === "protagonist");
+        if (mc) scene.characters.push(mc.id);
+      }
     }
+
+    // Also filter characters_involved at chapter level
+    bp.characters_involved = bp.characters_involved.filter((charId) => {
+      const seedChar = seed.characters.find((c) => c.id === charId);
+      return !seedChar || bp.chapter_number >= seedChar.introduction_chapter;
+    });
   }
 
   return { data: result.data.chapter_blueprints, usage: result.usage };
