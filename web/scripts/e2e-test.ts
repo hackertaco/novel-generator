@@ -21,6 +21,10 @@ import { evaluatePacing } from "../src/lib/evaluators/pacing";
 import type { NovelSeed } from "../src/lib/schema/novel";
 import type { ChapterSummary } from "../src/lib/schema/chapter";
 
+// Direct harness (bypasses API timeout)
+import { NovelHarness, getDefaultConfig, getBudgetConfig, getFastConfig } from "../src/lib/harness";
+import type { HarnessEvent } from "../src/lib/harness";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -227,58 +231,65 @@ async function generateNovel(config: E2EConfig) {
   if (!seed) throw new Error("시드 생성 실패");
   ok(`시드 생성 완료: "${seed.title}" (캐릭터 ${seed.characters.length}명, 아웃라인 ${seed.chapter_outlines.length}화)`);
 
-  // Step 3: Generate chapters
+  // Step 3: Generate chapters using harness directly (no API timeout)
+  const harnessConfig = preset === "fast" ? getFastConfig()
+    : preset === "budget" ? getBudgetConfig()
+    : getDefaultConfig();
+  const harness = new NovelHarness(harnessConfig);
+
+  log(`하네스 직접 실행 (preset: ${preset}, API 타임아웃 우회)`);
+
   const chapterResults: ChapterResult[] = [];
-  const summaries: Array<{ chapter: number; title: string; summary: string; cliffhanger?: string | null }> = [];
-  let masterPlan: unknown = undefined;
+  const start = Date.now();
 
-  for (let ch = 1; ch <= chapters; ch++) {
-    log(`${ch}화 생성 중... (preset: ${preset})`);
-
-    const previousChapterEnding = chapterResults.length > 0
-      ? chapterResults[chapterResults.length - 1].fullText.slice(-500)
-      : undefined;
-
-    const result = await parseSSEStream(
-      `${baseUrl}/api/orchestrate`,
-      {
-        seed,
-        chapterNumber: ch,
-        previousSummaries: summaries,
-        previousChapterEnding,
-        masterPlan,
-        preset,
-        options: {},
-      },
-      verbose ? (type, data) => {
-        if (type === "stage_change") process.stdout.write(`  [${data.stage}] `);
-        else if (type === "evaluation") process.stdout.write(`score=${Math.round((data.overall_score as number || 0) * 100)} `);
-        else if (type === "error") warn(`  ${data.message}`);
-        else if (type === "plan_update") { masterPlan = data.plan; process.stdout.write("[plan] "); }
-      } : undefined,
-    );
-
-    result.chapterNumber = ch;
-    chapterResults.push(result);
-
-    if (result.summary) {
-      summaries.push({
-        chapter: ch,
-        title: result.summary.title,
-        summary: result.summary.plot_summary,
-        cliffhanger: result.summary.cliffhanger,
-      });
-    }
-
-    if (verbose) console.log(); // newline after stage logs
-    ok(`${ch}화 완료: ${result.fullText.length}자, ${result.durationMs / 1000}초, $${result.usage.cost_usd.toFixed(4)}`);
-
-    if (result.errors.length > 0) {
-      for (const e of result.errors) warn(`  에러: ${e}`);
+  for await (const event of harness.run(seed, 1, chapters)) {
+    switch (event.type) {
+      case "plan_generated":
+        if (verbose) process.stdout.write("[plan] ");
+        break;
+      case "chapter_start":
+        if (verbose) process.stdout.write(`\n  ${event.chapter}화: `);
+        break;
+      case "pipeline_event":
+        if (verbose) {
+          if (event.event.type === "stage_change") process.stdout.write(`[${(event.event as { stage: string }).stage}] `);
+          else if (event.event.type === "error") warn((event.event as { message: string }).message);
+        }
+        break;
+      case "chapter_complete": {
+        const r = event.result;
+        chapterResults.push({
+          chapterNumber: r.chapterNumber,
+          fullText: r.text,
+          summary: r.summary,
+          score: r.score,
+          usage: { prompt_tokens: r.usage.prompt_tokens, completion_tokens: r.usage.completion_tokens, cost_usd: r.usage.cost_usd },
+          errors: [],
+          durationMs: r.durationMs,
+        });
+        if (verbose) console.log();
+        ok(`${r.chapterNumber}화 완료: ${r.text.length}자, ${(r.durationMs / 1000).toFixed(1)}초, $${r.usage.cost_usd.toFixed(4)}`);
+        break;
+      }
+      case "done":
+        if (verbose) log(`하네스 완료: $${event.result.totalUsage.cost_usd.toFixed(4)}`);
+        break;
+      case "error":
+        warn(`${event.chapter}화 에러: ${event.message}`);
+        break;
     }
   }
 
-  return { seed, plots, selectedPlot, chapterResults, summaries, masterPlan };
+  const summaries = chapterResults
+    .filter((ch) => ch.summary)
+    .map((ch) => ({
+      chapter: ch.chapterNumber,
+      title: ch.summary!.title,
+      summary: ch.summary!.plot_summary,
+      cliffhanger: ch.summary!.cliffhanger,
+    }));
+
+  return { seed, plots, selectedPlot, chapterResults, summaries, masterPlan: undefined };
 }
 
 // ---------------------------------------------------------------------------
