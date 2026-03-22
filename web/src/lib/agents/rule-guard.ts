@@ -170,6 +170,79 @@ export function detectSentenceStartRepeat(text: string): RuleIssue[] {
 }
 
 // ---------------------------------------------------------------------------
+// Short dialogue sequence detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect chains of short dialogue lines without meaningful narration between them.
+ * "Short" = dialogue text (excluding quotes/punctuation) is 8 chars or fewer.
+ * "Meaningful narration" = non-dialogue text of 6+ chars between two dialogues.
+ * Chains of 3+ short dialogues trigger issues.
+ */
+export function detectShortDialogueSequence(text: string): RuleIssue[] {
+  const lines = text.split("\n").filter((l) => l.trim());
+  const issues: RuleIssue[] = [];
+  const dPattern = /[""\u201C]([^""\u201D]*?)[""\u201D]/g;
+
+  let chainStart = -1;
+  let chainCount = 0;
+  let veryShortCount = 0;
+
+  const flushChain = (endLine: number) => {
+    if (chainCount >= 3) {
+      const severity = chainCount >= 5 || veryShortCount / chainCount >= 0.75 ? "critical" : "warning";
+      issues.push({
+        type: "short_dialogue_sequence",
+        position: chainStart,
+        detail: `${chainStart + 1}~${endLine}행: 짧은 대사 ${chainCount}개가 서술 없이 연속됩니다. 대사 사이에 행동/감정 묘사를 추가하세요.`,
+        severity,
+      });
+    }
+    chainCount = 0;
+    veryShortCount = 0;
+    chainStart = -1;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const dialogues: string[] = [];
+    let match: RegExpExecArray | null;
+    dPattern.lastIndex = 0;
+
+    while ((match = dPattern.exec(line)) !== null) {
+      dialogues.push(match[1]);
+    }
+
+    if (dialogues.length === 0) {
+      // Pure narration — meaningful if 6+ chars
+      const pureText = line.replace(/[""\u201C\u201D]/g, "").trim();
+      if (pureText.length >= 6) flushChain(i);
+      continue;
+    }
+
+    for (const d of dialogues) {
+      const cleaned = d.replace(/[.!?…。\s]/g, "");
+      if (cleaned.length <= 8) {
+        if (chainStart === -1) chainStart = i;
+        chainCount++;
+        if (cleaned.length <= 4) veryShortCount++;
+      } else {
+        flushChain(i);
+      }
+    }
+
+    // Check narration after dialogue in same line
+    const afterDialogue = line.replace(dPattern, "").trim();
+    if (afterDialogue.length >= 6 && chainCount > 0) {
+      flushChain(i);
+    }
+  }
+
+  flushChain(lines.length);
+  return issues;
+}
+
+// ---------------------------------------------------------------------------
 // RuleGuardAgent — PipelineAgent implementation
 // ---------------------------------------------------------------------------
 
@@ -184,6 +257,7 @@ export class RuleGuardAgent implements PipelineAgent {
     ctx.ruleIssues = [
       ...detectEndingRepeat(ctx.text),
       ...detectSentenceStartRepeat(ctx.text),
+      ...detectShortDialogueSequence(ctx.text),
     ];
   }
 }

@@ -84,14 +84,14 @@ export function planBeats(scene: SceneSpec, seed: NovelSeed): Beat[] {
       if (otherNames.length > 0) {
         beats.push({
           type: "dialogue",
-          instruction: `${mcName}이(가) 먼저 말합니다. 캐릭터 말투에 맞는 대사 1-2줄 + 짧은 행동 비트.\n씬 목적: ${scene.purpose}`,
+          instruction: `${mcName}이(가) 먼저 말합니다. 캐릭터 말투에 맞는 대사 + 행동/감정 비트.\n대사는 1~3문장 사이로 자유롭게. 짧은 대사 뒤에는 반드시 행동이나 감각 묘사를 덧붙이세요.\n씬 목적: ${scene.purpose}`,
           characters: [mcName],
           emotionalTarget: getEmotionalTarget(1, 5),
           microTension: "대사 속에 상대가 불편해할 단어나 질문을 하나 넣으세요",
         });
         beats.push({
           type: "dialogue",
-          instruction: `${otherNames[0]}이(가) 대답합니다. 캐릭터 말투에 맞는 대사 1-2줄 + ${mcName}의 반응.\n씬 목적: ${scene.purpose}`,
+          instruction: `${otherNames[0]}이(가) 대답합니다. 캐릭터 말투에 맞는 대사(2~3문장으로 길게) + ${mcName}의 내면 반응이나 행동 묘사.\n짧은 대사만 쓰지 마세요. 감정이나 의도가 드러나는 긴 대사를 쓰세요.\n씬 목적: ${scene.purpose}`,
           characters: [otherNames[0], mcName],
           emotionalTarget: getEmotionalTarget(2, 5),
           microTension: "대답 속에 숨기는 것이 있음을 행동(시선 회피, 말 끊김)으로 암시하세요",
@@ -133,7 +133,7 @@ export function planBeats(scene: SceneSpec, seed: NovelSeed): Beat[] {
       if (otherNames.length > 0) {
         beats.push({
           type: "dialogue",
-          instruction: `${otherNames[0]}이(가) 짧게 말합니다. 상황에 대한 반응이나 정보 전달. (1-2줄 대사)\n씬 목적: ${scene.purpose}`,
+          instruction: `${otherNames[0]}이(가) 말합니다. 상황에 대한 반응이나 정보 전달. 대사 뒤에 행동이나 표정 묘사를 반드시 포함하세요.\n씬 목적: ${scene.purpose}`,
           characters: [otherNames[0]],
           emotionalTarget: getEmotionalTarget(2, 4),
           microTension: "대사가 상황을 완전히 설명하지 않게 하세요. 정보를 절반만 주세요.",
