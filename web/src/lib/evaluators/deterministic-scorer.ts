@@ -41,6 +41,8 @@ export interface DeterministicScores {
   immersion: number;
   /** 정보이론 기반 서사 구조 (0~1) — 엔트로피, JSD, 아크 상관 */
   narrativeInformation: number;
+  /** 독자 몰입도 (0~1) — 고구마-사이다, 1화 임팩트, 엔딩 감정 */
+  engagement: number;
   /** 종합 (가중 평균) */
   overall: number;
   /** 상세 데이터 */
@@ -505,20 +507,110 @@ function scoreImmersion(text: string): { score: number; details: Record<string, 
 }
 
 // ---------------------------------------------------------------------------
+// 11. Engagement score (고구마-사이다 + 1화 임팩트 + 엔딩 감정)
+// ---------------------------------------------------------------------------
+
+const GOGUMA_KEYWORDS = [
+  "모욕", "무시", "실패", "패배", "굴욕", "배신", "위협", "절망", "좌절",
+  "조롱", "비웃", "무능", "쫓겨", "빼앗", "잃", "죽", "벌", "처형",
+  "감옥", "추방", "버림", "거절", "체념",
+];
+const CIDER_KEYWORDS = [
+  "성공", "승리", "인정", "칭찬", "보상", "반전", "각성", "해결", "극복",
+  "복수", "통쾌", "감탄", "놀라", "두려워", "무릎", "항복", "사과",
+  "존경", "기쁨", "웃", "미소", "감동", "환호", "축하",
+];
+const WORLDBUILD_PATTERNS = [
+  /^.{0,10}(제국|대륙|왕국|세계)[력은의에서]/,
+  /^.{0,10}\d{2,4}년/,
+  /^이\s*(곳|세계|대륙|왕국)은/,
+  /^(먼\s*옛날|오래\s*전|태초에)/,
+];
+
+function scoreEngagement(
+  text: string,
+  genre: string,
+  chapterNumber: number,
+): { score: number; details: Record<string, unknown> } {
+  const paragraphs = text.split("\n\n").filter((p) => p.trim());
+  let score = 0.5; // baseline
+  const details: Record<string, unknown> = {};
+
+  // --- 1. 고구마-사이다 밸런스 ---
+  const gogumaCount = GOGUMA_KEYWORDS.filter((kw) => text.includes(kw)).length;
+  const ciderCount = CIDER_KEYWORDS.filter((kw) => text.includes(kw)).length;
+  details.goguma = gogumaCount;
+  details.cider = ciderCount;
+
+  // 마지막 20% 텍스트의 감정 방향 (상승 감정으로 끝나야 함)
+  const lastPortion = text.slice(-Math.floor(text.length * 0.2));
+  const lastGoguma = GOGUMA_KEYWORDS.filter((kw) => lastPortion.includes(kw)).length;
+  const lastCider = CIDER_KEYWORDS.filter((kw) => lastPortion.includes(kw)).length;
+  const endingPositive = lastCider >= lastGoguma;
+  details.endingPositive = endingPositive;
+
+  if (endingPositive) {
+    score += 0.15; // 상승 감정으로 끝남
+  } else {
+    score -= 0.15; // 하강 감정으로 끝남
+  }
+
+  // 장르별 밸런스 체크
+  const isActionGenre = ["현대 판타지", "판타지", "무협", "게임"].some((g) => genre.includes(g));
+  if (isActionGenre) {
+    // 남성향: 같은 화 내에 사이다 필수
+    if (ciderCount === 0 && gogumaCount > 0) score -= 0.15;
+    if (ciderCount > 0) score += 0.1;
+  } else {
+    // 로판/로맨스: 밀당도 OK, 사이다 없어도 설렘이면 됨
+    if (ciderCount === 0 && gogumaCount > 2) score -= 0.1;
+  }
+
+  // --- 2. 1화 첫 문장 임팩트 ---
+  if (chapterNumber === 1 && paragraphs.length > 0) {
+    const firstPara = paragraphs[0];
+    const startsWithWorldbuild = WORLDBUILD_PATTERNS.some((p) => p.test(firstPara));
+    const startsWithDialogue = /^[""\u201C]/.test(firstPara.trim());
+    const startsWithAction = /^.{0,5}(었다|였다|했다|했다|렸다|쳤다|졌다)/.test(firstPara) ||
+      /[!]/.test(firstPara.slice(0, 50));
+
+    details.firstSentenceType = startsWithWorldbuild ? "worldbuild" : startsWithDialogue ? "dialogue" : startsWithAction ? "action" : "narration";
+
+    if (startsWithWorldbuild) {
+      score -= 0.2; // 세계관 설명으로 시작 = 큰 감점
+    } else if (startsWithDialogue || startsWithAction) {
+      score += 0.1; // 대화/액션으로 시작 = 가점
+    }
+  }
+
+  // --- 3. 주인공 호구화 방지 ---
+  // 마지막 문단에서 주인공이 수동적인지 체크
+  const lastPara = paragraphs[paragraphs.length - 1] || "";
+  const passiveEnding = /체념|포기|무력|아무것도.*할 수 없|어쩔 수 없/.test(lastPara);
+  if (passiveEnding) {
+    score -= 0.1;
+    details.passiveEnding = true;
+  }
+
+  return { score: Math.max(0, Math.min(1, score)), details };
+}
+
+// ---------------------------------------------------------------------------
 // Main scoring function
 // ---------------------------------------------------------------------------
 
 const WEIGHTS = {
-  rhythm: 0.10,
+  rhythm: 0.08,
   hookEnding: 0.08,
-  characterVoice: 0.12,
-  dialogueRatio: 0.06,
+  characterVoice: 0.10,
+  dialogueRatio: 0.04,
   lengthScore: 0.04,
-  antiRepetition: 0.08,
+  antiRepetition: 0.06,
   sensoryDiversity: 0.04,
-  narrative: 0.15,
-  immersion: 0.12,
-  narrativeInformation: 0.21,
+  narrative: 0.13,
+  immersion: 0.10,
+  narrativeInformation: 0.18,
+  engagement: 0.15,
 };
 
 export function computeDeterministicScores(
@@ -542,6 +634,10 @@ export function computeDeterministicScores(
   // Information-theoretic analysis
   const infoScores = computeNarrativeInformationScores(text, blueprint);
 
+  // Engagement (goguma-cider balance, ch1 impact, ending emotion)
+  const genre = seed.world?.genre || "";
+  const engagementResult = scoreEngagement(text, genre, chapterNumber);
+
   const scores = {
     rhythm: rhythmResult.score,
     hookEnding: hookResult.score,
@@ -553,6 +649,7 @@ export function computeDeterministicScores(
     narrative: narrativeResult.score,
     immersion: immersionResult.score,
     narrativeInformation: infoScores.overall,
+    engagement: engagementResult.score,
   };
 
   const overall = Object.entries(WEIGHTS).reduce(
@@ -573,6 +670,7 @@ export function computeDeterministicScores(
       sensory: { senses: sensoryResult.senses },
       narrative: narrativeResult.details,
       immersion: immersionResult.details,
+      engagement: engagementResult.details,
     },
     informationTheory: infoScores,
   };
