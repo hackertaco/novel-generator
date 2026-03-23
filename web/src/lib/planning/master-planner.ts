@@ -1,8 +1,87 @@
 import { getAgent } from "@/lib/agents/llm-agent";
 import { getMasterPlanPrompt } from "@/lib/prompts/planning-prompts";
-import { MasterPlanSchema, type MasterPlan } from "@/lib/schema/planning";
-import type { NovelSeed } from "@/lib/schema/novel";
+import { MasterPlanSchema, type MasterPlan, type ArcPlan } from "@/lib/schema/planning";
+import type { NovelSeed, PlotArc } from "@/lib/schema/novel";
 import type { TokenUsage } from "@/lib/agents/types";
+
+/**
+ * Convert seed PlotArcs into minimal ArcPlan objects for the fallback plan.
+ * If seed.arcs is empty, infer arcs from seed.chapter_outlines.
+ */
+function buildFallbackArcs(seed: NovelSeed, partId: string, partStart: number, partEnd: number): ArcPlan[] {
+  // 1) Try seed.arcs first — filter to arcs that overlap with this part
+  const overlapping = seed.arcs.filter(
+    (a) => a.start_chapter <= partEnd && a.end_chapter >= partStart,
+  );
+
+  if (overlapping.length > 0) {
+    return overlapping.map((a) => ({
+      id: a.id,
+      name: a.name,
+      part_id: partId,
+      start_chapter: Math.max(a.start_chapter, partStart),
+      end_chapter: Math.min(a.end_chapter, partEnd),
+      summary: a.summary,
+      theme: a.theme ?? "",
+      key_events: a.key_events ?? [],
+      climax_chapter: a.climax_chapter,
+      tension_curve: a.tension_curve ?? [],
+      chapter_blueprints: [],
+    }));
+  }
+
+  // 2) Try to infer arcs from chapter_outlines grouped by arc_id
+  if (seed.chapter_outlines.length > 0) {
+    const groups = new Map<string, { start: number; end: number; title: string; oneLiner: string }>();
+    for (const co of seed.chapter_outlines) {
+      if (co.chapter_number < partStart || co.chapter_number > partEnd) continue;
+      const existing = groups.get(co.arc_id);
+      if (existing) {
+        existing.start = Math.min(existing.start, co.chapter_number);
+        existing.end = Math.max(existing.end, co.chapter_number);
+      } else {
+        groups.set(co.arc_id, {
+          start: co.chapter_number,
+          end: co.chapter_number,
+          title: co.arc_id,
+          oneLiner: co.one_liner,
+        });
+      }
+    }
+    if (groups.size > 0) {
+      return Array.from(groups.entries()).map(([arcId, g]) => ({
+        id: arcId,
+        name: g.title,
+        part_id: partId,
+        start_chapter: g.start,
+        end_chapter: g.end,
+        summary: g.oneLiner,
+        theme: "",
+        key_events: [],
+        climax_chapter: g.end,
+        tension_curve: [],
+        chapter_blueprints: [],
+      }));
+    }
+  }
+
+  // 3) Last resort: create a single arc spanning the entire part
+  return [
+    {
+      id: `${partId}_arc_1`,
+      name: "기본 아크",
+      part_id: partId,
+      start_chapter: partStart,
+      end_chapter: partEnd,
+      summary: seed.logline.split("\n")[0].slice(0, 200) || "메인 스토리",
+      theme: "",
+      key_events: [],
+      climax_chapter: partEnd,
+      tension_curve: [],
+      chapter_blueprints: [],
+    },
+  ];
+}
 
 /**
  * Build a minimal fallback MasterPlan from the seed's existing arcs.
@@ -10,6 +89,10 @@ import type { TokenUsage } from "@/lib/agents/types";
  */
 function buildFallbackPlan(seed: NovelSeed): MasterPlan {
   console.warn("[master-plan] Using fallback plan from seed arcs");
+  const partEnd = Math.min(60, seed.total_chapters);
+  const partId = "part_1";
+  const arcs = buildFallbackArcs(seed, partId, 1, partEnd);
+
   return MasterPlanSchema.parse({
     estimated_total_chapters: {
       min: seed.total_chapters,
@@ -19,19 +102,19 @@ function buildFallbackPlan(seed: NovelSeed): MasterPlan {
       faction_count: Object.keys(seed.world.factions).length,
       location_count: Object.keys(seed.world.key_locations).length,
       power_system_depth: seed.world.magic_system ? "moderate" : "none",
-      subplot_count: seed.arcs.length,
+      subplot_count: Math.max(seed.arcs.length, arcs.length),
     },
     parts: [
       {
-        id: "part_1",
+        id: partId,
         name: "전체",
         start_chapter: 1,
-        end_chapter: Math.min(60, seed.total_chapters),
+        end_chapter: partEnd,
         theme: seed.logline.split("\n")[0].slice(0, 100),
         core_conflict: seed.arcs[0]?.summary || "핵심 갈등",
         resolution_target: "첫 번째 대막 완결",
-        estimated_chapter_count: Math.min(60, seed.total_chapters),
-        arcs: [],
+        estimated_chapter_count: partEnd,
+        arcs,
         transition_to_next: "",
       },
     ],
