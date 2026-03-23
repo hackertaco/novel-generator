@@ -1,4 +1,18 @@
 #!/usr/bin/env tsx
+// Load .env before anything else
+import * as fs from "fs";
+const envFile = fs.readFileSync(".env", "utf-8");
+for (const line of envFile.split("\n")) {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith("#")) continue;
+  const eqIdx = trimmed.indexOf("=");
+  if (eqIdx > 0) {
+    const key = trimmed.slice(0, eqIdx).trim();
+    const val = trimmed.slice(eqIdx + 1).trim();
+    if (!process.env[key]) process.env[key] = val;
+  }
+}
+
 /**
  * E2E Novel Generation Test Script
  *
@@ -11,7 +25,6 @@
  *   npx tsx scripts/e2e-test.ts --base-url http://localhost:6367
  */
 
-import * as fs from "fs";
 import * as path from "path";
 
 // Evaluators (deterministic, no LLM cost)

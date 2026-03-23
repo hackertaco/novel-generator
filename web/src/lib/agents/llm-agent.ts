@@ -148,7 +148,7 @@ export class LLMAgent {
         this.tracker.record(log);
 
         return {
-          data: response.choices[0]?.message?.content || "",
+          data: response.choices?.[0]?.message?.content || "",
           usage: {
             prompt_tokens: promptTokens,
             completion_tokens: completionTokens,

@@ -311,6 +311,7 @@ export class NovelHarness {
           yield { type: "plan_generated", plan: this.masterPlan };
         } catch (err) {
           console.warn(`[harness] 아크 플래닝 실패, 블루프린트 없이 진행: ${err instanceof Error ? err.message : err}`);
+          if (err instanceof Error) console.warn(err.stack);
         }
       }
 
@@ -333,6 +334,7 @@ export class NovelHarness {
           arc.chapter_blueprints = bpResult.data;
         } catch (err) {
           console.warn(`[harness] 블루프린트 생성 실패, 최소 블루프린트 생성: ${err instanceof Error ? err.message : err}`);
+          if (err instanceof Error) console.warn(err.stack);
 
           // Generate a minimal blueprint from seed data so we don't fall back to
           // uncontrolled single-shot generation
@@ -562,6 +564,7 @@ export class NovelHarness {
           }
         }
       } catch (err) {
+        if (err instanceof Error) console.error(`[harness] ${ch}화 생성 실패:`, err.stack);
         yield {
           type: "error",
           chapter: ch,
