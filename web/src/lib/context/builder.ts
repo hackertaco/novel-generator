@@ -143,11 +143,11 @@ ${points.map((p) => `- ${p}`).join("\n")}
 `);
   }
 
-  // Characters
+  // Characters — filter by introduction_chapter to prevent premature appearances
   const characterIds = outline?.characters_involved || [];
   const charsInChapter = characterIds
     .map((id) => seed.characters.find((c) => c.id === id))
-    .filter(Boolean);
+    .filter((c) => c && c.introduction_chapter <= chapterNum);
 
   if (charsInChapter.length > 0) {
     parts.push("# 등장 캐릭터");
@@ -396,11 +396,11 @@ ${currentArc.summary}
     parts.push("");
   }
 
-  // Characters (same format as existing)
+  // Characters — filter by introduction_chapter to prevent premature appearances
   const characterIds = blueprint.characters_involved || [];
   const charsInChapter = characterIds
     .map((id) => seed.characters.find((c) => c.id === id))
-    .filter(Boolean);
+    .filter((c) => c && c.introduction_chapter <= chapterNum);
 
   if (charsInChapter.length > 0) {
     parts.push("# 등장 캐릭터");
