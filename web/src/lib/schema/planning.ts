@@ -40,16 +40,10 @@ export const ForeshadowingActionRefSchema = z.object({
 
 // --- Chapter Blueprint (replaces ChapterOutline) ---
 
-export const ArcRoleEnum = z.enum([
-  "setup",
-  "rising_action",
-  "midpoint",
-  "escalation",
-  "climax",
-  "falling_action",
-  "resolution",
-  "transition",
-]);
+export const ArcRoleEnum = z.string().transform((val) => {
+  const valid = ["setup", "rising_action", "midpoint", "escalation", "climax", "falling_action", "resolution", "transition"];
+  return valid.includes(val) ? val : "rising_action"; // fallback for LLM typos like "development"
+}) as unknown as z.ZodType<"setup" | "rising_action" | "midpoint" | "escalation" | "climax" | "falling_action" | "resolution" | "transition">;
 export type ArcRole = z.infer<typeof ArcRoleEnum>;
 
 export const ChapterBlueprintSchema = z
@@ -60,7 +54,7 @@ export const ChapterBlueprintSchema = z
     one_liner: z.string().describe("One sentence description"),
     role_in_arc: ArcRoleEnum.default("rising_action"),
     scenes: z.array(SceneSpecSchema).default([]),
-    dependencies: z.array(z.string()).default([]).describe("What this chapter needs from prior chapters"),
+    dependencies: z.array(z.union([z.string(), z.number().transform(String)])).default([]).describe("What this chapter needs from prior chapters"),
     target_word_count: z.number().int().optional().describe("Target char count; derived from scenes if omitted"),
     emotional_arc: z.string().default("").describe("e.g. 긴장→갈등→충격"),
     key_points: z.array(z.string()).default([]),
