@@ -120,7 +120,7 @@ ${chapterText.slice(0, 8000)}
     taskId: `chapter-summarize-${chapterNumber}`,
     model,
     temperature: 0.3,
-    maxTokens: 1024,
+    maxTokens: 2048,
   });
 
   const outline = seed.chapter_outlines.find(

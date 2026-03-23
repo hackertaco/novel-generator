@@ -177,8 +177,14 @@ export class NovelHarness {
   ): Promise<void> {
     if (!this.memory) return;
 
-    const chapterMemory = await summarizeChapter(text, chapterNumber, seed);
-    this.memory.addChapter(chapterMemory);
+    let chapterMemory;
+    try {
+      chapterMemory = await summarizeChapter(text, chapterNumber, seed);
+      this.memory.addChapter(chapterMemory);
+    } catch (err) {
+      console.warn(`[harness] 챕터 요약 실패, 트래킹 건너뜀: ${err instanceof Error ? err.message : err}`);
+      return;
+    }
 
     if (this.characterTracker && chapterMemory.character_changes.length > 0) {
       // Sanity check: reject suspicious state changes to prevent snowball errors
