@@ -69,23 +69,27 @@ export class WriterAgent implements PipelineAgent {
       ctx.totalUsage = accumulateUsage(ctx.totalUsage, sceneResult.usage);
       yield { type: "usage", ...sceneResult.usage };
 
-      // Self-review on assembled text
-      yield { type: "stage_change", stage: "self-review" };
+      // Self-review on assembled text (skip in fast mode for speed)
+      if (!fastMode) {
+        yield { type: "stage_change", stage: "self-review" };
 
-      const selfReviewResult = await agent.call({
-        prompt: `${getSelfReviewPrompt()}\n\n---\n\n${sceneResult.fullText}`,
-        system: systemPrompt,
-        model,
-        temperature: 0.2,
-        maxTokens: 12000,
-        taskId: `chapter-${chapterNumber}-self-review`,
-      });
+        const selfReviewResult = await agent.call({
+          prompt: `${getSelfReviewPrompt()}\n\n---\n\n${sceneResult.fullText}`,
+          system: systemPrompt,
+          model,
+          temperature: 0.2,
+          maxTokens: 12000,
+          taskId: `chapter-${chapterNumber}-self-review`,
+        });
 
-      ctx.totalUsage = accumulateUsage(ctx.totalUsage, selfReviewResult.usage);
-      yield { type: "usage", ...selfReviewResult.usage };
+        ctx.totalUsage = accumulateUsage(ctx.totalUsage, selfReviewResult.usage);
+        yield { type: "usage", ...selfReviewResult.usage };
 
-      const reviewed = handleSelfReviewResponse(selfReviewResult.data, sceneResult.fullText);
-      ctx.text = sanitize(reviewed);
+        const reviewed = handleSelfReviewResponse(selfReviewResult.data, sceneResult.fullText);
+        ctx.text = sanitize(reviewed);
+      } else {
+        ctx.text = sanitize(sceneResult.fullText);
+      }
       yield { type: "replace_text", content: ctx.text };
       return;
     }
