@@ -166,6 +166,17 @@ ${char.voice.sample_dialogues
     }
   }
 
+  // Characters NOT allowed yet — explicit prohibition
+  const forbiddenChars = seed.characters
+    .filter((c) => c.introduction_chapter > chapterNum)
+    .map((c) => c.name);
+  if (forbiddenChars.length > 0) {
+    parts.push(`# ⛔ 등장 금지 캐릭터 (이 화에서 절대 사용 금지!)
+${forbiddenChars.join(", ")}
+위 인물은 아직 등장하면 안 됩니다. 이름, 대사, 행동 묘사 모두 금지.
+`);
+  }
+
   // Foreshadowing
   const activeFs = seed.foreshadowing.filter(
     (fs) => shouldAct(fs, chapterNum) !== null,
@@ -417,6 +428,17 @@ ${char.voice.sample_dialogues
   .join("\n")}
 `);
     }
+  }
+
+  // Characters NOT allowed yet — explicit prohibition
+  const forbiddenChars = seed.characters
+    .filter((c) => c.introduction_chapter > chapterNum)
+    .map((c) => c.name);
+  if (forbiddenChars.length > 0) {
+    parts.push(`# ⛔ 등장 금지 캐릭터 (이 화에서 절대 사용 금지!)
+${forbiddenChars.join(", ")}
+위 인물은 아직 등장하면 안 됩니다. 이름, 대사, 행동 묘사 모두 금지.
+`);
   }
 
   // Foreshadowing
