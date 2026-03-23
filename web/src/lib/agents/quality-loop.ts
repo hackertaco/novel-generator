@@ -110,6 +110,21 @@ export class QualityLoop implements PipelineAgent {
     let prevScore = initialReport.overallScore;
     let currentReport = initialReport;
 
+    // Convert short dialogue rule issues to CriticIssues for surgeon repair
+    const dialogueRuleIssues = ctx.ruleIssues
+      .filter((ri) => ri.type === "short_dialogue_sequence")
+      .map((ri) => ({
+        startParagraph: ri.position,
+        endParagraph: Math.min(ri.position + 4, segmentText(ctx.text).length - 1),
+        category: "rhythm" as const,
+        description: ri.detail,
+        severity: (ri.severity === "critical" ? "major" : "minor") as "major" | "minor",
+        suggestedFix: "짧은 대사 사이에 캐릭터의 행동, 표정, 감각 묘사를 추가하세요. 대사 자체는 유지하되, 대사 뒤나 사이에 1-2문장의 서술 비트를 넣어 리듬을 만드세요.",
+      }));
+    if (dialogueRuleIssues.length > 0) {
+      currentReport.issues.push(...dialogueRuleIssues);
+    }
+
     for (let i = 1; i <= MAX_ITERATIONS; i++) {
       const actionable = currentReport.issues.filter(iss => iss.severity !== "minor");
       if (actionable.length === 0) break;
