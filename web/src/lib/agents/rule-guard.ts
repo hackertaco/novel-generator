@@ -53,6 +53,69 @@ export function deduplicateParagraphs(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// FixEndingRepeat — deterministic ending variation (no LLM)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fix ending repeats by merging the 2nd sentence of a 3-run into the 3rd
+ * using a connective ending (~었고, / ~였으며, / ~인 채).
+ *
+ * Example:
+ *   "문은 닫혀 있었다. 정원사가 흙을 고르고 있었다. 그녀는 가까이 붙었다."
+ * → "문은 닫혀 있었다. 정원사가 흙을 고르고 있었고, 그녀는 가까이 붙었다."
+ */
+export function fixEndingRepeat(text: string): string {
+  const paragraphs = text.split("\n\n");
+  let changed = false;
+
+  const connectives: Record<string, string[]> = {
+    "었다": ["었고,", "었으며,"],
+    "였다": ["였고,", "였으며,"],
+    "렸다": ["렸고,", "렸으며,"],
+    "했다": ["했고,", "했으며,"],
+    "니다": ["니다만,", "는데,"],
+  };
+
+  for (let pi = 0; pi < paragraphs.length; pi++) {
+    const sentences = paragraphs[pi]
+      .split(/(?<=[.!?])\s+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    if (sentences.length < 3) continue;
+
+    const fixed = [...sentences];
+    let i = 0;
+    while (i < fixed.length - 2) {
+      const e1 = fixed[i].match(/(.{2})[.]\s*$/)?.[1];
+      const e2 = fixed[i + 1].match(/(.{2})[.]\s*$/)?.[1];
+      const e3 = fixed[i + 2].match(/(.{2})[.]\s*$/)?.[1];
+
+      if (e1 && e1 === e2 && e2 === e3) {
+        // Merge sentence i+1 into sentence i+2 using connective
+        const options = connectives[e2] || [`${e2.slice(-1)}고,`];
+        const replacement = options[0];
+        // Replace "었다." at end of sentence i+1 with connective
+        const merged = fixed[i + 1].replace(/(.{2})[.]\s*$/, replacement);
+        // Lowercase first char of sentence i+2 (Korean doesn't have case, just merge)
+        fixed[i + 1] = merged + " " + fixed[i + 2];
+        fixed.splice(i + 2, 1);
+        changed = true;
+        i += 2; // skip past the merged sentence
+      } else {
+        i++;
+      }
+    }
+
+    if (changed) {
+      paragraphs[pi] = fixed.join(" ");
+    }
+  }
+
+  return changed ? paragraphs.join("\n\n") : text;
+}
+
+// ---------------------------------------------------------------------------
 // Sentence splitting helper
 // ---------------------------------------------------------------------------
 
@@ -254,6 +317,7 @@ export class RuleGuardAgent implements PipelineAgent {
 
     ctx.text = sanitize(ctx.text);
     ctx.text = deduplicateParagraphs(ctx.text);
+    ctx.text = fixEndingRepeat(ctx.text);
     ctx.ruleIssues = [
       ...detectEndingRepeat(ctx.text),
       ...detectSentenceStartRepeat(ctx.text),
