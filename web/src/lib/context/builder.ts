@@ -5,6 +5,17 @@ import { shouldAct } from "../schema/foreshadowing";
 import { selectRelevantContext } from "./relevance";
 import { trimToFit, estimateTokens } from "./token-estimator";
 
+/** Infer honorific hint from character backstory/role */
+function getHonorificHint(char: { backstory?: string; role?: string }): string {
+  const bs = (char.backstory || "") + " " + (char.role || "");
+  if (bs.includes("황제") || bs.includes("황후")) return "\n호칭 규칙: 이 인물은 '전하' 또는 '폐하'로 불림 (전 화에서 사용한 호칭을 유지)";
+  if (bs.includes("공주") || bs.includes("공녀") || bs.includes("황녀")) return "\n호칭 규칙: 이 인물은 '전하' 또는 '공주님'으로 불림 (전 화에서 사용한 호칭을 유지)";
+  if (bs.includes("공작")) return "\n호칭 규칙: 이 인물은 '각하' 또는 '공작님'으로 불림";
+  if (bs.includes("후작") || bs.includes("백작")) return "\n호칭 규칙: 이 인물은 작위에 맞는 호칭 사용";
+  if (bs.includes("영애") || bs.includes("귀족")) return "\n호칭 규칙: 이 인물은 '아가씨'로 불림";
+  return "";
+}
+
 export interface ChapterContext {
   novelInfo: string;
   currentArc: string;
@@ -131,8 +142,8 @@ ${currentArc.summary}
     (o) => o.chapter_number === chapterNum,
   );
   if (outline) {
-    // Limit key_points for early chapters
-    const maxPoints = chapterNum <= 3 ? 2 : outline.key_points.length;
+    // Limit key_points for early chapters (but allow enough for pacing)
+    const maxPoints = chapterNum <= 2 ? 3 : outline.key_points.length;
     const points = outline.key_points.slice(0, maxPoints);
     parts.push(`# ${chapterNum}화 아웃라인
 제목: ${outline.title}
@@ -156,7 +167,7 @@ ${points.map((p) => `- ${p}`).join("\n")}
       parts.push(`
 ## ${char.name} (${char.role})
 톤: ${char.voice.tone}
-말투: ${char.voice.speech_patterns.join(", ")}
+말투: ${char.voice.speech_patterns.join(", ")}${getHonorificHint(char)}
 예시 대사:
 ${char.voice.sample_dialogues
   .slice(0, 3)
@@ -395,13 +406,13 @@ ${currentArc.summary}
 
   // Key points (limited for early chapters)
   if (blueprint.key_points.length > 0) {
-    const maxPoints = chapterNum <= 3 ? 2 : blueprint.key_points.length;
+    const maxPoints = chapterNum <= 2 ? 3 : blueprint.key_points.length;
     const points = blueprint.key_points.slice(0, maxPoints);
-    parts.push("# 핵심 포인트");
+    parts.push("# 핵심 포인트 (모두 이번 화에서 소화하세요)");
     for (const point of points) {
       parts.push(`- ${point}`);
     }
-    if (chapterNum <= 3 && blueprint.key_points.length > maxPoints) {
+    if (blueprint.key_points.length > maxPoints) {
       parts.push(`(나머지 ${blueprint.key_points.length - maxPoints}개는 후속 화에서 전개)`);
     }
     parts.push("");
@@ -420,7 +431,7 @@ ${currentArc.summary}
       parts.push(`
 ## ${char.name} (${char.role})
 톤: ${char.voice.tone}
-말투: ${char.voice.speech_patterns.join(", ")}
+말투: ${char.voice.speech_patterns.join(", ")}${getHonorificHint(char)}
 예시 대사:
 ${char.voice.sample_dialogues
   .slice(0, 3)
