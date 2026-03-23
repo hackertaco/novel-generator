@@ -175,7 +175,7 @@ export function detectSentenceStartRepeat(text: string): RuleIssue[] {
 
 /**
  * Detect chains of short dialogue lines without meaningful narration between them.
- * "Short" = dialogue text (excluding quotes/punctuation) is 8 chars or fewer.
+ * "Short" = dialogue text (excluding quotes/punctuation) is 5 chars or fewer.
  * "Meaningful narration" = non-dialogue text of 6+ chars between two dialogues.
  * Chains of 3+ short dialogues trigger issues.
  */
@@ -222,10 +222,10 @@ export function detectShortDialogueSequence(text: string): RuleIssue[] {
 
     for (const d of dialogues) {
       const cleaned = d.replace(/[.!?…。\s]/g, "");
-      if (cleaned.length <= 8) {
+      if (cleaned.length <= 5) {
         if (chainStart === -1) chainStart = i;
         chainCount++;
-        if (cleaned.length <= 4) veryShortCount++;
+        if (cleaned.length <= 2) veryShortCount++;
       } else {
         flushChain(i);
       }

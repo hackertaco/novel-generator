@@ -143,7 +143,7 @@ export const NovelSeedSchema = z.object({
   // Style (fixed)
   style: StyleGuideSchema.default({
     max_paragraph_length: 3,
-    dialogue_ratio: 0.6,
+    dialogue_ratio: 0.3,
     sentence_style: "short",
     hook_ending: true,
     pov: "1인칭",

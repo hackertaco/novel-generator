@@ -116,13 +116,24 @@ function checkHookEnding(content: string) {
 
   const lastPara = paragraphs[paragraphs.length - 1];
   const hookPatterns = [
-    /\.{3}$/,
-    /[?!]$/,
+    /\.{3}$/,           // 말줄임표
+    /[?!]$/,            // 의문/감탄
+    /["\u201C\u201D]/, // 대사로 끝남 (긴장감 있는 대사 후킹)
     /그때/,
     /순간/,
     /하지만/,
     /그러나/,
     /바로/,
+    /아니/,
+    /없었다\.$/,        // 부정적 종결 (불안감)
+    /못했다\.$/,
+    /몰랐다\.$/,
+    /않았다\.$/,
+    /있었다\.$/,        // 존재/발견 종결
+    /보였다\.$/,
+    /들렸다\.$/,
+    /열렸다\.$/,
+    /닫혔다\.$/,
   ];
   const hasHook = hookPatterns.some((p) => p.test(lastPara));
 

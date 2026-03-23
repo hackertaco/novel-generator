@@ -43,7 +43,7 @@ export interface PacingResult {
 }
 
 const TARGET_MIN = 3000;
-const TARGET_MAX = 5000;
+const TARGET_MAX = 7000;
 const OPTIMAL_CHARS_PER_SCENE_MIN = 1500;
 const OPTIMAL_CHARS_PER_SCENE_MAX = 2500;
 const DESCRIPTION_TARGET_MIN = 0.25;

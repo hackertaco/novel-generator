@@ -98,7 +98,7 @@ export function planBeats(scene: SceneSpec, seed: NovelSeed): Beat[] {
         });
         beats.push({
           type: "dialogue",
-          instruction: `대화가 핵심 정보를 전달하거나 갈등이 드러나는 2-3줄의 대사 교환. 씬의 목적을 달성하세요.\n씬 목적: ${scene.purpose}`,
+          instruction: `대화가 핵심 정보를 전달하거나 갈등이 드러나는 장면. 대사와 대사 사이에 반드시 행동/표정/감각 묘사를 넣으세요. 대사만 연속으로 나열하지 마세요.\n씬 목적: ${scene.purpose}`,
           characters: [mcName, ...otherNames],
           emotionalTarget: getEmotionalTarget(3, 5),
           microTension: "대화의 흐름 속에서 한 캐릭터가 상대의 약점이나 비밀에 가까이 다가가게 하세요",
