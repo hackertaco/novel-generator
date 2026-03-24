@@ -24,11 +24,20 @@ export const PlotArcSchema = z.object({
 
 export type PlotArc = z.infer<typeof PlotArcSchema>;
 
+export const StoryThreadSchema = z.object({
+  id: z.string().describe("Thread ID (e.g., 'main', 'romance', 'conspiracy')"),
+  name: z.string().describe("Thread name (e.g., '암살 누명 벗기', '라시드와의 관계')"),
+  type: z.enum(["main", "sub"]).default("sub").describe("Main thread or sub thread"),
+  description: z.string().default("").describe("What this thread is about"),
+});
+export type StoryThread = z.infer<typeof StoryThreadSchema>;
+
 export const ChapterOutlineSchema = z.object({
   chapter_number: z.number().int(),
   title: z.string(),
   arc_id: z.string(),
   one_liner: z.string().describe("One sentence description"),
+  advances_thread: z.array(z.string()).default([]).describe("Which story_threads this chapter advances (IDs)"),
   key_points: z.array(z.string()).default([]).describe("Key plot points"),
   characters_involved: z.array(z.string()).default([]),
   tension_level: z
@@ -132,6 +141,9 @@ export const NovelSeedSchema = z.object({
 
   // Characters (fixed, never compressed)
   characters: z.array(CharacterSchema).default([]),
+
+  // Story threads (main plot + sub plots)
+  story_threads: z.array(StoryThreadSchema).default([]).describe("메인 스레드 + 서브 스레드. 각 화는 최소 1개 스레드를 진전시켜야 함"),
 
   // Plot structure
   arcs: z.array(PlotArcSchema).default([]),

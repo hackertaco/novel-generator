@@ -78,11 +78,26 @@ arcs:
     climax_chapter: 20
     theme: "아크의 주제"
 
+story_threads:
+  - id: "main"
+    name: "메인 스토리 (예: 암살 누명 벗기)"
+    type: "main"
+    description: "이 소설의 핵심 줄거리. 모든 화는 직간접적으로 이 스레드와 연결되어야 함"
+  - id: "romance"
+    name: "로맨스 (예: 라시드와의 관계)"
+    type: "sub"
+    description: "서브 스레드. 메인 스레드를 보조하며 감정적 깊이를 더함"
+  - id: "conspiracy"
+    name: "음모 (예: 황후의 비밀)"
+    type: "sub"
+    description: "서브 스레드. 메인 스레드에 복잡성과 긴장감을 더함"
+
 chapter_outlines:
   - chapter_number: 1
     title: "1화 제목"
     arc_id: "arc_1"
     one_liner: "한 줄 설명"
+    advances_thread: ["main"]
     key_points:
       - "포인트 1"
     characters_involved:
@@ -121,6 +136,13 @@ style:
 \`\`\`
 
 주의사항:
+0. **스토리 스레드 (가장 중요!)**:
+   - story_threads에 메인 스레드 1개 + 서브 스레드 2~3개를 정의하세요.
+   - 메인 스레드: 이 소설의 핵심 줄거리 (예: "암살 누명을 벗고 진범을 찾는다")
+   - 서브 스레드: 메인을 보조하는 줄거리 (예: "로맨스", "음모 추적", "가족 갈등")
+   - **chapter_outlines의 advances_thread**: 매 화가 어떤 스레드를 진전시키는지 명시. 최소 1개.
+   - 메인 스레드는 매 3화마다 최소 1번 진전되어야 합니다.
+   - 각 화의 one_liner는 "이 화에서 어떤 스레드가 어떻게 진전되는지"를 담아야 합니다.
 1. 캐릭터는 첫 60화에 등장할 **핵심 인물 8~12명**을 정의. 주인공, 상대역, 조력자 2~3명, 적대자 2명, 멘토 1명, 서브 캐릭터 2~3명. 각 캐릭터의 대사 예시는 성격이 명확히 드러나도록. introduction_chapter를 1~30 사이에 분산시킬 것.
    **gender 필드 필수**: 모든 캐릭터에 gender("male"/"female"/"other")를 명시하세요. 이 값이 대명사(그/그녀)와 호칭(공작/공작부인, 기사/여기사)을 결정합니다.
 2. **캐릭터 등장 페이싱 (매우 중요)**: introduction_chapter를 반드시 분산시킬 것!

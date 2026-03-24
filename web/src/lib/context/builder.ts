@@ -145,9 +145,16 @@ ${currentArc.summary}
     // Limit key_points for early chapters (but allow enough for pacing)
     const maxPoints = chapterNum <= 2 ? 3 : outline.key_points.length;
     const points = outline.key_points.slice(0, maxPoints);
+    // Story threads this chapter advances
+    const threadIds = outline.advances_thread || [];
+    const threads = threadIds
+      .map((tid: string) => seed.story_threads?.find((t: { id: string; name: string }) => t.id === tid))
+      .filter(Boolean)
+      .map((t: { id: string; name: string; type?: string }) => `${t.type === "main" ? "🔴 메인" : "🔵 서브"}: ${t.name}`);
+
     parts.push(`# ${chapterNum}화 아웃라인
 제목: ${outline.title}
-핵심: ${outline.one_liner}
+핵심: ${outline.one_liner}${threads.length > 0 ? `\n이번 화가 진전시키는 스토리 라인:\n${threads.map((t: string) => `- ${t}`).join("\n")}` : ""}
 포인트:
 ${points.map((p) => `- ${p}`).join("\n")}
 긴장도: ${outline.tension_level}/10
