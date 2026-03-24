@@ -179,7 +179,7 @@ export class LLMAgent {
   async callStructured<T>(
     options: StructuredCallOptions<T>
   ): Promise<AgentCallResult<T>> {
-    const maxRetries = options.retryCount ?? 3;
+    const maxRetries = options.retryCount ?? 4;
     const attempts: Array<{ error: string; response?: string }> = [];
     let totalUsage: TokenUsage = {
       prompt_tokens: 0,

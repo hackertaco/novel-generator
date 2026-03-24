@@ -19,6 +19,9 @@ export function sanitize(text: string): string {
   // Remove LLM meta commentary that leaks into novel text
   result = result.replace(/^.*(수정본|정리했습니다|교정[된하]|다듬[었어]|윤문[했된]|아래는.*본문).{0,30}$/gm, "");
 
+  // Remove scene meta markers from bridge stitching
+  result = result.replace(/^(수정된\s*)?씬\s*\d+\s*(시작부분|끝부분|연결부분).*$/gm, "");
+
   // Remove editorial headers: "## 교정 결과", "### 수정 사항" etc.
   result = result.replace(/^#{1,3}\s*(교정|수정|편집|윤문|개선).*$/gm, "");
 
