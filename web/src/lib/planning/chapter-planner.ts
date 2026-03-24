@@ -35,7 +35,7 @@ export async function generateChapterBlueprints(
     prompt,
     system: "당신은 한국 웹소설 화별 구성을 설계하는 전문가입니다. JSON 형식으로 출력하세요.",
     temperature: 0.6,
-    maxTokens: 12000,
+    maxTokens: 16000,
     schema: ChapterBlueprintResponseSchema,
     format: "json",
     taskId: `chapter-blueprints-${arc.id}`,
