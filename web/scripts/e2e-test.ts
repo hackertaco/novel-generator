@@ -28,7 +28,8 @@ for (const line of envFile.split("\n")) {
 import * as path from "path";
 
 // Evaluators (deterministic, no LLM cost)
-import { sanitize, detectEndingRepeat, detectSentenceStartRepeat, detectShortDialogueSequence } from "../src/lib/agents/rule-guard";
+import { sanitize, fixEndingRepeat, detectEndingRepeat, detectSentenceStartRepeat, detectShortDialogueSequence } from "../src/lib/agents/rule-guard";
+import { runMathematicalChecks, type MathematicalCheckResults } from "../src/lib/evaluators/mathematical-checks";
 import { evaluateStyle } from "../src/lib/evaluators/style";
 import { evaluatePacing } from "../src/lib/evaluators/pacing";
 import type { NovelSeed } from "../src/lib/schema/novel";
@@ -321,13 +322,14 @@ interface ChapterEval {
   };
   pacing: Record<string, unknown> | null;
   style: Record<string, unknown> | null;
+  mathChecks: MathematicalCheckResults | null;
   overallScore: number;
   verdict: "PASS" | "WARN" | "FAIL";
 }
 
 function validateChapter(text: string, chapterNumber: number, seed: NovelSeed): ChapterEval {
-  // Rule Guard
-  const sanitized = sanitize(text);
+  // Rule Guard (apply fixEndingRepeat like the real pipeline does)
+  const sanitized = fixEndingRepeat(sanitize(text));
   const sanitizedDiff = text.length - sanitized.length;
   const endingIssues = detectEndingRepeat(sanitized);
   const sentenceStartIssues = detectSentenceStartRepeat(sanitized);
@@ -346,11 +348,18 @@ function validateChapter(text: string, chapterNumber: number, seed: NovelSeed): 
     styleResult = evaluateStyle(sanitized, seed.style) as unknown as Record<string, unknown>;
   } catch { /* evaluator may not exist or throw */ }
 
-  // Score
+  // Mathematical checks
+  let mathChecks: MathematicalCheckResults | null = null;
+  try {
+    mathChecks = runMathematicalChecks(sanitized);
+  } catch { /* evaluator may throw */ }
+
+  // Score (now includes math checks)
   const ruleGuardPenalty = Math.max(0, 1.0 - allIssues.length * 0.1);
   const pacingScore = (pacingResult as { overall?: number })?.overall ?? 0.7;
   const styleScore = (styleResult as { overall_score?: number })?.overall_score ?? 0.7;
-  const overallScore = ruleGuardPenalty * 0.3 + pacingScore * 0.35 + styleScore * 0.35;
+  const mathScore = mathChecks?.overallScore ?? 0.7;
+  const overallScore = ruleGuardPenalty * 0.2 + pacingScore * 0.25 + styleScore * 0.25 + mathScore * 0.3;
 
   const criticalCount = allIssues.filter((i) => (i as { severity?: string }).severity === "critical").length;
   const verdict = criticalCount > 0 || overallScore < 0.5 ? "FAIL"
@@ -369,6 +378,7 @@ function validateChapter(text: string, chapterNumber: number, seed: NovelSeed): 
     },
     pacing: pacingResult,
     style: styleResult,
+    mathChecks,
     overallScore: Math.round(overallScore * 100) / 100,
     verdict,
   };
@@ -434,6 +444,10 @@ function generateReport(
     console.log(`    RuleGuard:  ending=${ev.ruleGuard.endingRepeat} start=${ev.ruleGuard.sentenceStartRepeat} dialogue=${ev.ruleGuard.shortDialogueSequence}`);
     if (ev.ruleGuard.sanitizedDiff > 0) console.log(`    Sanitized:  ${ev.ruleGuard.sanitizedDiff}자 제거됨`);
     if (ch) console.log(`    Cost:       $${ch.usage.cost_usd.toFixed(4)}, ${(ch.durationMs / 1000).toFixed(1)}s`);
+    if (ev.mathChecks) {
+      const mc = ev.mathChecks;
+      console.log(`    Math:       info=${mc.informationDensity.score.toFixed(2)}(tell:${mc.informationDensity.tellMarkerCount}) loop=${mc.loopDetection.score.toFixed(2)}(${mc.loopDetection.loopPairs.length}) dialogue=${mc.dialogueInfo.score.toFixed(2)}(${mc.dialogueInfo.informativeLines}/${mc.dialogueInfo.totalLines}) H=${mc.sentimentArc.hurstExponent}(${mc.sentimentArc.hurstScore.toFixed(2)})`);
+    }
     for (const issue of ev.ruleGuard.issues) {
       console.log(`    [${issue.type}] ${issue.detail}`);
     }
