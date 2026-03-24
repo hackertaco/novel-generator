@@ -502,6 +502,18 @@ export class NovelHarness {
       yield { type: "plan_generated", plan: this.masterPlan };
     }
 
+    // Generate story threads if missing (separate lightweight call)
+    if (!seed.story_threads || seed.story_threads.length === 0) {
+      try {
+        const { generateStoryThreads } = require("../planning/thread-generator");
+        const threadResult = await generateStoryThreads(seed);
+        seed.story_threads = threadResult.threads;
+        // advances_thread is applied to outlines inside generateStoryThreads
+      } catch (err) {
+        console.warn("[harness] story_threads 생성 실패, 스킵:", err instanceof Error ? err.message : err);
+      }
+    }
+
     // Plausibility check — only when generating a fresh plan (not on continuation)
     if (!options?.masterPlan) {
       try {
