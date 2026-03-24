@@ -10,6 +10,12 @@
  * - characterVoice (음성 일관성) → speech pattern matching
  *
  * The remaining 2 (narrative, immersion) still need LLM judgment.
+ *
+ * References:
+ * - engagement dimension inspired by Korean web novel analytics
+ *   (카카오페이지/문피아 연독률 패턴, 고구마-사이다 밸런스)
+ * - Ely et al. 2015: "Suspense and Surprise" (JPE) — tension/relief cycle
+ * - Reagan et al. 2016: emotional arc shapes (EPJ Data Science)
  */
 
 import type { NovelSeed } from "../schema/novel";
