@@ -111,8 +111,19 @@ ${seed.arcs.map((a) => `- ${a.name} (${a.start_chapter}~${a.end_chapter}화): ${
 ## 복선
 ${seed.foreshadowing.map((f) => `- ${f.name}: ${f.description} (심기:${f.planted_at}, 회수:${f.reveal_at})`).join("\n")}
 
-## 초반 챕터 아웃라인
-${seed.chapter_outlines.slice(0, 5).map((o) => `- ${o.chapter_number}화: ${o.one_liner}`).join("\n")}`;
+## 초반 챕터 아웃라인 (what/why)
+${seed.chapter_outlines.slice(0, 10).map((o) => {
+    const points = o.key_points.map((p) => {
+      if (typeof p === "string") return p;
+      return `${p.what}${p.why ? ` (이유: ${p.why})` : " (⚠ 이유 없음!)"}`;
+    }).join("; ");
+    return `- ${o.chapter_number}화: ${o.one_liner}${points ? `\n  포인트: ${points}` : ""}`;
+  }).join("\n")}
+
+## 개연성 특별 체크 (매우 중요!)
+- 각 챕터의 key_points에서 "이유(why)"가 비어있으면 → **critical 이슈**로 보고하세요. 사건에 이유가 없으면 개연성이 없는 것입니다.
+- 특히 "왜 이런 극단적 결정을 하는가?"에 답이 없으면 반드시 지적하세요. (예: 왜 독살 용의자를 결혼시키는가? 왜 도망치지 않는가?)
+- 사건의 이유가 있더라도, 그 이유가 말이 되는지 검증하세요.`;
 
   try {
     const result = await agent.callStructured({
