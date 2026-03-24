@@ -84,7 +84,13 @@ chapter_outlines:
     arc_id: "arc_1"
     one_liner: "한 줄 설명"
     key_points:
-      - "포인트 1"
+      - what: "무슨 일이 일어나는가"
+        why: "왜 그런 일이 일어나는가 (인물의 동기/상황의 원인)"
+        reveal: "immediate"
+      - what: "숨기고 싶은 사건"
+        why: "나중에 밝혀질 이유"
+        reveal: "delayed"
+        reveal_at: 5
     characters_involved:
       - "mc"
     tension_level: 5

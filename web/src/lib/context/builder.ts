@@ -16,6 +16,25 @@ function getHonorificHint(char: { backstory?: string; role?: string }): string {
   return "";
 }
 
+/**
+ * Format a PlotPoint (string or {what, why, reveal}) for writer context.
+ * - immediate: show what + why to writer
+ * - delayed: show what only, hide why (writer should hint, not explain)
+ * - implicit: show what only with "독자가 추론하도록 힌트만" note
+ */
+function formatPlotPoint(point: string | { what: string; why?: string; reveal?: string }): string {
+  if (typeof point === "string") return `- ${point}`;
+  const { what, why, reveal } = point;
+  if (reveal === "delayed") {
+    return `- ${what} (⚠ 이유는 아직 밝히지 마세요. 독자에게 의문만 남기세요.)`;
+  }
+  if (reveal === "implicit") {
+    return `- ${what} (이유를 직접 말하지 말고 힌트만 주세요: ${why || ""})`;
+  }
+  // immediate (default)
+  return why ? `- ${what} — 이유: ${why} (독자에게 명확히 설명하세요)` : `- ${what}`;
+}
+
 export interface ChapterContext {
   novelInfo: string;
   currentArc: string;
@@ -168,7 +187,7 @@ ${currentArc.summary}
 제목: ${outline.title}
 핵심: ${outline.one_liner}${threads.length > 0 ? `\n이번 화가 진전시키는 스토리 라인:\n${threads.map((t: string) => `- ${t}`).join("\n")}${relationHints.length > 0 ? `\n스레드 간 관계:\n${relationHints.map((h) => `- ${h}`).join("\n")}` : ""}` : ""}
 포인트:
-${points.map((p) => `- ${p}`).join("\n")}
+${points.map((p) => formatPlotPoint(p)).join("\n")}
 긴장도: ${outline.tension_level}/10
 `);
   }

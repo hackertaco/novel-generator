@@ -41,13 +41,25 @@ export const StoryThreadSchema = z.object({
 });
 export type StoryThread = z.infer<typeof StoryThreadSchema>;
 
+export const PlotPointSchema = z.union([
+  z.string(), // backward compat: plain string
+  z.object({
+    what: z.string().describe("무슨 일이 일어나는가"),
+    why: z.string().default("").describe("왜 그런 일이 일어나는가 (내부 동기/원인)"),
+    reveal: z.enum(["immediate", "delayed", "implicit"]).default("immediate").describe(
+      "immediate: 독자에게 바로 설명. delayed: 숨기고 나중에 밝힘 (서스펜스). implicit: 힌트만 주고 추론하게 함"
+    ),
+    reveal_at: z.number().int().optional().describe("delayed일 때, 몇 화에서 밝히는지"),
+  }),
+]);
+
 export const ChapterOutlineSchema = z.object({
   chapter_number: z.number().int(),
   title: z.string(),
   arc_id: z.string(),
   one_liner: z.string().describe("One sentence description"),
   advances_thread: z.array(z.string()).default([]).describe("Which story_threads this chapter advances (IDs)"),
-  key_points: z.array(z.string()).default([]).describe("Key plot points"),
+  key_points: z.array(PlotPointSchema).default([]).describe("Key plot points with what/why/reveal timing"),
   characters_involved: z.array(z.string()).default([]),
   tension_level: z
     .number()

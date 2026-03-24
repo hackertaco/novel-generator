@@ -302,7 +302,10 @@ ${arc.start_chapter}화부터 ${Math.min(arc.start_chapter + 4, arc.end_chapter)
       ],
       "dependencies": [],
       "emotional_arc": "긴장→진지→충격",
-      "key_points": ["던전 진입", "전략 수립"],
+      "key_points": [
+        {"what": "준혁이 던전에 진입한다", "why": "마나 감지기 이상을 직접 확인하기 위해", "reveal": "immediate"},
+        {"what": "서연이 3년 전 데이터와 일치한다고 경고", "why": "서울역 붕괴 패턴과 동일 — 이 사실은 아직 공개하면 안 됨", "reveal": "delayed", "reveal_at": 5}
+      ],
       "characters_involved": ["mc", "companion_1"],
       "tension_level": 5,
       "foreshadowing_actions": [{"id": "fs_1", "action": "plant"}]
