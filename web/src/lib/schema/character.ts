@@ -78,6 +78,10 @@ export const CharacterSchema = z.object({
     .enum(["male", "female", "other"])
     .optional()
     .describe("Character gender — controls pronouns (그/그녀) and honorifics. Defaults to 'male' if omitted."),
+  social_rank: z
+    .enum(["royal", "noble", "gentry", "commoner", "servant", "slave", "outcast"])
+    .default("commoner")
+    .describe("사회적 신분 — 대화/행동 제약을 결정. royal: 왕족, noble: 귀족, gentry: 사대부/기사, commoner: 평민, servant: 하인/시녀, slave: 노예, outcast: 추방자"),
   introduction_chapter: z
     .preprocess((v) => {
       if (typeof v === "number") return v;

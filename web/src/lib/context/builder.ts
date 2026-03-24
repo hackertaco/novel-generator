@@ -5,6 +5,31 @@ import { shouldAct } from "../schema/foreshadowing";
 import { selectRelevantContext } from "./relevance";
 import { trimToFit, estimateTokens } from "./token-estimator";
 
+const RANK_ORDER = ["royal", "noble", "gentry", "commoner", "servant", "slave", "outcast"];
+const RANK_LABEL: Record<string, string> = {
+  royal: "왕족", noble: "귀족", gentry: "사대부/기사", commoner: "평민",
+  servant: "하인/시녀", slave: "노예", outcast: "추방자",
+};
+
+/** Build social rank interaction pairs for characters in a chapter */
+function buildRankPairs(chars: Array<{ name: string; social_rank?: string }>): string[] {
+  const ranked = chars.filter((c) => c.social_rank);
+  const pairs: string[] = [];
+  for (let i = 0; i < ranked.length; i++) {
+    for (let j = i + 1; j < ranked.length; j++) {
+      const a = ranked[i], b = ranked[j];
+      const ra = RANK_ORDER.indexOf(a.social_rank || "commoner");
+      const rb = RANK_ORDER.indexOf(b.social_rank || "commoner");
+      if (ra !== rb) {
+        const higher = ra < rb ? a : b;
+        const lower = ra < rb ? b : a;
+        pairs.push(`${lower.name}(${RANK_LABEL[lower.social_rank!] || lower.social_rank}) → ${higher.name}(${RANK_LABEL[higher.social_rank!] || higher.social_rank}): 존대`);
+      }
+    }
+  }
+  return pairs;
+}
+
 /** Infer honorific hint from character backstory/role */
 function getHonorificHint(char: { backstory?: string; role?: string }): string {
   const bs = (char.backstory || "") + " " + (char.role || "");
@@ -203,7 +228,7 @@ ${points.map((p) => formatPlotPoint(p)).join("\n")}
     for (const char of charsInChapter) {
       if (!char) continue;
       parts.push(`
-## ${char.name} (${char.role})
+## ${char.name} (${char.role}${char.social_rank ? ` / ${char.social_rank}` : ""})
 톤: ${char.voice.tone}
 말투: ${char.voice.speech_patterns.join(", ")}${getHonorificHint(char)}
 예시 대사:
@@ -214,6 +239,12 @@ ${char.voice.sample_dialogues
 `);
     }
   }
+    // Rank-based interaction hints (data only)
+    const validChars = charsInChapter.filter((c): c is NonNullable<typeof c> => !!c);
+    const rankPairs = buildRankPairs(validChars);
+    if (rankPairs.length > 0) {
+      parts.push(`# 신분 관계\n${rankPairs.join("\n")}\n`);
+    }
 
   // Characters NOT allowed yet — explicit prohibition
   const forbiddenChars = seed.characters
@@ -467,7 +498,7 @@ ${currentArc.summary}
     for (const char of charsInChapter) {
       if (!char) continue;
       parts.push(`
-## ${char.name} (${char.role})
+## ${char.name} (${char.role}${char.social_rank ? ` / ${char.social_rank}` : ""})
 톤: ${char.voice.tone}
 말투: ${char.voice.speech_patterns.join(", ")}${getHonorificHint(char)}
 예시 대사:
