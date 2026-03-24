@@ -127,6 +127,45 @@ export function fixEndingRepeat(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// DeduplicateSentences — remove repeated sentences within/across paragraphs
+// ---------------------------------------------------------------------------
+
+/**
+ * Remove duplicate sentences that appear within the same chapter.
+ * This catches bridge-stitching artifacts where the same sentence
+ * appears twice in adjacent paragraphs or within the same paragraph.
+ */
+export function deduplicateSentences(text: string): string {
+  const paragraphs = text.split("\n\n");
+  const seenSentences = new Set<string>();
+  const result: string[] = [];
+
+  for (const para of paragraphs) {
+    const sentences = para
+      .split(/(?<=[.!?])\s+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    const uniqueSentences: string[] = [];
+    for (const sent of sentences) {
+      // Use first 30 chars as fingerprint (handles minor trailing differences)
+      const fp = sent.slice(0, 30);
+      if (fp.length >= 15 && seenSentences.has(fp)) {
+        continue; // skip duplicate
+      }
+      seenSentences.add(fp);
+      uniqueSentences.push(sent);
+    }
+
+    if (uniqueSentences.length > 0) {
+      result.push(uniqueSentences.join(" "));
+    }
+  }
+
+  return result.join("\n\n");
+}
+
+// ---------------------------------------------------------------------------
 // Sentence splitting helper
 // ---------------------------------------------------------------------------
 
@@ -328,6 +367,7 @@ export class RuleGuardAgent implements PipelineAgent {
 
     ctx.text = sanitize(ctx.text);
     ctx.text = deduplicateParagraphs(ctx.text);
+    ctx.text = deduplicateSentences(ctx.text);
     ctx.text = fixEndingRepeat(ctx.text);
     ctx.ruleIssues = [
       ...detectEndingRepeat(ctx.text),
