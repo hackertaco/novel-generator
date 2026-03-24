@@ -322,6 +322,47 @@ export class RuleGuardAgent implements PipelineAgent {
       ...detectEndingRepeat(ctx.text),
       ...detectSentenceStartRepeat(ctx.text),
       ...detectShortDialogueSequence(ctx.text),
+      ...detectMissingInformation(ctx.text, ctx.blueprint),
     ];
   }
+}
+
+// ---------------------------------------------------------------------------
+// DetectMissingInformation — check must_reveal facts against actual text
+// ---------------------------------------------------------------------------
+
+/**
+ * Check if blueprint's must_reveal facts actually appear in the written text.
+ * Uses keyword extraction from each fact and checks presence in text.
+ */
+function detectMissingInformation(
+  text: string,
+  blueprint?: { scenes: Array<{ must_reveal?: string[] }> },
+): RuleIssue[] {
+  if (!blueprint || !blueprint.scenes) return [];
+
+  const issues: RuleIssue[] = [];
+  const normalizedText = text.replace(/\s+/g, " ").toLowerCase();
+
+  for (const scene of blueprint.scenes) {
+    if (!scene.must_reveal) continue;
+    for (const fact of scene.must_reveal) {
+      // Extract meaningful keywords (3+ char Korean words) from the fact
+      const keywords = fact.match(/[가-힣]{3,}/g) || [];
+      if (keywords.length === 0) continue;
+
+      // Check if at least half the keywords appear in text
+      const found = keywords.filter((kw) => normalizedText.includes(kw.toLowerCase()));
+      if (found.length < Math.ceil(keywords.length * 0.5)) {
+        issues.push({
+          type: "consistency" as const,
+          position: 0,
+          detail: `[정보 누락] 블루프린트에서 요구한 팩트가 본문에 없습니다: "${fact}" (키워드 ${found.length}/${keywords.length} 매칭)`,
+          severity: "warning",
+        });
+      }
+    }
+  }
+
+  return issues;
 }

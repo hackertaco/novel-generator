@@ -300,13 +300,18 @@ ${lastSummary.summary.slice(0, 300)}
       ? `\n## 서사 스레드 힌트\n${extras.threadReminders.map((r) => `- ${r}`).join("\n")}\n`
       : "";
 
+  // Must-reveal facts — these MUST appear in the scene text
+  const mustRevealSection = scene.must_reveal && scene.must_reveal.length > 0
+    ? `\n**⚠️ 반드시 전달할 정보** (이 팩트들이 독자에게 명확히 전달되어야 합니다):\n${scene.must_reveal.map((r: string) => `- ${r}`).join("\n")}\n→ 감각 묘사로 암시하지 말고, 서술이나 대사로 명확하게 전달하세요.\n`
+    : "";
+
   parts.push(`# ${sceneLabel} 지시
 
 **목적**: ${scene.purpose}
 **유형**: ${scene.type}
 **감정톤**: ${scene.emotional_tone}
 **목표 분량**: ${scene.estimated_chars}자
-${correctionRule}
+${mustRevealSection}${correctionRule}
 ## 작성 규칙
 1. 이 씬의 목적에만 집중하세요. 다른 사건을 끌어오지 마세요.
 2. 대사를 충분히 넣으세요 (전체의 30% 이상). 캐릭터 목소리가 들려야 합니다.

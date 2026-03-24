@@ -28,6 +28,7 @@ export const SceneSpecSchema = z.object({
   characters: z.array(z.string()).default([]).describe("Character IDs in scene"),
   estimated_chars: z.number().int().default(1000).describe("Estimated character count"),
   emotional_tone: z.string().default("neutral").describe("Emotional tone of scene"),
+  must_reveal: z.array(z.string()).default([]).describe("독자가 이 씬에서 반드시 알게 되어야 할 구체적 팩트 (예: '사형 서류에 서명이 누락됨', '범인은 북회랑에 있었음')"),
 });
 export type SceneSpec = z.infer<typeof SceneSpecSchema>;
 
