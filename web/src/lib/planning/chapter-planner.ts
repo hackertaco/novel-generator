@@ -75,6 +75,34 @@ export async function generateChapterBlueprints(
       const seedChar = seed.characters.find((c) => c.id === charId);
       return !seedChar || bp.chapter_number >= seedChar.introduction_chapter;
     });
+
+    // Flow key_points.why → scene must_reveal (connect planning layers)
+    const outline = seed.chapter_outlines.find((o) => o.chapter_number === bp.chapter_number);
+    if (outline && outline.key_points.length > 0) {
+      const reveals: string[] = [];
+      for (const point of outline.key_points) {
+        if (typeof point === "string") {
+          reveals.push(point);
+        } else {
+          // Structured PlotPoint: flow "what" to must_reveal
+          // For "immediate", also flow "why"
+          reveals.push(point.what);
+          if (point.reveal === "immediate" && point.why) {
+            reveals.push(point.why);
+          }
+        }
+      }
+      // Distribute reveals across scenes (first scene gets most)
+      if (bp.scenes.length > 0 && reveals.length > 0) {
+        for (let si = 0; si < bp.scenes.length; si++) {
+          if (!bp.scenes[si].must_reveal) bp.scenes[si].must_reveal = [];
+        }
+        for (let ri = 0; ri < reveals.length; ri++) {
+          const targetScene = Math.min(ri, bp.scenes.length - 1);
+          bp.scenes[targetScene].must_reveal!.push(reveals[ri]);
+        }
+      }
+    }
   }
 
   return { data: result.data.chapter_blueprints, usage: result.usage };
