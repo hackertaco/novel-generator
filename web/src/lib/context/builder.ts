@@ -147,14 +147,26 @@ ${currentArc.summary}
     const points = outline.key_points.slice(0, maxPoints);
     // Story threads this chapter advances
     const threadIds = outline.advances_thread || [];
-    const threads = threadIds
-      .map((tid: string) => seed.story_threads?.find((t: { id: string; name: string }) => t.id === tid))
-      .filter(Boolean)
-      .map((t: { id: string; name: string; type?: string }) => `${t.type === "main" ? "🔴 메인" : "🔵 서브"}: ${t.name}`);
+    const threadObjects = threadIds
+      .map((tid: string) => seed.story_threads?.find((t: { id: string }) => t.id === tid))
+      .filter(Boolean) as Array<{ id: string; name: string; type?: string; relations?: Array<{ target: string; relation: string; description: string }> }>;
+    const threads = threadObjects.map((t) => `${t.type === "main" ? "🔴 메인" : "🔵 서브"}: ${t.name}`);
+
+    // Show thread relations for context
+    const relationHints: string[] = [];
+    for (const t of threadObjects) {
+      if (!t.relations) continue;
+      for (const rel of t.relations) {
+        const targetThread = seed.story_threads?.find((st: { id: string }) => st.id === rel.target);
+        if (!targetThread) continue;
+        const relLabel = rel.relation === "feeds_into" ? "→ 도움" : rel.relation === "conflicts_with" ? "⚡ 충돌" : rel.relation === "blocked_by" ? "🔒 의존" : "💡 드러냄";
+        relationHints.push(`${t.name} ${relLabel} ${(targetThread as { name: string }).name}: ${rel.description}`);
+      }
+    }
 
     parts.push(`# ${chapterNum}화 아웃라인
 제목: ${outline.title}
-핵심: ${outline.one_liner}${threads.length > 0 ? `\n이번 화가 진전시키는 스토리 라인:\n${threads.map((t: string) => `- ${t}`).join("\n")}` : ""}
+핵심: ${outline.one_liner}${threads.length > 0 ? `\n이번 화가 진전시키는 스토리 라인:\n${threads.map((t: string) => `- ${t}`).join("\n")}${relationHints.length > 0 ? `\n스레드 간 관계:\n${relationHints.map((h) => `- ${h}`).join("\n")}` : ""}` : ""}
 포인트:
 ${points.map((p) => `- ${p}`).join("\n")}
 긴장도: ${outline.tension_level}/10

@@ -82,15 +82,27 @@ story_threads:
   - id: "main"
     name: "메인 스토리 (예: 암살 누명 벗기)"
     type: "main"
-    description: "이 소설의 핵심 줄거리. 모든 화는 직간접적으로 이 스레드와 연결되어야 함"
+    description: "이 소설의 핵심 줄거리"
+    relations: []
   - id: "romance"
     name: "로맨스 (예: 라시드와의 관계)"
     type: "sub"
-    description: "서브 스레드. 메인 스레드를 보조하며 감정적 깊이를 더함"
+    description: "감정적 깊이를 더하는 서브 스레드"
+    relations:
+      - target: "main"
+        relation: "conflicts_with"
+        description: "감정이 깊어질수록 정치적 판단이 흔들림"
   - id: "conspiracy"
     name: "음모 (예: 황후의 비밀)"
     type: "sub"
-    description: "서브 스레드. 메인 스레드에 복잡성과 긴장감을 더함"
+    description: "복잡성과 긴장감을 더하는 서브 스레드"
+    relations:
+      - target: "main"
+        relation: "feeds_into"
+        description: "음모의 증거가 누명을 벗는 핵심 반증이 됨"
+      - target: "romance"
+        relation: "reveals"
+        description: "음모를 파헤치면서 상대의 진심을 알게 됨"
 
 chapter_outlines:
   - chapter_number: 1

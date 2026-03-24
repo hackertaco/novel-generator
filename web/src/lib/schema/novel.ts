@@ -24,11 +24,20 @@ export const PlotArcSchema = z.object({
 
 export type PlotArc = z.infer<typeof PlotArcSchema>;
 
+export const ThreadRelationSchema = z.object({
+  target: z.string().describe("Target thread ID"),
+  relation: z.enum(["feeds_into", "conflicts_with", "blocked_by", "reveals"]).describe(
+    "feeds_into: 이 스레드의 진전이 타겟을 도움. conflicts_with: 이 스레드가 타겟과 충돌. blocked_by: 타겟이 풀려야 이 스레드도 진전. reveals: 이 스레드가 타겟의 숨겨진 면을 드러냄"
+  ),
+  description: z.string().default("").describe("구체적 연결 (예: '음모 증거가 누명의 핵심 반증이 됨')"),
+});
+
 export const StoryThreadSchema = z.object({
   id: z.string().describe("Thread ID (e.g., 'main', 'romance', 'conspiracy')"),
   name: z.string().describe("Thread name (e.g., '암살 누명 벗기', '라시드와의 관계')"),
   type: z.enum(["main", "sub"]).default("sub").describe("Main thread or sub thread"),
   description: z.string().default("").describe("What this thread is about"),
+  relations: z.array(ThreadRelationSchema).default([]).describe("이 스레드가 다른 스레드와 어떻게 연결되는지"),
 });
 export type StoryThread = z.infer<typeof StoryThreadSchema>;
 
