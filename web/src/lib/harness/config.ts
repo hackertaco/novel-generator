@@ -170,6 +170,8 @@ function lazyPipeline(): PipelineStepConfig[] {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { RuleGuardAgent } = require("../agents/rule-guard");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { SceneVerifierAgent } = require("../agents/scene-verifier");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { ConsistencyChecker } = require("../agents/consistency-checker");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { QualityLoop } = require("../agents/quality-loop");
@@ -179,6 +181,7 @@ function lazyPipeline(): PipelineStepConfig[] {
   return [
     { create: () => new WriterAgent(), enabled: true },
     { create: () => new RuleGuardAgent(), enabled: true },
+    { create: () => new SceneVerifierAgent(), enabled: true },
     { create: () => new ConsistencyChecker(), enabled: true },
     { create: () => new QualityLoop(), enabled: true },
     { create: () => new PolisherAgent(), enabled: true },
@@ -215,9 +218,9 @@ export function getBudgetConfig(name = "budget"): HarnessConfig {
 export function getFastConfig(name = "fast"): HarnessConfig {
   const pipeline = lazyPipeline();
   // Disable consistency checker, quality loop, polisher for speed
-  pipeline[2].enabled = false; // ConsistencyChecker
-  pipeline[3].enabled = false; // QualityLoop
-  pipeline[4].enabled = false; // Polisher
+  pipeline[3].enabled = false; // ConsistencyChecker
+  pipeline[4].enabled = false; // QualityLoop
+  pipeline[5].enabled = false; // Polisher
   return {
     ...getDefaultConfig(name),
     name,

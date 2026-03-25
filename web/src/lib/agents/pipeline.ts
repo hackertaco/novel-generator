@@ -21,7 +21,7 @@ export interface TrackingInjection {
 // --- Issue types ---
 
 export interface RuleIssue {
-  type: "ending_repeat" | "sentence_start_repeat" | "banned_expression" | "consistency" | "short_dialogue_sequence";
+  type: "ending_repeat" | "sentence_start_repeat" | "banned_expression" | "consistency" | "short_dialogue_sequence" | "speech_level_violation";
   severity?: "warning" | "error" | "critical";
   message?: string;
   position: number; // paragraph index (0-based)
@@ -68,6 +68,8 @@ export interface ChapterContext {
   trackingContext?: TrackingInjection;
   /** Last ~500 chars of the previous chapter's actual text */
   previousChapterEnding?: string;
+  /** Individual scene texts (preserved from scene-writer for downstream verification) */
+  sceneTexts?: string[];
   /** Skip beat-by-beat writing for speed */
   fastMode?: boolean;
   /** Generate scenes in parallel + bridge stitching (fastest) */

@@ -66,6 +66,7 @@ export class WriterAgent implements PipelineAgent {
         } : {}),
       });
 
+      ctx.sceneTexts = sceneResult.sceneTexts;
       ctx.totalUsage = accumulateUsage(ctx.totalUsage, sceneResult.usage);
       yield { type: "usage", ...sceneResult.usage };
 

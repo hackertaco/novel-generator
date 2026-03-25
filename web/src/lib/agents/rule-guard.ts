@@ -1,4 +1,6 @@
 import type { RuleIssue, ChapterContext, PipelineAgent, LifecycleEvent } from "@/lib/agents/pipeline";
+import { enforceLength, DEFAULT_TARGET_CHARS, DEFAULT_TOLERANCE } from "@/lib/agents/length-enforcer";
+import { enforceSpeechLevels } from "@/lib/evaluators/speech-level-enforcer";
 
 // ---------------------------------------------------------------------------
 // Sanitize — remove LLM meta markers from generated text
@@ -372,11 +374,39 @@ export class RuleGuardAgent implements PipelineAgent {
     ctx.text = deduplicateParagraphs(ctx.text);
     ctx.text = deduplicateSentences(ctx.text);
     ctx.text = fixEndingRepeat(ctx.text);
+
+    // Speech level enforcement — fix Korean 화계 violations based on social_rank
+    const speechResult = enforceSpeechLevels(
+      ctx.text,
+      ctx.seed,
+      ctx.chapterNumber,
+      ctx.blueprint,
+    );
+    ctx.text = speechResult.text;
+
+    // Length enforcement — trim low-density paragraphs if too long
+    const mustRevealKeywords = ctx.blueprint?.scenes
+      ?.flatMap((s) => s.must_reveal ?? [])
+      .flatMap((fact) => fact.match(/[가-힣]{3,}/g) ?? []) ?? [];
+    const lengthResult = enforceLength(
+      ctx.text,
+      DEFAULT_TARGET_CHARS,
+      DEFAULT_TOLERANCE,
+      mustRevealKeywords,
+    );
+    ctx.text = lengthResult.text;
+
     ctx.ruleIssues = [
       ...detectEndingRepeat(ctx.text),
       ...detectSentenceStartRepeat(ctx.text),
       ...detectShortDialogueSequence(ctx.text),
       ...detectMissingInformation(ctx.text, ctx.blueprint),
+      ...speechResult.violations.map((v) => ({
+        type: "speech_level_violation" as const,
+        position: v.position,
+        detail: `[화계 위반] ${v.speaker}->${v.listener}: "${v.dialogueText.slice(0, 30)}..." 감지=${v.detectedLevel}, 기대=${v.expectedLevel}`,
+        severity: "warning" as const,
+      })),
     ];
   }
 }
