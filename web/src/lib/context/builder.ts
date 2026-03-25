@@ -160,6 +160,18 @@ export function buildChapterContext(
 장르: ${seed.world.genre} / ${seed.world.sub_genre}
 `);
 
+
+  // First chapter: reader needs world-building context
+  if (chapterNum === 1) {
+    const mcChar = seed.characters.find((c) => c.role === "주인공" || c.role === "protagonist");
+    parts.push(`# ⚠ 1화 도입 — 독자는 이 세계를 모릅니다
+주인공: ${mcChar ? mcChar.name + " — " + mcChar.backstory.slice(0, 100) : "미정"}
+배경: ${seed.world.time_period || ""}, ${seed.world.name || ""}
+
+초반 1~2문단에서 주인공의 이름/처지/상황을 독자에게 알려주세요.
+배경 없이 장면에 바로 던지지 마세요. 최소한의 맥락을 먼저 제공하세요.
+`);
+  }
   // Current arc (reduced info for early chapters)
   const currentArc = seed.arcs.find(
     (a) => a.start_chapter <= chapterNum && chapterNum <= a.end_chapter,
