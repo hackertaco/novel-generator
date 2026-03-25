@@ -24,8 +24,9 @@ export function sanitize(text: string): string {
   // Remove scene meta markers from bridge stitching and LLM output
   result = result.replace(/^#{0,3}\s*(수정된\s*)?씬\s*\d+\s*(시작부분|끝부분|연결부분|시작|끝)?.*$/gm, "");
 
-  // Remove LLM format acknowledgments
+  // Remove LLM format acknowledgments and meta markers
   result = result.replace(/^(출력은|결과물은|아래는|다음은).*?(형식|포맷|요청).*$/gm, "");
+  result = result.replace(/^\[(원문|계속|이어서|다음|원본)\]$/gm, "");
 
   // Remove editorial headers: "## 교정 결과", "### 수정 사항" etc.
   result = result.replace(/^#{1,3}\s*(교정|수정|편집|윤문|개선).*$/gm, "");
