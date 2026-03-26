@@ -22,6 +22,10 @@ import type { NovelSeed } from "../schema/novel";
 import type { ChapterBlueprint } from "../schema/planning";
 import { computeNarrativeInformationScores, type NarrativeInformationScores } from "./narrative-information-scorer";
 import { detectNarrativeLoop, measureDialogueInformation, analyzeSentimentArc } from "./mathematical-checks";
+import { measureCuriosityGap } from "./curiosity-gap";
+import { measureEmotionalImpact } from "./emotional-impact";
+import { measureOriginality } from "./originality";
+import { measurePageTurner } from "./page-turner";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -56,6 +60,14 @@ export interface DeterministicScores {
   dialogueQuality: number;
   /** 감정 아크 (0~1) — Hurst 지수 기반 감정 변동 패턴 */
   sentimentArc: number;
+  /** 호기심 갭 (0~1) — 열린 질문/미스터리 관리 */
+  curiosityGap: number;
+  /** 감정 낙차 (0~1) — 클라이맥스 감정 강도, 카타르시스 */
+  emotionalImpact: number;
+  /** 독창성 (0~1) — 클리셰 회피, 어휘 다양성 */
+  originality: number;
+  /** 페이지터너 (0~1) — 절단신공, 미해결 스레드, 정보 속도 */
+  pageTurner: number;
   /** 종합 (가중 평균) */
   overall: number;
   /** 상세 데이터 */
@@ -613,20 +625,28 @@ function scoreEngagement(
 // ---------------------------------------------------------------------------
 
 const WEIGHTS = {
-  rhythm: 0.07,
-  hookEnding: 0.07,
-  characterVoice: 0.09,
-  dialogueRatio: 0.03,
-  lengthScore: 0.03,
-  antiRepetition: 0.05,
-  sensoryDiversity: 0.03,
-  narrative: 0.11,
-  immersion: 0.09,
-  narrativeInformation: 0.15,
-  engagement: 0.13,
-  loopAvoidance: 0.05,
-  dialogueQuality: 0.05,
-  sentimentArc: 0.05,
+  // 구조/기법 (40%)
+  rhythm: 0.05,
+  hookEnding: 0.04,
+  characterVoice: 0.07,
+  dialogueRatio: 0.02,
+  lengthScore: 0.02,
+  antiRepetition: 0.04,
+  sensoryDiversity: 0.02,
+  narrative: 0.08,
+  immersion: 0.06,
+  // 정보이론 (20%)
+  narrativeInformation: 0.12,
+  engagement: 0.08,
+  // 수학적 검증 (12%)
+  loopAvoidance: 0.04,
+  dialogueQuality: 0.04,
+  sentimentArc: 0.04,
+  // 재미/감동/독창성/읽고싶은지 (28%) — NEW
+  curiosityGap: 0.07,
+  emotionalImpact: 0.07,
+  originality: 0.07,
+  pageTurner: 0.07,
 };
 
 export function computeDeterministicScores(
@@ -672,6 +692,20 @@ export function computeDeterministicScores(
     // Non-blocking: use defaults on failure
   }
 
+  // Fun/emotion/originality/page-turner (NEW — "재미있는 글" 측정)
+  let curiosityGapScore = 0.5;
+  let emotionalImpactScore = 0.5;
+  let originalityScore = 0.5;
+  let pageTurnerScore = 0.5;
+  try {
+    curiosityGapScore = measureCuriosityGap(text).score;
+    emotionalImpactScore = measureEmotionalImpact(text).score;
+    originalityScore = measureOriginality(text).score;
+    pageTurnerScore = measurePageTurner(text).score;
+  } catch {
+    // Non-blocking: use defaults on failure
+  }
+
   const scores = {
     rhythm: rhythmResult.score,
     hookEnding: hookResult.score,
@@ -687,6 +721,10 @@ export function computeDeterministicScores(
     loopAvoidance: loopAvoidanceScore,
     dialogueQuality: dialogueQualityScore,
     sentimentArc: sentimentArcScore,
+    curiosityGap: curiosityGapScore,
+    emotionalImpact: emotionalImpactScore,
+    originality: originalityScore,
+    pageTurner: pageTurnerScore,
   };
 
   const overall = Object.entries(WEIGHTS).reduce(

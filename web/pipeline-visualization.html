@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>Novel Generator Pipeline</title>
+<title>Novel Generator Pipeline (v2 - State Machine)</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background:#0a0a0a; color:#e0e0e0; font-family:-apple-system,'Pretendard',sans-serif; }
@@ -26,11 +26,23 @@ svg text { font-family:-apple-system,'Pretendard',sans-serif; }
 .tag-llm { background:#d9770622; color:#d97706; }
 .tag-code { background:#2563eb22; color:#60a5fa; }
 .tag-new { background:#e11d4822; color:#e11d48; }
+.tag-off { background:#55555522; color:#666; }
+.metrics-row { display:flex; gap:14px; justify-content:center; margin:0 auto 20px; flex-wrap:wrap; max-width:700px; }
+.metric-card { border:1px solid #222; border-radius:8px; padding:10px 16px; background:#111; text-align:center; min-width:100px; }
+.metric-card .value { font-size:20px; font-weight:700; color:#fff; }
+.metric-card .label { font-size:10px; color:#888; margin-top:2px; }
 </style>
 </head>
 <body>
 
-<h1>Novel Generator Pipeline</h1>
+<h1>Novel Generator Pipeline (v2 - State Machine)</h1>
+
+<div class="metrics-row">
+  <div class="metric-card"><div class="value" style="color:#22c55e">0.77</div><div class="label">Avg Score (2ch)</div></div>
+  <div class="metric-card"><div class="value" style="color:#60a5fa">$0.047</div><div class="label">Cost/ch (-66%)</div></div>
+  <div class="metric-card"><div class="value" style="color:#fbbf24">0</div><div class="label">RuleGuard Issues</div></div>
+  <div class="metric-card"><div class="value" style="color:#c084fc">3500</div><div class="label">Target (2800-4200)</div></div>
+</div>
 
 <div class="legend">
   <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div>UI</div>
@@ -38,18 +50,20 @@ svg text { font-family:-apple-system,'Pretendard',sans-serif; }
   <div class="legend-item"><div class="legend-dot" style="background:#d97706"></div>LLM</div>
   <div class="legend-item"><div class="legend-dot" style="background:#2563eb"></div>Code</div>
   <div class="legend-item"><div class="legend-dot" style="background:#e11d48"></div>NEW</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#555"></div>DISABLED</div>
 </div>
 
 <div class="tabs">
   <div class="tab active" onclick="switchTab('overview')">1. Overview</div>
-  <div class="tab" onclick="switchTab('chapter')">2. Chapter Gen</div>
+  <div class="tab" onclick="switchTab('statemachine')">2. State Machine</div>
   <div class="tab" onclick="switchTab('tracking')">3. Top-Down + Bottom-Up</div>
-  <div class="tab" onclick="switchTab('modules')">4. All Modules</div>
+  <div class="tab" onclick="switchTab('scorer')">4. Scorer (14D)</div>
+  <div class="tab" onclick="switchTab('modules')">5. All Modules</div>
 </div>
 
-<!-- ==================== TAB 1 ==================== -->
+<!-- ==================== TAB 1: OVERVIEW ==================== -->
 <div id="overview" class="view active">
-<svg viewBox="0 0 500 680" style="max-width:500px;margin:0 auto;display:block">
+<svg viewBox="0 0 500 720" style="max-width:500px;margin:0 auto;display:block">
   <defs>
     <marker id="a1" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#555"/></marker>
     <marker id="a1b" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#2563eb"/></marker>
@@ -78,136 +92,137 @@ svg text { font-family:-apple-system,'Pretendard',sans-serif; }
   <text x="250" y="268" text-anchor="middle" fill="#d97706" font-size="9">LLM x4 + Rule Eval</text>
   <line x1="250" y1="280" x2="250" y2="300" stroke="#555" marker-end="url(#a1)"/>
 
-  <!-- Step 4 -->
-  <rect x="100" y="300" width="300" height="64" rx="10" fill="#111" stroke="#05966944"/>
+  <!-- Step 4: Master Plan + Causal Graph -->
+  <rect x="100" y="300" width="300" height="80" rx="10" fill="#111" stroke="#05966944"/>
   <text x="250" y="322" text-anchor="middle" fill="#34d399" font-size="12" font-weight="700">4. /plan - POST /api/plan/master</text>
   <text x="250" y="340" text-anchor="middle" fill="#888" font-size="10">Parts / Arcs / Global Foreshadowing</text>
-  <text x="250" y="354" text-anchor="middle" fill="#d97706" font-size="9">LLM x1</text>
-  <line x1="250" y1="364" x2="250" y2="390" stroke="#2563eb" stroke-width="2" marker-end="url(#a1b)"/>
+  <text x="250" y="356" text-anchor="middle" fill="#e11d48" font-size="9" font-weight="600">+ Causal Graph Validation (NEW)</text>
+  <text x="250" y="370" text-anchor="middle" fill="#d97706" font-size="9">LLM x1 + plausibility + causal DAG check</text>
+  <line x1="250" y1="380" x2="250" y2="406" stroke="#2563eb" stroke-width="2" marker-end="url(#a1b)"/>
 
-  <!-- Step 5 -->
-  <rect x="80" y="390" width="340" height="100" rx="12" fill="#0d1117" stroke="#2563eb" stroke-width="2"/>
-  <text x="250" y="414" text-anchor="middle" fill="#60a5fa" font-size="13" font-weight="700">5. /reader - POST /api/orchestrate</text>
-  <text x="250" y="434" text-anchor="middle" fill="#888" font-size="10">Blueprint + Beat-by-beat writing (SSE)</text>
-  <text x="250" y="450" text-anchor="middle" fill="#888" font-size="10">4 Validators + Repair loop</text>
-  <text x="250" y="468" text-anchor="middle" fill="#e11d48" font-size="10" font-weight="600">+ NEW: Memory + Tracking + Feedback</text>
-  <text x="250" y="482" text-anchor="middle" fill="#666" font-size="9">Real-time SSE streaming to browser</text>
+  <!-- Step 5: State Machine -->
+  <rect x="80" y="406" width="340" height="110" rx="12" fill="#0d1117" stroke="#2563eb" stroke-width="2"/>
+  <text x="250" y="430" text-anchor="middle" fill="#60a5fa" font-size="13" font-weight="700">5. /reader - POST /api/orchestrate</text>
+  <text x="250" y="448" text-anchor="middle" fill="#e11d48" font-size="10" font-weight="600">State Machine (v2)</text>
+  <text x="250" y="464" text-anchor="middle" fill="#888" font-size="9">PLAN > GENERATE > VALIDATE > POLISH > DONE</text>
+  <text x="250" y="480" text-anchor="middle" fill="#888" font-size="9">Active: WriterAgent > SceneVerifier > RuleGuard</text>
+  <text x="250" y="496" text-anchor="middle" fill="#888" font-size="9">REPAIR (max 3x) / REGENERATE (max 2x)</text>
+  <text x="250" y="510" text-anchor="middle" fill="#666" font-size="9">Real-time SSE streaming to browser</text>
 
   <!-- SSE events -->
-  <rect x="80" y="510" width="340" height="140" rx="10" fill="#111" stroke="#7c3aed44"/>
-  <text x="250" y="532" text-anchor="middle" fill="#c084fc" font-size="11" font-weight="600">Browser receives SSE events:</text>
-  <text x="120" y="552" fill="#22c55e" font-size="10">chunk</text><text x="200" y="552" fill="#888" font-size="10">real-time text streaming</text>
-  <text x="120" y="568" fill="#eab308" font-size="10">stage_change</text><text x="200" y="568" fill="#888" font-size="10">"writer is typing..."</text>
-  <text x="120" y="584" fill="#60a5fa" font-size="10">evaluation</text><text x="200" y="584" fill="#888" font-size="10">quality score display</text>
-  <text x="120" y="600" fill="#f97316" font-size="10">replace_text</text><text x="200" y="600" fill="#888" font-size="10">editor polished version</text>
-  <text x="120" y="616" fill="#34d399" font-size="10">complete</text><text x="200" y="616" fill="#888" font-size="10">save to localStorage</text>
-  <text x="120" y="632" fill="#fb7185" font-size="10">post_process</text><text x="200" y="632" fill="#888" font-size="10">feedback results (NEW)</text>
+  <rect x="80" y="530" width="340" height="160" rx="10" fill="#111" stroke="#7c3aed44"/>
+  <text x="250" y="552" text-anchor="middle" fill="#c084fc" font-size="11" font-weight="600">Browser receives SSE events:</text>
+  <text x="120" y="572" fill="#22c55e" font-size="10">chunk</text><text x="200" y="572" fill="#888" font-size="10">real-time text streaming</text>
+  <text x="120" y="588" fill="#eab308" font-size="10">stage_change</text><text x="200" y="588" fill="#888" font-size="10">"writer is typing..."</text>
+  <text x="120" y="604" fill="#60a5fa" font-size="10">deterministic_scores</text><text x="255" y="604" fill="#888" font-size="10">14D score breakdown</text>
+  <text x="120" y="620" fill="#f97316" font-size="10">gate_decision</text><text x="220" y="620" fill="#888" font-size="10">pass / repair / regenerate</text>
+  <text x="120" y="636" fill="#f97316" font-size="10">replace_text</text><text x="200" y="636" fill="#888" font-size="10">repaired/polished version</text>
+  <text x="120" y="652" fill="#34d399" font-size="10">complete</text><text x="200" y="652" fill="#888" font-size="10">save to localStorage</text>
+  <text x="120" y="668" fill="#fb7185" font-size="10">post_process</text><text x="200" y="668" fill="#888" font-size="10">feedback results</text>
 </svg>
 </div>
 
-<!-- ==================== TAB 2 ==================== -->
-<div id="chapter" class="view">
-<svg viewBox="0 0 620 900" style="max-width:620px;margin:0 auto;display:block">
+<!-- ==================== TAB 2: STATE MACHINE ==================== -->
+<div id="statemachine" class="view">
+<svg viewBox="0 0 700 920" style="max-width:700px;margin:0 auto;display:block">
   <defs>
     <marker id="a2" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#555"/></marker>
     <marker id="a2r" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#e11d48"/></marker>
     <marker id="a2b" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#2563eb"/></marker>
+    <marker id="a2g" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#22c55e"/></marker>
+    <marker id="a2y" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#eab308"/></marker>
   </defs>
 
-  <text x="310" y="20" text-anchor="middle" fill="#666" font-size="11" letter-spacing="2">SINGLE CHAPTER PIPELINE</text>
+  <text x="350" y="24" text-anchor="middle" fill="#666" font-size="11" letter-spacing="2">CHAPTER STATE MACHINE (state-machine.ts)</text>
 
-  <!-- Init tracking -->
-  <rect x="140" y="36" width="340" height="48" rx="8" fill="#111" stroke="#e11d4844" stroke-dasharray="4"/>
-  <circle cx="160" cy="60" r="6" fill="#e11d48"/><text x="175" y="55" fill="#fb7185" font-size="10" font-weight="600">NEW</text>
-  <text x="310" y="55" text-anchor="middle" fill="#fff" font-size="11" font-weight="600">initTracking(seed)</text>
-  <text x="310" y="72" text-anchor="middle" fill="#888" font-size="9">Memory, CharTracker, ThreadTracker, Tone, Progress, Feedback</text>
-  <line x1="310" y1="84" x2="310" y2="104" stroke="#555" marker-end="url(#a2)"/>
+  <!-- PLAN -->
+  <rect x="230" y="44" width="240" height="48" rx="10" fill="#111" stroke="#8b5cf644"/>
+  <text x="350" y="64" text-anchor="middle" fill="#c084fc" font-size="12" font-weight="700">PLAN</text>
+  <text x="350" y="80" text-anchor="middle" fill="#888" font-size="9">Blueprint + Causal Graph Validation</text>
+  <line x1="350" y1="92" x2="350" y2="116" stroke="#555" marker-end="url(#a2)"/>
 
-  <!-- Build context -->
-  <rect x="140" y="104" width="340" height="56" rx="8" fill="#111" stroke="#e11d4844" stroke-dasharray="4"/>
-  <circle cx="160" cy="132" r="6" fill="#e11d48"/>
-  <text x="310" y="125" text-anchor="middle" fill="#fff" font-size="11" font-weight="600">buildTrackingContext()</text>
-  <text x="310" y="140" text-anchor="middle" fill="#888" font-size="9">memory snapshot (~3K tok) + tone guide + pacing + threads + corrections</text>
-  <text x="310" y="152" text-anchor="middle" fill="#666" font-size="8">injected into every LLM prompt below</text>
-  <line x1="310" y1="160" x2="310" y2="180" stroke="#555" marker-end="url(#a2)"/>
+  <!-- GENERATE -->
+  <rect x="200" y="116" width="300" height="64" rx="10" fill="#111" stroke="#d9770644"/>
+  <text x="350" y="136" text-anchor="middle" fill="#fbbf24" font-size="12" font-weight="700">GENERATE</text>
+  <text x="350" y="152" text-anchor="middle" fill="#888" font-size="9">WriterAgent: beat-by-beat scene writing</text>
+  <text x="350" y="166" text-anchor="middle" fill="#d97706" font-size="8">LLM | target 3500 chars (2800-4200)</text>
+  <line x1="350" y1="180" x2="350" y2="208" stroke="#555" marker-end="url(#a2)"/>
 
-  <!-- Blueprint -->
-  <rect x="160" y="180" width="300" height="44" rx="8" fill="#111" stroke="#d9770644"/>
-  <text x="310" y="200" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="600">Blueprint Generation</text>
-  <text x="310" y="214" text-anchor="middle" fill="#888" font-size="9">LLM callStructured() -> scene specs</text>
-  <line x1="310" y1="224" x2="310" y2="248" stroke="#555" marker-end="url(#a2)"/>
+  <!-- VALIDATE -->
+  <rect x="160" y="208" width="380" height="100" rx="10" fill="#0d1117" stroke="#2563eb" stroke-width="2"/>
+  <text x="350" y="230" text-anchor="middle" fill="#60a5fa" font-size="13" font-weight="700">VALIDATE</text>
+  <text x="350" y="248" text-anchor="middle" fill="#888" font-size="9">1. SceneVerifier (dialogue, endings) [CODE]</text>
+  <text x="350" y="262" text-anchor="middle" fill="#888" font-size="9">2. RuleGuardAgent (sanitize + rule check) [CODE]</text>
+  <text x="350" y="276" text-anchor="middle" fill="#888" font-size="9">3. DeterministicScorer (14 dimensions) [CODE]</text>
+  <text x="350" y="290" text-anchor="middle" fill="#888" font-size="9">4. ConflictGate (tension/resolution) [CODE]</text>
 
-  <!-- Scene loop box -->
-  <rect x="60" y="248" width="500" height="310" rx="12" fill="none" stroke="#444" stroke-dasharray="6"/>
-  <text x="310" y="268" text-anchor="middle" fill="#888" font-size="10" letter-spacing="1">FOR EACH SCENE (typically 3)</text>
+  <!-- Decision diamond -->
+  <polygon points="350,330 420,370 350,410 280,370" fill="#111" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="350" y="367" text-anchor="middle" fill="#60a5fa" font-size="10" font-weight="600">score?</text>
+  <text x="350" y="380" text-anchor="middle" fill="#888" font-size="8">decideValidation()</text>
 
-  <!-- planBeats -->
-  <rect x="160" y="280" width="300" height="40" rx="8" fill="#111" stroke="#2563eb44"/>
-  <text x="310" y="298" text-anchor="middle" fill="#60a5fa" font-size="11" font-weight="600">planBeats() [CODE]</text>
-  <text x="310" y="312" text-anchor="middle" fill="#888" font-size="9">3-5 beats + emotional targets + micro-tension</text>
-  <line x1="310" y1="320" x2="310" y2="340" stroke="#555" marker-end="url(#a2)"/>
+  <!-- PASS branch (center down) -->
+  <line x1="350" y1="410" x2="350" y2="450" stroke="#22c55e" stroke-width="2" marker-end="url(#a2g)"/>
+  <text x="356" y="436" fill="#22c55e" font-size="9" font-weight="600">>=0.85</text>
 
-  <!-- writeBeats -->
-  <rect x="160" y="340" width="300" height="48" rx="8" fill="#111" stroke="#d9770644"/>
-  <text x="310" y="358" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="600">writeSceneByBeats()</text>
-  <text x="310" y="374" text-anchor="middle" fill="#d97706" font-size="9">LLM x beats | memoryCtx + toneGuide injected</text>
-  <text x="310" y="384" text-anchor="middle" fill="#888" font-size="8">SSE: chunk events stream to browser</text>
-  <line x1="310" y1="388" x2="310" y2="410" stroke="#555" marker-end="url(#a2)"/>
+  <rect x="260" y="450" width="180" height="40" rx="8" fill="#111" stroke="#22c55e44"/>
+  <text x="350" y="474" text-anchor="middle" fill="#22c55e" font-size="12" font-weight="700">PASS</text>
+  <line x1="350" y1="490" x2="350" y2="520" stroke="#555" marker-end="url(#a2)"/>
 
-  <!-- Validate loop -->
-  <rect x="100" y="410" width="420" height="80" rx="8" fill="none" stroke="#2563eb44" stroke-dasharray="4"/>
-  <text x="310" y="428" text-anchor="middle" fill="#60a5fa" font-size="10" letter-spacing="1">VALIDATE + REPAIR (max 3x)</text>
+  <!-- POLISH -->
+  <rect x="250" y="520" width="200" height="44" rx="8" fill="#111" stroke="#55555544"/>
+  <text x="350" y="540" text-anchor="middle" fill="#888" font-size="11" font-weight="600">POLISH</text>
+  <text x="350" y="554" text-anchor="middle" fill="#666" font-size="9">PolisherAgent (DISABLED by default)</text>
+  <line x1="350" y1="564" x2="350" y2="594" stroke="#555" marker-end="url(#a2)"/>
 
-  <rect x="116" y="438" width="120" height="40" rx="6" fill="#111" stroke="#2563eb33"/>
-  <text x="176" y="455" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">scene-validator</text>
-  <text x="176" y="468" text-anchor="middle" fill="#888" font-size="8">dialogue, endings</text>
+  <!-- DONE -->
+  <rect x="270" y="594" width="160" height="40" rx="20" fill="#059669" stroke="none"/>
+  <text x="350" y="618" text-anchor="middle" fill="#fff" font-size="12" font-weight="700">DONE</text>
 
-  <rect x="248" y="438" width="120" height="40" rx="6" fill="#111" stroke="#2563eb33"/>
-  <text x="308" y="455" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">repetition-det</text>
-  <text x="308" y="468" text-anchor="middle" fill="#888" font-size="8">n-gram overlap</text>
+  <!-- REPAIR branch (right) -->
+  <line x1="420" y1="370" x2="540" y2="370" stroke="#eab308" stroke-width="2" marker-end="url(#a2y)"/>
+  <text x="480" y="364" text-anchor="middle" fill="#eab308" font-size="9" font-weight="600">0.55-0.85</text>
 
-  <rect x="380" y="438" width="128" height="40" rx="6" fill="#111" stroke="#2563eb33"/>
-  <text x="444" y="455" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">sentiment+conflict</text>
-  <text x="444" y="468" text-anchor="middle" fill="#888" font-size="8">tone, early resolve</text>
+  <rect x="540" y="348" width="140" height="48" rx="8" fill="#111" stroke="#eab30844"/>
+  <text x="610" y="368" text-anchor="middle" fill="#eab308" font-size="12" font-weight="700">REPAIR</text>
+  <text x="610" y="384" text-anchor="middle" fill="#888" font-size="8">SurgeonAgent (max 3x)</text>
 
-  <text x="310" y="504" text-anchor="middle" fill="#d97706" font-size="9">fail? -> LLM repair with issue-specific prompts</text>
+  <!-- REPAIR -> VALIDATE loop -->
+  <path d="M 610 396 L 610 430 L 540 430 L 460 320 L 440 308" stroke="#eab308" stroke-width="1.5" fill="none" stroke-dasharray="5" marker-end="url(#a2y)"/>
+  <text x="560" y="426" fill="#eab308" font-size="8">re-validate</text>
 
-  <!-- End of scene loop -->
+  <!-- REGENERATE branch (left) -->
+  <line x1="280" y1="370" x2="120" y2="370" stroke="#ef4444" stroke-width="2" marker-end="url(#a2r)"/>
+  <text x="200" y="364" text-anchor="middle" fill="#ef4444" font-size="9" font-weight="600">&lt;0.55</text>
 
-  <line x1="310" y1="558" x2="310" y2="585" stroke="#555" marker-end="url(#a2)"/>
+  <rect x="30" y="348" width="150" height="48" rx="8" fill="#111" stroke="#ef444444"/>
+  <text x="105" y="368" text-anchor="middle" fill="#ef4444" font-size="12" font-weight="700">REGENERATE</text>
+  <text x="105" y="384" text-anchor="middle" fill="#888" font-size="8">reset text (max 2x)</text>
 
-  <!-- Post-chapter tracking -->
-  <rect x="100" y="585" width="420" height="80" rx="10" fill="#111" stroke="#e11d48" stroke-width="1.5" stroke-dasharray="4"/>
-  <circle cx="120" cy="610" r="6" fill="#e11d48"/>
-  <text x="310" y="605" text-anchor="middle" fill="#fb7185" font-size="12" font-weight="700">Post-Chapter Tracking (NEW)</text>
-  <text x="310" y="622" text-anchor="middle" fill="#888" font-size="9">summarizeChapter [LLM] | memory.addChapter | characterTracker.record</text>
-  <text x="310" y="636" text-anchor="middle" fill="#888" font-size="9">extractThreads [LLM] | progressMonitor.record | postProcessChapter</text>
-  <text x="310" y="650" text-anchor="middle" fill="#666" font-size="8">+2 LLM calls for summary + thread extraction</text>
-  <line x1="310" y1="665" x2="310" y2="690" stroke="#555" marker-end="url(#a2)"/>
+  <!-- REGENERATE -> GENERATE loop -->
+  <path d="M 105 348 L 105 140 L 200 140" stroke="#ef4444" stroke-width="1.5" fill="none" stroke-dasharray="5" marker-end="url(#a2r)"/>
+  <text x="94" y="240" fill="#ef4444" font-size="8" font-weight="600" transform="rotate(-90,94,240)">re-generate</text>
 
-  <!-- Feedback decision -->
-  <rect x="120" y="690" width="380" height="60" rx="10" fill="#1a0a0a" stroke="#e11d48" stroke-width="2" stroke-dasharray="4"/>
-  <text x="310" y="712" text-anchor="middle" fill="#fb7185" font-size="12" font-weight="700">FeedbackAccumulator</text>
-  <text x="190" y="730" text-anchor="middle" fill="#22c55e" font-size="10" font-weight="600">WARN</text>
-  <text x="310" y="730" text-anchor="middle" fill="#eab308" font-size="10" font-weight="600">ADJUST</text>
-  <text x="430" y="730" text-anchor="middle" fill="#ef4444" font-size="10" font-weight="600">REWRITE</text>
-  <text x="190" y="743" text-anchor="middle" fill="#888" font-size="8">next prompt</text>
-  <text x="310" y="743" text-anchor="middle" fill="#888" font-size="8">regen blueprint</text>
-  <text x="430" y="743" text-anchor="middle" fill="#888" font-size="8">re-run 1x</text>
+  <!-- Exhaustion fallback annotations -->
+  <rect x="40" y="660" width="620" height="110" rx="10" fill="#0d0d0d" stroke="#222"/>
+  <text x="350" y="682" text-anchor="middle" fill="#fff" font-size="11" font-weight="600">Threshold / Exhaustion Rules</text>
+  <text x="350" y="700" text-anchor="middle" fill="#22c55e" font-size="10">score >= 0.85, no critical issues --> PASS</text>
+  <text x="350" y="716" text-anchor="middle" fill="#eab308" font-size="10">0.55 <= score < 0.85 --> REPAIR (SurgeonAgent, max 3x)</text>
+  <text x="350" y="732" text-anchor="middle" fill="#ef4444" font-size="10">score < 0.55 --> REGENERATE (full rewrite, max 2x)</text>
+  <text x="350" y="748" text-anchor="middle" fill="#ef4444" font-size="10">score < 0.40 or critical issues --> hard REGENERATE</text>
+  <text x="350" y="764" text-anchor="middle" fill="#888" font-size="9">exhaustion: REGENERATE --> REPAIR fallback --> force PASS</text>
 
-  <line x1="310" y1="750" x2="310" y2="775" stroke="#555" marker-end="url(#a2)"/>
-
-  <!-- Complete -->
-  <rect x="180" y="775" width="260" height="40" rx="8" fill="#111" stroke="#05966944"/>
-  <text x="310" y="798" text-anchor="middle" fill="#34d399" font-size="12" font-weight="600">Chapter Complete -> localStorage</text>
-
-  <!-- Rewrite arrow -->
-  <path d="M 500 720 L 560 720 L 560 300 L 460 300" stroke="#ef4444" stroke-width="1.5" fill="none" stroke-dasharray="5" marker-end="url(#a2r)"/>
-  <text x="568" y="510" fill="#ef4444" font-size="8" font-weight="600" transform="rotate(90,568,510)">REWRITE (max 1x)</text>
+  <!-- Disabled stages note -->
+  <rect x="40" y="790" width="620" height="100" rx="10" fill="#0d0d0d" stroke="#55555544"/>
+  <text x="350" y="812" text-anchor="middle" fill="#666" font-size="11" font-weight="600">Default Preset: Disabled Stages</text>
+  <text x="350" y="832" text-anchor="middle" fill="#666" font-size="10">Self-review (WriterAgent) -- DISABLED</text>
+  <text x="350" y="848" text-anchor="middle" fill="#666" font-size="10">ConsistencyChecker -- DISABLED (LLM rewrite undoes RuleGuard)</text>
+  <text x="350" y="864" text-anchor="middle" fill="#666" font-size="10">QualityLoop -- DISABLED (A/B test proved harmful)</text>
+  <text x="350" y="880" text-anchor="middle" fill="#666" font-size="10">PolisherAgent -- DISABLED (overlaps with RuleGuard)</text>
 </svg>
 </div>
 
-<!-- ==================== TAB 3 ==================== -->
+<!-- ==================== TAB 3: TOP-DOWN + BOTTOM-UP ==================== -->
 <div id="tracking" class="view">
 <svg viewBox="0 0 960 750" style="max-width:960px;margin:0 auto;display:block">
   <defs>
@@ -221,7 +236,7 @@ svg text { font-family:-apple-system,'Pretendard',sans-serif; }
   <!-- Labels -->
   <text x="180" y="24" text-anchor="middle" fill="#3b82f6" font-size="13" font-weight="700" letter-spacing="2">TOP-DOWN</text>
   <text x="480" y="24" text-anchor="middle" fill="#8b5cf6" font-size="13" font-weight="700" letter-spacing="2">MEETING POINT</text>
-  <text x="780" y="24" text-anchor="middle" fill="#e11d48" font-size="13" font-weight="700" letter-spacing="2">BOTTOM-UP (NEW)</text>
+  <text x="780" y="24" text-anchor="middle" fill="#e11d48" font-size="13" font-weight="700" letter-spacing="2">BOTTOM-UP</text>
 
   <!-- === LEFT: TOP-DOWN === -->
   <rect x="50" y="44" width="260" height="46" rx="8" fill="#111" stroke="#3b82f644"/><text x="180" y="64" text-anchor="middle" fill="#fff" font-size="11" font-weight="600">Master Plan</text><text x="180" y="80" text-anchor="middle" fill="#888" font-size="9">200ch, parts, global foreshadowing</text>
@@ -233,161 +248,260 @@ svg text { font-family:-apple-system,'Pretendard',sans-serif; }
   <rect x="50" y="176" width="260" height="46" rx="8" fill="#111" stroke="#3b82f644"/><text x="180" y="196" text-anchor="middle" fill="#fff" font-size="11" font-weight="600">Arc (8-12ch)</text><text x="180" y="212" text-anchor="middle" fill="#888" font-size="9">key events, climax, tension curve</text>
   <line x1="180" y1="222" x2="180" y2="242" stroke="#3b82f6" marker-end="url(#a3b)"/>
 
-  <rect x="50" y="242" width="260" height="46" rx="8" fill="#111" stroke="#3b82f644"/><text x="180" y="262" text-anchor="middle" fill="#fff" font-size="11" font-weight="600">Blueprint</text><text x="180" y="278" text-anchor="middle" fill="#888" font-size="9">scenes, emotional arc, foreshadowing</text>
+  <!-- Causal Graph Validation -->
+  <rect x="50" y="242" width="260" height="46" rx="8" fill="#111" stroke="#e11d4844" stroke-dasharray="4"/>
+  <circle cx="70" cy="265" r="6" fill="#e11d48"/>
+  <text x="180" y="262" text-anchor="middle" fill="#fb7185" font-size="11" font-weight="600">Causal Graph Validation (NEW)</text>
+  <text x="180" y="278" text-anchor="middle" fill="#888" font-size="9">DAG prerequisite check at plan time</text>
+  <line x1="180" y1="288" x2="180" y2="308" stroke="#3b82f6" marker-end="url(#a3b)"/>
+
+  <rect x="50" y="308" width="260" height="46" rx="8" fill="#111" stroke="#3b82f644"/><text x="180" y="328" text-anchor="middle" fill="#fff" font-size="11" font-weight="600">Blueprint (per chapter)</text><text x="180" y="344" text-anchor="middle" fill="#888" font-size="9">scenes, emotional arc, must_reveal facts</text>
 
   <!-- Arrow from Blueprint to Meeting Point -->
-  <line x1="180" y1="288" x2="180" y2="340" stroke="#3b82f6" stroke-width="1.5"/>
-  <line x1="180" y1="340" x2="340" y2="340" stroke="#3b82f6" stroke-width="2" marker-end="url(#a3b)"/>
-  <text x="260" y="334" text-anchor="middle" fill="#3b82f6" font-size="8">context flows in</text>
+  <line x1="180" y1="354" x2="180" y2="390" stroke="#3b82f6" stroke-width="1.5"/>
+  <line x1="180" y1="390" x2="340" y2="390" stroke="#3b82f6" stroke-width="2" marker-end="url(#a3b)"/>
+  <text x="260" y="384" text-anchor="middle" fill="#3b82f6" font-size="8">context flows in</text>
 
   <!-- === CENTER: MEETING POINT === -->
-  <rect x="340" y="306" width="280" height="68" rx="12" fill="#1a1a2e" stroke="#8b5cf6" stroke-width="2.5"/>
-  <text x="480" y="332" text-anchor="middle" fill="#c084fc" font-size="14" font-weight="700">Beat-by-Beat Writing</text>
-  <text x="480" y="350" text-anchor="middle" fill="#a78bfa" font-size="10">LLM calls with tracking context injected</text>
-  <text x="480" y="366" text-anchor="middle" fill="#7c3aed" font-size="9">TOP-DOWN structure + BOTTOM-UP feedback meet here</text>
+  <rect x="340" y="356" width="280" height="68" rx="12" fill="#1a1a2e" stroke="#8b5cf6" stroke-width="2.5"/>
+  <text x="480" y="382" text-anchor="middle" fill="#c084fc" font-size="14" font-weight="700">State Machine</text>
+  <text x="480" y="400" text-anchor="middle" fill="#a78bfa" font-size="10">GENERATE > VALIDATE > REPAIR/REGEN</text>
+  <text x="480" y="416" text-anchor="middle" fill="#7c3aed" font-size="9">TOP-DOWN structure + BOTTOM-UP feedback meet here</text>
 
   <!-- Down from meeting point -->
-  <line x1="480" y1="374" x2="480" y2="400" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#a3b)"/>
+  <line x1="480" y1="424" x2="480" y2="450" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#a3b)"/>
 
-  <!-- Validators -->
-  <rect x="340" y="400" width="280" height="42" rx="8" fill="#111" stroke="#2563eb44"/>
-  <text x="480" y="418" text-anchor="middle" fill="#60a5fa" font-size="11" font-weight="600">4 Code Validators</text>
-  <text x="480" y="432" text-anchor="middle" fill="#888" font-size="9">dialogue, repetition, sentiment, conflict</text>
+  <!-- Active Validators -->
+  <rect x="340" y="450" width="280" height="52" rx="8" fill="#111" stroke="#2563eb44"/>
+  <text x="480" y="468" text-anchor="middle" fill="#60a5fa" font-size="11" font-weight="600">Active: 3 Code Validators</text>
+  <text x="480" y="484" text-anchor="middle" fill="#888" font-size="9">SceneVerifier | RuleGuard | DeterministicScorer(14D)</text>
+  <text x="480" y="496" text-anchor="middle" fill="#666" font-size="8">+ ConflictGate, BlueprintEval (non-blocking)</text>
 
-  <line x1="480" y1="442" x2="480" y2="464" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#a3b)"/>
+  <line x1="480" y1="502" x2="480" y2="524" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#a3b)"/>
 
   <!-- Chapter complete -->
-  <rect x="370" y="464" width="220" height="36" rx="8" fill="#111" stroke="#05966944"/>
-  <text x="480" y="486" text-anchor="middle" fill="#34d399" font-size="11" font-weight="600">Chapter Complete</text>
+  <rect x="370" y="524" width="220" height="36" rx="8" fill="#111" stroke="#05966944"/>
+  <text x="480" y="546" text-anchor="middle" fill="#34d399" font-size="11" font-weight="600">Chapter Complete</text>
 
   <!-- Arrow from complete to summarizer -->
-  <line x1="590" y1="482" x2="650" y2="482" stroke="#e11d48" stroke-width="1.5" marker-end="url(#a3r)"/>
-  <text x="620" y="476" text-anchor="middle" fill="#e11d48" font-size="8">analyze</text>
+  <line x1="590" y1="542" x2="650" y2="542" stroke="#e11d48" stroke-width="1.5" marker-end="url(#a3r)"/>
+  <text x="620" y="536" text-anchor="middle" fill="#e11d48" font-size="8">analyze</text>
 
   <!-- === RIGHT: BOTTOM-UP === -->
   <!-- Summarizer -->
-  <rect x="650" y="462" width="260" height="42" rx="8" fill="#111" stroke="#e11d4844" stroke-dasharray="4"/>
-  <text x="780" y="480" text-anchor="middle" fill="#fb7185" font-size="11" font-weight="600">chapter-summarizer [LLM]</text>
-  <text x="780" y="494" text-anchor="middle" fill="#888" font-size="9">events, character changes, threads</text>
+  <rect x="650" y="522" width="260" height="42" rx="8" fill="#111" stroke="#e11d4844" stroke-dasharray="4"/>
+  <text x="780" y="540" text-anchor="middle" fill="#fb7185" font-size="11" font-weight="600">chapter-summarizer [LLM]</text>
+  <text x="780" y="554" text-anchor="middle" fill="#888" font-size="9">events, character changes, threads</text>
 
   <!-- Up arrow -->
-  <line x1="780" y1="462" x2="780" y2="440" stroke="#e11d48" stroke-width="1.5" marker-end="url(#a3r)"/>
+  <line x1="780" y1="522" x2="780" y2="500" stroke="#e11d48" stroke-width="1.5" marker-end="url(#a3r)"/>
 
   <!-- 5 Trackers -->
-  <rect x="650" y="380" width="260" height="60" rx="8" fill="#111" stroke="#e11d4844" stroke-dasharray="4"/>
-  <text x="780" y="400" text-anchor="middle" fill="#fb7185" font-size="11" font-weight="600">5 Trackers</text>
-  <text x="780" y="416" text-anchor="middle" fill="#888" font-size="9">Character | Thread | Tone | Pacing | Foreshadow</text>
-  <text x="780" y="430" text-anchor="middle" fill="#666" font-size="8">detect drift, forgotten threads, tone mismatch</text>
+  <rect x="650" y="440" width="260" height="60" rx="8" fill="#111" stroke="#e11d4844" stroke-dasharray="4"/>
+  <text x="780" y="460" text-anchor="middle" fill="#fb7185" font-size="11" font-weight="600">5 Trackers</text>
+  <text x="780" y="476" text-anchor="middle" fill="#888" font-size="9">Character | Thread | Tone | Pacing | Foreshadow</text>
+  <text x="780" y="490" text-anchor="middle" fill="#666" font-size="8">detect drift, forgotten threads, tone mismatch</text>
 
   <!-- Up arrow -->
-  <line x1="780" y1="380" x2="780" y2="356" stroke="#e11d48" stroke-width="1.5" marker-end="url(#a3r)"/>
+  <line x1="780" y1="440" x2="780" y2="416" stroke="#e11d48" stroke-width="1.5" marker-end="url(#a3r)"/>
 
   <!-- FeedbackAccumulator -->
-  <rect x="650" y="290" width="260" height="66" rx="10" fill="#1a0a0a" stroke="#e11d48" stroke-width="2" stroke-dasharray="4"/>
-  <text x="780" y="312" text-anchor="middle" fill="#fb7185" font-size="12" font-weight="700">FeedbackAccumulator</text>
-  <text x="710" y="332" text-anchor="middle" fill="#22c55e" font-size="10" font-weight="600">WARN</text>
-  <text x="780" y="332" text-anchor="middle" fill="#eab308" font-size="10" font-weight="600">ADJUST</text>
-  <text x="850" y="332" text-anchor="middle" fill="#ef4444" font-size="10" font-weight="600">REWRITE</text>
-  <text x="780" y="348" text-anchor="middle" fill="#666" font-size="8">thresholds: 2 / 5 / 8</text>
+  <rect x="650" y="350" width="260" height="66" rx="10" fill="#1a0a0a" stroke="#e11d48" stroke-width="2" stroke-dasharray="4"/>
+  <text x="780" y="372" text-anchor="middle" fill="#fb7185" font-size="12" font-weight="700">FeedbackAccumulator</text>
+  <text x="710" y="392" text-anchor="middle" fill="#22c55e" font-size="10" font-weight="600">WARN</text>
+  <text x="780" y="392" text-anchor="middle" fill="#eab308" font-size="10" font-weight="600">ADJUST</text>
+  <text x="850" y="392" text-anchor="middle" fill="#ef4444" font-size="10" font-weight="600">REWRITE</text>
+  <text x="780" y="408" text-anchor="middle" fill="#666" font-size="8">thresholds: 2 / 5 / 8</text>
 
   <!-- ===== FEEDBACK ARROWS GOING BACK ===== -->
 
   <!-- WARN -> next chapter prompt (green, goes to Meeting Point) -->
-  <path d="M 710 290 C 710 260, 620 250, 570 250 L 480 250 L 480 306"
+  <path d="M 710 350 C 710 320, 620 310, 570 310 L 480 310 L 480 356"
         stroke="#22c55e" stroke-width="2" fill="none" stroke-dasharray="6 3" marker-end="url(#a3g)"/>
-  <rect x="522" y="238" width="150" height="16" rx="4" fill="#0a0a0a"/>
-  <text x="597" y="250" text-anchor="middle" fill="#22c55e" font-size="9" font-weight="600">WARN: next prompt injection</text>
+  <rect x="522" y="298" width="150" height="16" rx="4" fill="#0a0a0a"/>
+  <text x="597" y="310" text-anchor="middle" fill="#22c55e" font-size="9" font-weight="600">WARN: next prompt injection</text>
 
   <!-- ADJUST -> Blueprint (yellow) -->
-  <path d="M 780 290 C 780 230, 600 200, 310 265"
+  <path d="M 780 350 C 780 290, 600 260, 310 331"
         stroke="#eab308" stroke-width="2" fill="none" stroke-dasharray="6 3" marker-end="url(#a3y)"/>
-  <rect x="480" y="218" width="160" height="16" rx="4" fill="#0a0a0a"/>
-  <text x="560" y="230" text-anchor="middle" fill="#eab308" font-size="9" font-weight="600">ADJUST: regen blueprints</text>
+  <rect x="480" y="278" width="160" height="16" rx="4" fill="#0a0a0a"/>
+  <text x="560" y="290" text-anchor="middle" fill="#eab308" font-size="9" font-weight="600">ADJUST: regen blueprints</text>
 
   <!-- REWRITE -> Chapter Complete (red) -->
-  <path d="M 910 323 L 940 323 L 940 482 L 590 482"
+  <path d="M 910 383 L 940 383 L 940 542 L 590 542"
         stroke="#ef4444" stroke-width="2" fill="none" stroke-dasharray="6 3" marker-end="url(#a3x)"/>
-  <text x="948" y="410" fill="#ef4444" font-size="9" font-weight="600" transform="rotate(90,948,410)">REWRITE (1x max)</text>
+  <text x="948" y="470" fill="#ef4444" font-size="9" font-weight="600" transform="rotate(90,948,470)">REWRITE (1x max)</text>
 
   <!-- ===== BOTTOM LEGEND ===== -->
-  <rect x="100" y="560" width="760" height="72" rx="10" fill="#0d0d0d" stroke="#222"/>
-  <text x="480" y="582" text-anchor="middle" fill="#999" font-size="11">Top-down provides structure. Bottom-up catches problems. They meet at Beat-by-Beat Writing.</text>
-  <text x="480" y="600" text-anchor="middle" fill="#999" font-size="11">Tracking context flows IN (left to center). Feedback flows OUT (center to right, then back up).</text>
-  <text x="480" y="618" text-anchor="middle" fill="#ccc" font-size="11" font-weight="600">Small issues fix forward. Big issues re-plan. Critical issues re-run (max 1 chapter).</text>
+  <rect x="100" y="600" width="760" height="72" rx="10" fill="#0d0d0d" stroke="#222"/>
+  <text x="480" y="622" text-anchor="middle" fill="#999" font-size="11">Top-down provides structure. Bottom-up catches problems. They meet at the State Machine.</text>
+  <text x="480" y="640" text-anchor="middle" fill="#999" font-size="11">Tracking context flows IN (left to center). Feedback flows OUT (center to right, then back up).</text>
+  <text x="480" y="658" text-anchor="middle" fill="#ccc" font-size="11" font-weight="600">Small issues fix forward. Big issues re-plan. Critical issues re-run (max 1 chapter).</text>
 
   <!-- Mini legend -->
-  <line x1="160" y1="556" x2="190" y2="556" stroke="#22c55e" stroke-width="2" stroke-dasharray="4"/>
-  <text x="196" y="560" fill="#22c55e" font-size="9">WARN</text>
-  <line x1="280" y1="556" x2="310" y2="556" stroke="#eab308" stroke-width="2" stroke-dasharray="4"/>
-  <text x="316" y="560" fill="#eab308" font-size="9">ADJUST</text>
-  <line x1="400" y1="556" x2="430" y2="556" stroke="#ef4444" stroke-width="2" stroke-dasharray="4"/>
-  <text x="436" y="560" fill="#ef4444" font-size="9">REWRITE</text>
-  <line x1="520" y1="556" x2="550" y2="556" stroke="#3b82f6" stroke-width="2"/>
-  <text x="556" y="560" fill="#3b82f6" font-size="9">Top-Down</text>
-  <line x1="630" y1="556" x2="660" y2="556" stroke="#e11d48" stroke-width="2"/>
-  <text x="666" y="560" fill="#e11d48" font-size="9">Bottom-Up</text>
+  <line x1="160" y1="596" x2="190" y2="596" stroke="#22c55e" stroke-width="2" stroke-dasharray="4"/>
+  <text x="196" y="600" fill="#22c55e" font-size="9">WARN</text>
+  <line x1="280" y1="596" x2="310" y2="596" stroke="#eab308" stroke-width="2" stroke-dasharray="4"/>
+  <text x="316" y="600" fill="#eab308" font-size="9">ADJUST</text>
+  <line x1="400" y1="596" x2="430" y2="596" stroke="#ef4444" stroke-width="2" stroke-dasharray="4"/>
+  <text x="436" y="600" fill="#ef4444" font-size="9">REWRITE</text>
+  <line x1="520" y1="596" x2="550" y2="596" stroke="#3b82f6" stroke-width="2"/>
+  <text x="556" y="600" fill="#3b82f6" font-size="9">Top-Down</text>
+  <line x1="630" y1="596" x2="660" y2="596" stroke="#e11d48" stroke-width="2"/>
+  <text x="666" y="600" fill="#e11d48" font-size="9">Bottom-Up</text>
 </svg>
 </div>
 
-<!-- ==================== TAB 4 ==================== -->
+<!-- ==================== TAB 4: SCORER ==================== -->
+<div id="scorer" class="view">
+<svg viewBox="0 0 700 560" style="max-width:700px;margin:0 auto;display:block">
+  <text x="350" y="24" text-anchor="middle" fill="#666" font-size="11" letter-spacing="2">DETERMINISTIC SCORER: 14 DIMENSIONS</text>
+
+  <!-- Header row -->
+  <rect x="50" y="44" width="600" height="30" rx="6" fill="#1a1a1a"/>
+  <text x="70" y="64" fill="#888" font-size="10" font-weight="600">Dimension</text>
+  <text x="350" y="64" text-anchor="middle" fill="#888" font-size="10" font-weight="600">Weight</text>
+  <text x="520" y="64" text-anchor="middle" fill="#888" font-size="10" font-weight="600">Category</text>
+
+  <!-- Rows -->
+  <rect x="50" y="80" width="600" height="26" rx="4" fill="#111"/>
+  <text x="70" y="98" fill="#fff" font-size="10">narrativeInformation</text>
+  <rect x="300" y="86" width="100" height="12" rx="3" fill="#2563eb22"/><rect x="300" y="86" width="100" height="12" rx="3" fill="#2563eb44" style="width:100px"/><text x="350" y="96" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">15%</text>
+  <text x="520" y="98" text-anchor="middle" fill="#888" font-size="9">story info density</text>
+
+  <rect x="50" y="110" width="600" height="26" rx="4" fill="#0d0d0d"/>
+  <text x="70" y="128" fill="#fff" font-size="10">engagement</text>
+  <rect x="300" y="116" width="87" height="12" rx="3" fill="#2563eb44"/><text x="350" y="126" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">13%</text>
+  <text x="520" y="128" text-anchor="middle" fill="#888" font-size="9">reader engagement</text>
+
+  <rect x="50" y="140" width="600" height="26" rx="4" fill="#111"/>
+  <text x="70" y="158" fill="#fff" font-size="10">narrative</text>
+  <rect x="300" y="146" width="73" height="12" rx="3" fill="#2563eb44"/><text x="350" y="156" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">11%</text>
+  <text x="520" y="158" text-anchor="middle" fill="#888" font-size="9">story structure</text>
+
+  <rect x="50" y="170" width="600" height="26" rx="4" fill="#0d0d0d"/>
+  <text x="70" y="188" fill="#fff" font-size="10">characterVoice</text>
+  <rect x="300" y="176" width="60" height="12" rx="3" fill="#2563eb44"/><text x="350" y="186" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">9%</text>
+  <text x="520" y="188" text-anchor="middle" fill="#888" font-size="9">distinct voices</text>
+
+  <rect x="50" y="200" width="600" height="26" rx="4" fill="#111"/>
+  <text x="70" y="218" fill="#fff" font-size="10">immersion</text>
+  <rect x="300" y="206" width="60" height="12" rx="3" fill="#2563eb44"/><text x="350" y="216" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">9%</text>
+  <text x="520" y="218" text-anchor="middle" fill="#888" font-size="9">world immersion</text>
+
+  <rect x="50" y="230" width="600" height="26" rx="4" fill="#0d0d0d"/>
+  <text x="70" y="248" fill="#fff" font-size="10">rhythm</text>
+  <rect x="300" y="236" width="47" height="12" rx="3" fill="#2563eb44"/><text x="350" y="246" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">7%</text>
+  <text x="520" y="248" text-anchor="middle" fill="#888" font-size="9">sentence rhythm</text>
+
+  <rect x="50" y="260" width="600" height="26" rx="4" fill="#111"/>
+  <text x="70" y="278" fill="#fff" font-size="10">hookEnding</text>
+  <rect x="300" y="266" width="47" height="12" rx="3" fill="#2563eb44"/><text x="350" y="276" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">7%</text>
+  <text x="520" y="278" text-anchor="middle" fill="#888" font-size="9">chapter hook/ending</text>
+
+  <rect x="50" y="290" width="600" height="26" rx="4" fill="#0d0d0d"/>
+  <text x="70" y="308" fill="#e11d48" font-size="10" font-weight="600">loopAvoidance</text>
+  <rect x="300" y="296" width="33" height="12" rx="3" fill="#e11d4844"/><text x="350" y="306" text-anchor="middle" fill="#e11d48" font-size="9" font-weight="600">5%</text>
+  <text x="520" y="308" text-anchor="middle" fill="#e11d48" font-size="9">NEW - narrative loop detection</text>
+
+  <rect x="50" y="320" width="600" height="26" rx="4" fill="#111"/>
+  <text x="70" y="338" fill="#e11d48" font-size="10" font-weight="600">dialogueQuality</text>
+  <rect x="300" y="326" width="33" height="12" rx="3" fill="#e11d4844"/><text x="350" y="336" text-anchor="middle" fill="#e11d48" font-size="9" font-weight="600">5%</text>
+  <text x="520" y="338" text-anchor="middle" fill="#e11d48" font-size="9">NEW - informative dialogue</text>
+
+  <rect x="50" y="350" width="600" height="26" rx="4" fill="#0d0d0d"/>
+  <text x="70" y="368" fill="#e11d48" font-size="10" font-weight="600">sentimentArc</text>
+  <rect x="300" y="356" width="33" height="12" rx="3" fill="#e11d4844"/><text x="350" y="366" text-anchor="middle" fill="#e11d48" font-size="9" font-weight="600">5%</text>
+  <text x="520" y="368" text-anchor="middle" fill="#e11d48" font-size="9">NEW - Hurst index arc</text>
+
+  <rect x="50" y="380" width="600" height="26" rx="4" fill="#111"/>
+  <text x="70" y="398" fill="#fff" font-size="10">antiRepetition</text>
+  <rect x="300" y="386" width="33" height="12" rx="3" fill="#2563eb44"/><text x="350" y="396" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">5%</text>
+  <text x="520" y="398" text-anchor="middle" fill="#888" font-size="9">n-gram dedup</text>
+
+  <rect x="50" y="410" width="600" height="26" rx="4" fill="#0d0d0d"/>
+  <text x="70" y="428" fill="#fff" font-size="10">dialogueRatio</text>
+  <rect x="300" y="416" width="20" height="12" rx="3" fill="#2563eb44"/><text x="350" y="426" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">3%</text>
+  <text x="520" y="428" text-anchor="middle" fill="#888" font-size="9">dialogue balance</text>
+
+  <rect x="50" y="440" width="600" height="26" rx="4" fill="#111"/>
+  <text x="70" y="458" fill="#fff" font-size="10">lengthScore</text>
+  <rect x="300" y="446" width="20" height="12" rx="3" fill="#2563eb44"/><text x="350" y="456" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">3%</text>
+  <text x="520" y="458" text-anchor="middle" fill="#888" font-size="9">target 3500 (2800-4200)</text>
+
+  <rect x="50" y="470" width="600" height="26" rx="4" fill="#0d0d0d"/>
+  <text x="70" y="488" fill="#fff" font-size="10">sensoryDiversity</text>
+  <rect x="300" y="476" width="20" height="12" rx="3" fill="#2563eb44"/><text x="350" y="486" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">3%</text>
+  <text x="520" y="488" text-anchor="middle" fill="#888" font-size="9">5-sense coverage</text>
+
+  <!-- E2E Results -->
+  <rect x="50" y="516" width="600" height="36" rx="8" fill="#059669" fill-opacity="0.1" stroke="#05966944"/>
+  <text x="350" y="540" text-anchor="middle" fill="#34d399" font-size="11" font-weight="600">E2E Results: score=0.77 | loop=1.00 | dialogue=1.00 | cost=$0.047/ch (-66%)</text>
+</svg>
+</div>
+
+<!-- ==================== TAB 5: ALL MODULES ==================== -->
 <div id="modules" class="view">
   <div class="detail-grid">
     <div class="detail-card">
       <h3 style="color:#d97706">LLM Agents (11)</h3>
       <ul>
-        <li>plot-pipeline.ts — write/debate/polish <span class="tag tag-llm">LLM x3</span></li>
-        <li>seed-generator.ts — 5-step pipeline <span class="tag tag-llm">LLM x5</span></li>
-        <li>master-planner.ts — structure design <span class="tag tag-llm">LLM x1</span></li>
-        <li>arc-planner.ts — arc expansion <span class="tag tag-llm">LLM x1</span></li>
-        <li>chapter-planner.ts — blueprints <span class="tag tag-llm">LLM x1</span></li>
-        <li>beat-writer.ts — beat-by-beat <span class="tag tag-llm">LLM xN</span></li>
-        <li>writer-agent.ts — scene orchestration</li>
-        <li>polisher-agent.ts — text polish <span class="tag tag-llm">LLM x1</span></li>
-        <li>quality-loop.ts — quality iteration</li>
-        <li>chapter-summarizer.ts <span class="tag tag-new">NEW</span> <span class="tag tag-llm">LLM x1</span></li>
-        <li>thread-extractor.ts <span class="tag tag-new">NEW</span> <span class="tag tag-llm">LLM x1</span></li>
+        <li>plot-pipeline.ts -- write/debate/polish <span class="tag tag-llm">LLM x3</span></li>
+        <li>seed-generator.ts -- 5-step pipeline <span class="tag tag-llm">LLM x5</span></li>
+        <li>master-planner.ts -- structure design <span class="tag tag-llm">LLM x1</span></li>
+        <li>arc-planner.ts -- arc expansion <span class="tag tag-llm">LLM x1</span></li>
+        <li>chapter-planner.ts -- blueprints <span class="tag tag-llm">LLM x1</span></li>
+        <li>beat-writer.ts -- beat-by-beat <span class="tag tag-llm">LLM xN</span></li>
+        <li>writer-agent.ts -- scene orchestration (self-review <span class="tag tag-off">OFF</span>)</li>
+        <li>surgeon-agent.ts -- targeted repair <span class="tag tag-llm">LLM x1</span></li>
+        <li>polisher-agent.ts <span class="tag tag-off">OFF</span></li>
+        <li>consistency-checker.ts <span class="tag tag-off">OFF</span></li>
+        <li>quality-loop.ts <span class="tag tag-off">OFF</span></li>
       </ul>
     </div>
     <div class="detail-card">
-      <h3 style="color:#2563eb">Code Validators (8)</h3>
+      <h3 style="color:#2563eb">Code Validators / Evaluators (10)</h3>
       <ul>
-        <li>scene-validator.ts — dialogue, tell-not-show <span class="tag tag-code">CODE</span></li>
-        <li>repetition-detector.ts — n-gram overlap <span class="tag tag-code">CODE</span></li>
-        <li>sentiment-validator.ts — emotional tone <span class="tag tag-code">CODE</span></li>
-        <li>conflict-gate.ts — premature resolve <span class="tag tag-code">CODE</span></li>
-        <li>style evaluator — formatting <span class="tag tag-code">CODE</span></li>
-        <li>blueprint-evaluator.ts — blueprint quality <span class="tag tag-code">CODE</span></li>
-        <li>tone-profile.ts <span class="tag tag-new">NEW</span> <span class="tag tag-code">CODE</span></li>
-        <li>progress-monitor.ts <span class="tag tag-new">NEW</span> <span class="tag tag-code">CODE</span></li>
+        <li>scene-validator.ts -- dialogue, endings <span class="tag tag-code">CODE</span></li>
+        <li>rule-guard.ts -- sanitize + 79 rules <span class="tag tag-code">CODE</span></li>
+        <li>deterministic-scorer.ts -- 14D scorer <span class="tag tag-code">CODE</span></li>
+        <li>repetition-detector.ts -- n-gram overlap <span class="tag tag-code">CODE</span></li>
+        <li>sentiment-validator.ts -- emotional tone <span class="tag tag-code">CODE</span></li>
+        <li>conflict-gate.ts -- premature resolve <span class="tag tag-code">CODE</span></li>
+        <li>blueprint-evaluator.ts -- blueprint quality <span class="tag tag-code">CODE</span></li>
+        <li>causal-graph.ts -- DAG prerequisite <span class="tag tag-new">NEW</span> <span class="tag tag-code">CODE</span></li>
+        <li>tone-profile.ts <span class="tag tag-code">CODE</span></li>
+        <li>progress-monitor.ts <span class="tag tag-code">CODE</span></li>
       </ul>
     </div>
     <div class="detail-card">
-      <h3 style="color:#e11d48">Tracking + Memory (7) <span class="tag tag-new">ALL NEW</span></h3>
+      <h3 style="color:#e11d48">State Machine + Tracking (8)</h3>
       <ul>
-        <li>hierarchical-memory.ts — 6-layer tiered context</li>
-        <li>character-tracker.ts — per-chapter state snapshots</li>
-        <li>thread-tracker.ts — narrative thread lifecycle</li>
-        <li>tone-profile.ts — arc tone compliance</li>
-        <li>progress-monitor.ts — event pacing balance</li>
-        <li>feedback-accumulator.ts — 3-level response</li>
-        <li>chapter-post-processor.ts — orchestrator</li>
+        <li>state-machine.ts <span class="tag tag-new">NEW</span> -- PLAN/GEN/VALIDATE/REPAIR/REGEN/POLISH/DONE</li>
+        <li>hierarchical-memory.ts -- 6-layer tiered context</li>
+        <li>character-tracker.ts -- per-chapter state snapshots</li>
+        <li>thread-tracker.ts -- narrative thread lifecycle</li>
+        <li>tone-profile.ts -- arc tone compliance</li>
+        <li>progress-monitor.ts -- event pacing balance</li>
+        <li>feedback-accumulator.ts -- 3-level response</li>
+        <li>chapter-post-processor.ts -- orchestrator</li>
       </ul>
     </div>
     <div class="detail-card">
       <h3 style="color:#7c3aed">UI + API (13)</h3>
       <ul>
-        <li>useNovelStore.ts — Zustand (localStorage)</li>
-        <li>useStreamingGeneration.ts — SSE handler</li>
-        <li>/genre — genre selection</li>
-        <li>/plot — plot selection</li>
-        <li>/preview — seed preview</li>
-        <li>/plan — master plan view</li>
-        <li>/reader — chapter reader</li>
+        <li>useNovelStore.ts -- Zustand (localStorage)</li>
+        <li>useStreamingGeneration.ts -- SSE handler</li>
+        <li>/genre -- genre selection</li>
+        <li>/plot -- plot selection</li>
+        <li>/preview -- seed preview</li>
+        <li>/plan -- master plan view</li>
+        <li>/reader -- chapter reader</li>
         <li>POST /api/plots</li>
         <li>POST /api/seed</li>
         <li>POST /api/plan/master</li>
-        <li>POST /api/chapter — simple gen</li>
-        <li>POST /api/orchestrate — full pipeline</li>
+        <li>POST /api/chapter -- simple gen</li>
+        <li>POST /api/orchestrate -- state machine pipeline</li>
         <li>POST /api/evaluate</li>
       </ul>
     </div>
