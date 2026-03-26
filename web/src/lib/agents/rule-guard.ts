@@ -133,6 +133,59 @@ export function fixEndingRepeat(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// FixSentenceStartRepeat — replace repeated name with pronoun
+// ---------------------------------------------------------------------------
+
+/**
+ * When 3+ consecutive sentences start with the same name,
+ * replace the 2nd sentence's name with a pronoun (그/그녀).
+ */
+export function fixSentenceStartRepeat(
+  text: string,
+  characterGenders?: Map<string, string>,
+): string {
+  const paragraphs = text.split("\n\n");
+  let changed = false;
+
+  for (let pi = 0; pi < paragraphs.length; pi++) {
+    const sentences = paragraphs[pi]
+      .split(/(?<=[.!?])\s+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    if (sentences.length < 3) continue;
+
+    const fixed = [...sentences];
+    let i = 0;
+    while (i < fixed.length - 2) {
+      const s1 = fixed[i].trimStart().slice(0, 3);
+      const s2 = fixed[i + 1].trimStart().slice(0, 3);
+      const s3 = fixed[i + 2].trimStart().slice(0, 3);
+
+      if (s1.length >= 2 && s1 === s2 && s2 === s3) {
+        const nameMatch = fixed[i + 1].match(/^([가-힣]{2,}[이가은는의]?\s?)/);
+        if (nameMatch) {
+          const name = nameMatch[1].replace(/[이가은는의]\s?$/, "");
+          const gender = characterGenders?.get(name);
+          const pronoun = gender === "female" ? "그녀는" : "그는";
+          fixed[i + 1] = fixed[i + 1].replace(nameMatch[1], pronoun + " ");
+          changed = true;
+        }
+        i += 3;
+      } else {
+        i++;
+      }
+    }
+
+    if (changed) {
+      paragraphs[pi] = fixed.join(" ");
+    }
+  }
+
+  return changed ? paragraphs.join("\n\n") : text;
+}
+
+// ---------------------------------------------------------------------------
 // DeduplicateSentences — remove repeated sentences within/across paragraphs
 // ---------------------------------------------------------------------------
 
@@ -375,6 +428,15 @@ export class RuleGuardAgent implements PipelineAgent {
     ctx.text = deduplicateParagraphs(ctx.text);
     ctx.text = deduplicateSentences(ctx.text);
     ctx.text = fixEndingRepeat(ctx.text);
+
+    // Fix sentence start repetition (e.g., "세레인이... 세레인은... 세레인의..." → pronoun)
+    const genderMap = new Map<string, string>();
+    for (const c of ctx.seed.characters) {
+      genderMap.set(c.name, c.gender || "male");
+      // Also map first 2 chars of name for partial matching
+      if (c.name.length >= 2) genderMap.set(c.name.slice(0, 2), c.gender || "male");
+    }
+    ctx.text = fixSentenceStartRepeat(ctx.text, genderMap);
 
     // Speech level enforcement — fix Korean 화계 violations based on social_rank
     const speechResult = enforceSpeechLevels(
