@@ -1,10 +1,39 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 interface ChapterReaderProps {
   content: string;
   isStreaming: boolean;
   chapterNumber: number;
   title?: string;
+}
+
+/**
+ * Render a single paragraph, detecting quoted dialogue lines
+ * and wrapping them with subtle visual distinction.
+ */
+function NovelParagraph({ text }: { text: string }) {
+  // Detect if this paragraph is primarily dialogue (starts with a quote mark)
+  const isDialogue =
+    text.startsWith("\u201C") || // "
+    text.startsWith('"') ||
+    text.startsWith("\u300C") || // 「
+    text.startsWith("\u300E"); // 『
+
+  if (isDialogue) {
+    return (
+      <p className="my-5 border-l-2 border-violet-500/30 pl-4 font-[var(--font-serif-kr)] text-base leading-[2] text-amber-50/90">
+        {text}
+      </p>
+    );
+  }
+
+  return (
+    <p className="my-5 font-[var(--font-serif-kr)] text-base leading-[2] text-stone-300">
+      {text}
+    </p>
+  );
 }
 
 export default function ChapterReader({
@@ -13,40 +42,59 @@ export default function ChapterReader({
   chapterNumber,
   title,
 }: ChapterReaderProps) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Smooth auto-scroll during streaming
+  useEffect(() => {
+    if (isStreaming && bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [content, isStreaming]);
+
   if (!content) {
     return (
-      <div className="flex min-h-[400px] items-center justify-center text-zinc-500">
-        생성 버튼을 눌러 {chapterNumber}화를 시작하세요
+      <div className="flex min-h-[400px] items-center justify-center">
+        <p className="font-[var(--font-serif-kr)] text-zinc-500">
+          {chapterNumber > 0
+            ? `제${chapterNumber}화를 불러오는 중...`
+            : "생성 버튼을 눌러 첫 화를 시작하세요"}
+        </p>
       </div>
     );
   }
 
-  return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-8">
-      <div className="mb-6 border-b border-zinc-800 pb-4">
-        <p className="text-xs text-zinc-500">제{chapterNumber}화</p>
-        {title && <h2 className="mt-1 text-xl font-bold text-white">{title}</h2>}
-      </div>
+  const paragraphs = content.split("\n\n").filter((p) => p.trim().length > 0);
 
-      <div className="prose prose-invert max-w-none">
-        {content.split("\n\n").map((paragraph, i) => (
-          <p
-            key={i}
-            className="mb-4 text-[15px] leading-relaxed text-zinc-200"
-          >
-            {paragraph}
-          </p>
+  return (
+    <article className="mx-auto max-w-[680px] px-4 py-8 sm:px-0">
+      {/* Chapter header */}
+      <header className="mb-10 border-b border-zinc-800/60 pb-6 text-center">
+        <span className="text-xs tracking-widest text-zinc-600">
+          CHAPTER {chapterNumber}
+        </span>
+        <h2 className="mt-2 font-[var(--font-serif-kr)] text-2xl font-bold text-zinc-100">
+          {title || `제${chapterNumber}화`}
+        </h2>
+      </header>
+
+      {/* Novel body */}
+      <div className="mb-8">
+        {paragraphs.map((paragraph, i) => (
+          <NovelParagraph key={i} text={paragraph} />
         ))}
         {isStreaming && <span className="cursor-blink" />}
       </div>
 
+      {/* Word count footer */}
       {!isStreaming && content && (
-        <div className="mt-6 border-t border-zinc-800 pt-4 text-right">
-          <span className="text-xs text-zinc-500">
+        <footer className="border-t border-zinc-800/40 pt-4 text-center">
+          <span className="text-xs text-zinc-600">
             {content.length.toLocaleString()}자
           </span>
-        </div>
+        </footer>
       )}
-    </div>
+
+      <div ref={bottomRef} />
+    </article>
   );
 }

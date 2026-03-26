@@ -3,19 +3,29 @@
 import { useState } from "react";
 
 const STAGE_LABELS: Record<string, string> = {
-  generating: "소설 생성 중",
-  generating_chapter: "소설 생성 중",
-  writing: "집필 중",
-  "self-review": "자체 검토 중",
-  critiquing: "품질 평가 중",
-  surgery: "수술 중",
+  // planning
+  planning_arcs: "구성 중",
+  planning_chapters: "구성 중",
+  // writing
+  generating: "글 쓰는 중",
+  generating_chapter: "글 쓰는 중",
+  writing: "글 쓰는 중",
+  // validation
+  scene_verify: "검수 중",
+  validating: "검수 중",
+  deterministic_gate: "검수 중",
+  rule_check: "교정 중",
+  "self-review": "교정 중",
+  critiquing: "교정 중",
+  evaluating: "교정 중",
+  // repair
+  surgery: "수정 중",
+  improving: "수정 중",
+  patching: "수정 중",
   polishing: "다듬는 중",
-  evaluating: "품질 평가 중",
-  improving: "개선 중",
-  completing: "마무리 중",
+  // done
+  completing: "완료",
   chapter_complete: "완료",
-  planning_arcs: "아크 설계 중",
-  planning_chapters: "블루프린트 생성 중",
 };
 
 const PRESETS = [

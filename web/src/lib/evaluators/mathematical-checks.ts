@@ -249,11 +249,11 @@ export function analyzeSentimentArc(text: string): SentimentArcResult {
 
   let hurstScore = 0.5;
   if (H !== null) {
-    if (H >= 0.55 && H <= 0.65) hurstScore = 1.0;
-    else if (H >= 0.45 && H <= 0.75) {
-      const dist = H < 0.55 ? 0.55 - H : H - 0.65;
-      hurstScore = Math.max(0.3, 1.0 - dist * 5);
-    } else hurstScore = 0.2;
+    if (H >= 0.50 && H <= 0.70) hurstScore = 1.0;
+    else if (H >= 0.35 && H <= 0.85) {
+      const dist = H < 0.50 ? 0.50 - H : H - 0.70;
+      hurstScore = Math.max(0.4, 1.0 - dist * 3);
+    } else hurstScore = 0.3;
   }
 
   const minV = series.length > 0 ? Math.min(...series) : 0;

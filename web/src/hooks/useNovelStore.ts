@@ -38,6 +38,7 @@ interface NovelState {
   pipelineStage: string;
   pipelineRetries: number;
   pipelineLogs: Array<{ time: number; message: string; type: "info" | "warn" | "success" }>;
+  generationStartTime: number | null;
 
   // Arc summaries for hierarchical context
   arcSummaries: Record<string, string>;
@@ -91,6 +92,7 @@ const initialState = {
   pipelineStage: "idle",
   pipelineRetries: 0,
   pipelineLogs: [],
+  generationStartTime: null,
   arcSummaries: {},
   viewingChapter: null,
   isGenerating: false,
@@ -112,7 +114,7 @@ export const useNovelStore = create<NovelState>()(
         seed: null,
         masterPlan: null, planningStage: "idle" as const,
         chapters: {}, summaries: [], currentChapter: 0, arcSummaries: {},
-        pipelineStage: "idle", pipelineRetries: 0, pipelineLogs: [],
+        pipelineStage: "idle", pipelineRetries: 0, pipelineLogs: [], generationStartTime: null,
       }),
       setPlots: (plots) => set({ plots }),
       selectPlot: (plot) =>
@@ -122,7 +124,7 @@ export const useNovelStore = create<NovelState>()(
           seed: null,
           masterPlan: null, planningStage: "idle" as const,
           chapters: {}, summaries: [], currentChapter: 0, arcSummaries: {},
-          pipelineStage: "idle", pipelineRetries: 0, pipelineLogs: [],
+          pipelineStage: "idle", pipelineRetries: 0, pipelineLogs: [], generationStartTime: null,
         })),
       setSeed: (seed) => set((s) => ({
         seed,
@@ -194,7 +196,7 @@ export const useNovelStore = create<NovelState>()(
         set((s) => ({
           pipelineLogs: [...s.pipelineLogs, { time: Date.now(), message, type }],
         })),
-      resetPipelineState: () => set({ pipelineStage: "idle", pipelineRetries: 0, pipelineLogs: [] }),
+      resetPipelineState: () => set({ pipelineStage: "idle", pipelineRetries: 0, pipelineLogs: [], generationStartTime: Date.now() }),
       setArcSummaries: (summaries) => set({ arcSummaries: summaries }),
       setViewingChapter: (chapter) => set({ viewingChapter: chapter }),
       resetToPlotSelection: () =>

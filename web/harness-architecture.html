@@ -15,7 +15,8 @@
   .grid-2 { grid-template-columns: 1fr 1fr; }
   .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
   .grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
-  @media (max-width: 900px) { .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; } }
+  .grid-5 { grid-template-columns: 1fr 1fr 1fr 1fr 1fr; }
+  @media (max-width: 900px) { .grid-2, .grid-3, .grid-4, .grid-5 { grid-template-columns: 1fr; } }
 
   .card { background: #12121a; border: 1px solid #2a2a3a; border-radius: 12px; padding: 20px; }
   .card-accent { border-color: #7c3aed; }
@@ -35,6 +36,7 @@
   .tag-cyan { background: #06b6d422; color: #67e8f9; border: 1px solid #06b6d444; }
   .tag-zinc { background: #27272a; color: #a1a1aa; border: 1px solid #3f3f46; }
   .tag-pink { background: #ec489922; color: #f9a8d4; border: 1px solid #ec489944; }
+  .tag-disabled { background: #dc262622; color: #fca5a5; border: 1px solid #dc262644; font-weight: 700; }
 
   .flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
   .flow-item { background: #1e1e2e; border: 1px solid #3a3a4a; border-radius: 8px; padding: 8px 14px; font-size: 13px; white-space: nowrap; }
@@ -56,6 +58,7 @@
   .section-flow { background: #0f0f18; border: 1px solid #1e1e2e; border-radius: 16px; padding: 24px; margin: 24px 0; }
   .pipeline-step { display: flex; align-items: flex-start; gap: 12px; margin: 8px 0; padding: 12px; border-radius: 8px; }
   .pipeline-step:hover { background: #1a1a2a; }
+  .pipeline-step.disabled { opacity: 0.45; }
   .step-num { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
   .step-content { flex: 1; }
   .step-name { font-weight: 600; font-size: 14px; }
@@ -71,29 +74,41 @@
   .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
 
   .score-bar { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
-  .score-bar-label { width: 100px; font-size: 12px; color: #9ca3af; text-align: right; }
+  .score-bar-label { width: 120px; font-size: 12px; color: #9ca3af; text-align: right; }
   .score-bar-track { flex: 1; height: 6px; background: #1a1a2a; border-radius: 3px; overflow: hidden; }
   .score-bar-fill { height: 100%; border-radius: 3px; }
   .score-bar-value { width: 36px; font-size: 11px; color: #6b7280; }
+
+  .state-machine-diagram { display: flex; flex-direction: column; gap: 0; align-items: center; margin: 16px 0; }
+  .sm-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .sm-node { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; text-align: center; min-width: 90px; }
+  .sm-arrow { color: #4a4a5a; font-size: 16px; }
+  .sm-branch { font-size: 11px; color: #6b7280; padding: 2px 6px; }
 </style>
 </head>
 <body>
 
 <h1>소설 생성 하네스 아키텍처</h1>
-<p class="subtitle">kakao-novel-generator v3 — 2026.03.20 기준 | 파일 60+개, 모듈 8개</p>
+<p class="subtitle">kakao-novel-generator v3 — 2026.03.26 기준 | 상태 머신 기반 파이프라인</p>
 
-<div class="grid grid-4" style="margin-bottom: 32px;">
+<div class="grid grid-5" style="margin-bottom: 32px;">
   <div class="card" style="text-align:center;">
-    <div class="stat">5</div>
-    <div class="stat-label">파이프라인 에이전트</div>
+    <div class="stat">3</div>
+    <div class="stat-label">활성 에이전트</div>
+    <div style="font-size:10px; color:#6b7280;">Writer, SceneVerifier, RuleGuard</div>
+  </div>
+  <div class="card" style="text-align:center;">
+    <div class="stat">14</div>
+    <div class="stat-label">결정적 평가 차원</div>
+  </div>
+  <div class="card" style="text-align:center;">
+    <div class="stat">9</div>
+    <div class="stat-label">상태 머신 상태</div>
+    <div style="font-size:10px; color:#6b7280;">PLAN~FAILED</div>
   </div>
   <div class="card" style="text-align:center;">
     <div class="stat">7</div>
     <div class="stat-label">트래킹 시스템</div>
-  </div>
-  <div class="card" style="text-align:center;">
-    <div class="stat">10</div>
-    <div class="stat-label">결정적 평가 차원</div>
   </div>
   <div class="card" style="text-align:center;">
     <div class="stat">3</div>
@@ -110,47 +125,47 @@
   <div style="display:grid; grid-template-columns: 1fr auto 1fr auto 1fr auto 1fr; gap:0; align-items:center; margin-bottom:16px;">
     <div class="flow-item active" style="text-align:center; border-color:#7c3aed;">
       <div style="font-size:11px; color:#a78bfa;">Step 1</div>
-      <div>🎭 stepPlots</div>
+      <div>stepPlots</div>
       <div style="font-size:10px; color:#6b7280;">플롯 3개 생성</div>
     </div>
     <div style="text-align:center;">
-      <span class="flow-arrow">→</span><br>
+      <span class="flow-arrow">&rarr;</span><br>
       <span style="font-size:9px; color:#fbbf24;">사용자 선택</span>
     </div>
     <div class="flow-item active" style="text-align:center; border-color:#7c3aed;">
       <div style="font-size:11px; color:#a78bfa;">Step 2</div>
-      <div>🌱 stepSeed</div>
+      <div>stepSeed</div>
       <div style="font-size:10px; color:#6b7280;">3온도 진화 + 교차</div>
     </div>
     <div style="text-align:center;">
-      <span class="flow-arrow">→</span><br>
+      <span class="flow-arrow">&rarr;</span><br>
       <span style="font-size:9px; color:#fbbf24;">사용자 확인</span>
     </div>
     <div class="flow-item active" style="text-align:center; border-color:#7c3aed;">
       <div style="font-size:11px; color:#a78bfa;">Step 3</div>
-      <div>📋 stepPlan</div>
-      <div style="font-size:10px; color:#6b7280;">개연성 + 마스터플랜</div>
+      <div>stepPlan</div>
+      <div style="font-size:10px; color:#6b7280;">개연성 + 인과그래프 + 마스터플랜</div>
     </div>
     <div style="text-align:center;">
-      <span class="flow-arrow">→</span><br>
+      <span class="flow-arrow">&rarr;</span><br>
       <span style="font-size:9px; color:#fbbf24;">사용자 확인</span>
     </div>
     <div class="flow-item active" style="text-align:center; border-color:#7c3aed;">
       <div style="font-size:11px; color:#a78bfa;">Step 4</div>
-      <div>⚡ stepChapters</div>
-      <div style="font-size:10px; color:#6b7280;">챕터 N화 생성</div>
+      <div>stepChapters</div>
+      <div style="font-size:10px; color:#6b7280;">챕터 N화 생성 (상태 머신)</div>
     </div>
   </div>
 
   <div style="padding: 12px; background: #7c3aed11; border: 1px solid #7c3aed33; border-radius: 8px; font-size: 12px;">
     <strong style="color: #a78bfa;">NovelHarness — 단계별 오케스트레이션</strong><br>
     <span style="color: #6b7280;">
-      사용자가 매 단계 사이에 결과를 확인/수정. 하네스가 모든 단계의 모델·검증·프리셋을 일관 관리.<br>
+      사용자가 매 단계 사이에 결과를 확인/수정. 하네스가 모든 단계의 모델 &middot; 검증 &middot; 프리셋을 일관 관리.<br>
       <code>getState()</code>로 중간 상태(plots, seed, masterPlan)를 읽고, 다음 단계에 수정된 데이터 전달 가능.
     </span>
   </div>
   <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
-    단계별: <code>stepPlots() → stepSeed() → stepPlan() → stepChapters()</code><br>
+    단계별: <code>stepPlots() &rarr; stepSeed() &rarr; stepPlan() &rarr; stepChapters()</code><br>
     자동: <code>runFullPipeline("판타지", { endChapter: 10 })</code> — CLI/테스트용
   </div>
 </div>
@@ -166,6 +181,12 @@
     같은 시드로 다른 프리셋을 돌려 비교 가능.
   </p>
 
+  <div style="padding: 10px; background: #05966911; border: 1px solid #05966933; border-radius: 8px; font-size: 12px; margin-bottom: 16px;">
+    <strong style="color: #6ee7b7;">A/B 테스트 결론:</strong>
+    LLM 후처리(ConsistencyChecker, QualityLoop, Polisher)가 품질을 떨어뜨림 (0.78 &rarr; 0.82 without).
+    LLM surgeon이 결정적 수정을 덮어쓰고 자연스러운 문체를 해침. 기본 프리셋에서 모두 비활성화.
+  </div>
+
   <table class="preset-table">
     <thead>
       <tr>
@@ -179,251 +200,365 @@
     </thead>
     <tbody>
       <tr>
-        <td><span class="tag tag-purple">기본</span></td>
+        <td><span class="tag tag-purple">기본 (default)</span></td>
         <td>gpt-5.4</td>
-        <td>Writer → Guard → Constraint → Consistency → Quality → Polisher</td>
+        <td>
+          Writer &rarr; SceneVerifier &rarr; RuleGuard<br>
+          <span style="font-size:11px; color:#fca5a5;">ConsistencyChecker, QualityLoop, Polisher — DISABLED</span><br>
+          <span style="font-size:11px; color:#fca5a5;">Self-review — DISABLED</span>
+        </td>
         <td>0.85</td>
-        <td>❌ (비트별)</td>
-        <td>~25-35</td>
+        <td>-</td>
+        <td style="color:#6ee7b7; font-weight:600;">~3-5</td>
       </tr>
       <tr>
-        <td><span class="tag tag-amber">절약</span></td>
+        <td><span class="tag tag-amber">절약 (budget)</span></td>
         <td>gpt-4o</td>
-        <td>Writer → Guard → Constraint → Consistency → Quality → Polisher</td>
+        <td>Writer &rarr; SceneVerifier &rarr; RuleGuard</td>
         <td>0.75</td>
-        <td>❌</td>
-        <td>~20-30</td>
+        <td>-</td>
+        <td>~3-5</td>
       </tr>
       <tr>
-        <td><span class="tag tag-green">빠름</span></td>
+        <td><span class="tag tag-green">빠름 (fast)</span></td>
         <td>gpt-4o-mini</td>
-        <td>Writer → Guard → Constraint</td>
+        <td>Writer &rarr; SceneVerifier &rarr; RuleGuard</td>
         <td>0.70</td>
-        <td>✅ (씬 단위)</td>
+        <td>parallel + dedup</td>
         <td>~3-5</td>
       </tr>
     </tbody>
   </table>
 
   <div class="file-list">
-    📁 <code>src/lib/harness/config.ts</code> — HarnessConfig, 프리셋 정의<br>
-    📁 <code>src/lib/harness/harness.ts</code> — NovelHarness 실행 엔진<br>
-    📁 <code>scripts/generate.ts</code> — CLI 진입점
+    <code>src/lib/harness/config.ts</code> — HarnessConfig, 프리셋 정의<br>
+    <code>src/lib/harness/harness.ts</code> — NovelHarness 실행 엔진<br>
+    <code>scripts/generate.ts</code> — CLI 진입점
   </div>
 </div>
 
 <!-- ============================================================ -->
-<h2>3. 챕터 생성 파이프라인</h2>
+<h2>3. 챕터 생성 파이프라인 — 상태 머신</h2>
 <!-- ============================================================ -->
 
 <div class="section-flow">
-  <div class="legend">
-    <div class="legend-item"><div class="legend-dot" style="background:#7c3aed;"></div> 생성</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#d97706;"></div> 규칙 검증</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#ec4899;"></div> 수학적 검증 (NEW)</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#059669;"></div> 설정 일관성</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#2563eb;"></div> 품질 평가</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#dc2626;"></div> 수술/수정</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#06b6d4;"></div> 다듬기</div>
+  <div style="margin-bottom: 16px;">
+    <strong style="color: #a78bfa; font-size: 14px;">ChapterStateMachine</strong>
+    <span style="font-size: 12px; color: #6b7280;"> — 선형 파이프라인을 대체하는 상태 머신. 점수에 따라 REPAIR/REGENERATE 분기.</span>
   </div>
 
+  <!-- State machine diagram -->
+  <div style="background: #0a0a0f; border: 1px solid #2a2a3a; border-radius: 12px; padding: 20px; margin-bottom: 16px;">
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 12px;">
+      <div class="sm-node" style="background: #7c3aed22; border: 1px solid #7c3aed; color: #a78bfa;">PLAN</div>
+      <div class="sm-arrow">&rarr;</div>
+      <div class="sm-node" style="background: #7c3aed22; border: 1px solid #7c3aed; color: #a78bfa;">GENERATE</div>
+      <div class="sm-arrow">&rarr;</div>
+      <div class="sm-node" style="background: #d9770622; border: 1px solid #d97706; color: #fbbf24;">VALIDATE</div>
+      <div class="sm-arrow">&rarr;</div>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <div style="padding: 4px 10px; background: #05966911; border: 1px solid #059669; border-radius: 6px; font-size: 12px; color: #6ee7b7; font-weight: 600;">&ge;0.85 PASS</div>
+          <div class="sm-arrow">&rarr;</div>
+          <div class="sm-node" style="background: #06b6d422; border: 1px solid #06b6d4; color: #67e8f9; padding: 6px 12px; font-size: 12px;">POLISH</div>
+          <div class="sm-arrow">&rarr;</div>
+          <div class="sm-node" style="background: #05966922; border: 1px solid #059669; color: #6ee7b7; padding: 6px 12px; font-size: 12px;">DONE</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <div style="padding: 4px 10px; background: #d9770611; border: 1px solid #d97706; border-radius: 6px; font-size: 12px; color: #fbbf24; font-weight: 600;">0.55~0.85 REPAIR</div>
+          <div class="sm-arrow">&rarr;</div>
+          <div style="font-size: 11px; color: #fbbf24;">&larr; VALIDATE (최대 3회)</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <div style="padding: 4px 10px; background: #dc262611; border: 1px solid #dc2626; border-radius: 6px; font-size: 12px; color: #fca5a5; font-weight: 600;">&lt;0.55 REGENERATE</div>
+          <div class="sm-arrow">&rarr;</div>
+          <div style="font-size: 11px; color: #fca5a5;">&larr; GENERATE (최대 2회)</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; font-size: 11px; margin-top: 8px;">
+      <div style="padding: 6px 10px; background: #1a1a2a; border-radius: 6px;">
+        <span style="color: #fca5a5;">&lt;0.40</span> <span style="color: #6b7280;">hard REGENERATE (critical 이슈)</span>
+      </div>
+      <div style="padding: 6px 10px; background: #1a1a2a; border-radius: 6px;">
+        <span style="color: #fbbf24;">소진 시</span> <span style="color: #6b7280;">REGENERATE 소진 &rarr; REPAIR 폴백, 둘 다 소진 &rarr; 강제 PASS</span>
+      </div>
+      <div style="padding: 6px 10px; background: #1a1a2a; border-radius: 6px;">
+        <span style="color: #67e8f9;">FAILED</span> <span style="color: #6b7280;">예상치 못한 상태 전이 시</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="file-list">
+    <code>src/lib/agents/state-machine.ts</code> — ChapterStateMachine, resolveTransition(), decideValidation()
+  </div>
+
+  <div class="legend" style="margin-top: 16px;">
+    <div class="legend-item"><div class="legend-dot" style="background:#7c3aed;"></div> 생성 (ACTIVE)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#d97706;"></div> 검증 (ACTIVE)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ec4899;"></div> 수학적 검증 (ACTIVE)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#dc2626;"></div> DISABLED</div>
+  </div>
+
+  <!-- Active steps -->
   <div class="pipeline-step">
     <div class="step-num" style="background:#7c3aed33; color:#a78bfa;">1</div>
     <div class="step-content">
-      <div class="step-name">WriterAgent <span class="tag tag-purple">생성</span></div>
+      <div class="step-name">WriterAgent <span class="tag tag-purple">생성</span> <span class="tag tag-green">ACTIVE</span></div>
       <div class="step-desc">
         블루프린트의 각 씬을 비트별로 생성 (기본 모드) 또는 씬 단위 1회 생성 (빠른 모드).<br>
-        이전 화 마지막 500자를 컨텍스트로 받아 연결성 유지. 셀프리뷰 포함.
+        이전 화 마지막 500자를 컨텍스트로 받아 연결성 유지. 목표 분량: 3500자 (허용 범위: 2800~4200).
       </div>
       <div class="file-list">
-        <code>writer-agent.ts</code> → <code>scene-writer.ts</code> → <code>beat-writer.ts</code>
+        <code>writer-agent.ts</code> &rarr; <code>scene-writer.ts</code> &rarr; <code>beat-writer.ts</code>
       </div>
     </div>
   </div>
 
   <div class="pipeline-step">
-    <div class="step-num" style="background:#d9770633; color:#fbbf24;">2</div>
+    <div class="step-num" style="background:#06b6d433; color:#67e8f9;">2</div>
     <div class="step-content">
-      <div class="step-name">RuleGuardAgent <span class="tag tag-amber">규칙</span></div>
+      <div class="step-name">SceneVerifierAgent <span class="tag tag-cyan">씬 검증</span> <span class="tag tag-green">ACTIVE</span></div>
       <div class="step-desc">
-        코드 기반 검증: 어미 반복("~였다" 3연속), 금지 표현, 문장 시작 반복, 클리셰 감지.
-        LLM 호출 없음 (순수 로직).
+        씬 경계 중복 제거 + 전제조건 검증. 병렬 모드에서 교차 씬 중복도 처리.
+      </div>
+      <div class="file-list"><code>scene-verifier.ts</code></div>
+    </div>
+  </div>
+
+  <div class="pipeline-step">
+    <div class="step-num" style="background:#d9770633; color:#fbbf24;">3</div>
+    <div class="step-content">
+      <div class="step-name">RuleGuardAgent <span class="tag tag-amber">규칙</span> <span class="tag tag-green">ACTIVE</span></div>
+      <div class="step-desc">
+        코드 기반 검증: 어미 반복("~였다" 3연속), 금지 표현, 문장 시작 반복, 클리셰 감지, 분량 검증 (2800~4200자).<br>
+        LLM 호출 없음 (순수 로직). <strong>$0, &lt;1ms</strong>
       </div>
       <div class="file-list"><code>rule-guard.ts</code></div>
     </div>
   </div>
 
-  <div class="pipeline-step">
-    <div class="step-num" style="background:#ec489933; color:#f9a8d4;">3</div>
+  <!-- Disabled steps -->
+  <div style="margin: 16px 0 8px; padding: 8px 16px; background: #dc262611; border: 1px solid #dc262633; border-radius: 8px; font-size: 12px; color: #fca5a5;">
+    <strong>DISABLED 에이전트</strong> — A/B 테스트에서 LLM 후처리가 품질을 떨어뜨리는 것으로 증명됨 (0.78 &rarr; 0.82 without)
+  </div>
+
+  <div class="pipeline-step disabled">
+    <div class="step-num" style="background:#27272a; color:#6b7280;">-</div>
     <div class="step-content">
-      <div class="step-name">ConstraintChecker <span class="tag tag-pink">수학적 검증 — NEW</span></div>
-      <div class="step-desc">
-        코드 기반 — 지식 그래프 + 상태 머신으로 논리적 모순 감지:<br>
-        • 죽은 캐릭터 등장 (dead_character_active)<br>
-        • 모르는 정보를 아는 것처럼 행동 (unknown_knowledge)<br>
-        • 불가능한 위치 이동 (impossible_location)<br>
-        • 관계 비대칭 (relationship_asymmetry)<br>
-        • 시간선 모순 (timeline_paradox)<br>
-        • 등장 이전 화 활동 (premature_introduction)<br>
-        <strong>LLM 0회, $0, &lt;1ms</strong>
+      <div class="step-name" style="color:#6b7280;">ConsistencyChecker <span class="tag tag-disabled">DISABLED</span></div>
+      <div class="step-desc" style="color:#4b5563;">
+        설정집 대조 (LLM 1회). 비활성화 이유: full-text LLM rewrite가 RuleGuard의 결정적 수정을 덮어씀.
       </div>
-      <div class="file-list"><code>evaluators/constraint-checker.ts</code></div>
     </div>
   </div>
 
-  <div class="pipeline-step">
-    <div class="step-num" style="background:#05966933; color:#6ee7b7;">4</div>
+  <div class="pipeline-step disabled">
+    <div class="step-num" style="background:#27272a; color:#6b7280;">-</div>
     <div class="step-content">
-      <div class="step-name">ConsistencyChecker <span class="tag tag-green">설정 일관성</span></div>
-      <div class="step-desc">
-        생성된 텍스트를 설정집과 대조:<br>
-        • 캐릭터 말투가 프로필과 일치하는가?<br>
-        • 세계관 규칙이 위반되지 않는가?<br>
-        • 모르는 정보를 아는 것처럼 행동하지 않는가?<br>
-        Critical 이슈 → 자동 수정 (LLM 1회 호출)
+      <div class="step-name" style="color:#6b7280;">QualityLoop (CriticAgent + SurgeonAgent) <span class="tag tag-disabled">DISABLED</span></div>
+      <div class="step-desc" style="color:#4b5563;">
+        LLM 기반 품질 게이트. 비활성화 이유: A/B 테스트에서 품질을 떨어뜨리는 것으로 증명. LLM surgeon이 자연스러운 문체를 해침.
       </div>
-      <div class="file-list"><code>consistency-checker.ts</code></div>
     </div>
   </div>
 
-  <div class="pipeline-step" style="background:#1a1a2a; border:1px solid #2563eb33; border-radius:8px;">
-    <div class="step-num" style="background:#2563eb33; color:#93c5fd;">5</div>
+  <div class="pipeline-step disabled">
+    <div class="step-num" style="background:#27272a; color:#6b7280;">-</div>
     <div class="step-content">
-      <div class="step-name">QualityLoop <span class="tag tag-blue">품질 게이트</span></div>
-      <div class="step-desc" style="margin-bottom:12px;">
-        DeterministicScorer가 먼저 실행 → 점수에 따라 분기:
+      <div class="step-name" style="color:#6b7280;">PolisherAgent <span class="tag tag-disabled">DISABLED</span></div>
+      <div class="step-desc" style="color:#4b5563;">
+        최종 문체 패스. 비활성화 이유: RuleGuard와 기능 중복 + LLM rewrite가 결정적 수정을 덮어씀.
       </div>
-
-      <!-- Gate flow inside QualityLoop -->
-      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
-        <div style="flex:1; min-width:160px; padding:10px; background:#ec489911; border:1px solid #ec489933; border-radius:8px; font-size:12px;">
-          <div style="color:#f9a8d4; font-weight:600;">5a. DeterministicScorer</div>
-          <div style="color:#6b7280; margin-top:4px;">10차원 코드 평가<br><strong>$0, &lt;1ms</strong></div>
-        </div>
-        <div style="display:flex; align-items:center; color:#4a4a5a;">→</div>
-        <div style="flex:2; min-width:200px; display:flex; flex-direction:column; gap:6px;">
-          <div style="padding:8px; background:#05966911; border:1px solid #05966933; border-radius:6px; font-size:11px;">
-            <span style="color:#6ee7b7; font-weight:600;">0.85+</span>
-            <span style="color:#6b7280;"> → 통과 (LLM 스킵)</span>
-          </div>
-          <div style="padding:8px; background:#2563eb11; border:1px solid #2563eb33; border-radius:6px; font-size:11px;">
-            <span style="color:#93c5fd; font-weight:600;">0.70~0.85</span>
-            <span style="color:#6b7280;"> → 5b. CriticAgent(LLM) → 5c. SurgeonAgent → 재평가 (최대 5회)</span>
-          </div>
-          <div style="padding:8px; background:#dc262611; border:1px solid #dc262633; border-radius:6px; font-size:11px;">
-            <span style="color:#fca5a5; font-weight:600;">&lt;0.70</span>
-            <span style="color:#6b7280;"> → reject + 약한 차원 피드백 (LLM 스킵, 재생성 권고)</span>
-          </div>
-        </div>
-      </div>
-
-      <div style="font-size:11px; color:#6b7280;">
-        ~70%의 챕터가 게이트에서 처리됨 → LLM CriticAgent 호출 70% 감소
-      </div>
-      <div class="file-list"><code>quality-loop.ts</code> → <code>deterministic-scorer.ts</code> + <code>critic-agent.ts</code> + <code>surgeon-agent.ts</code></div>
     </div>
   </div>
 
-  <div class="pipeline-step">
-    <div class="step-num" style="background:#06b6d433; color:#67e8f9;">6</div>
+  <div class="pipeline-step disabled">
+    <div class="step-num" style="background:#27272a; color:#6b7280;">-</div>
     <div class="step-content">
-      <div class="step-name">PolisherAgent <span class="tag tag-cyan">다듬기</span></div>
-      <div class="step-desc">최종 문체 패스. 어색한 표현 교정, 리듬 미세 조정.</div>
-      <div class="file-list"><code>polisher-agent.ts</code></div>
+      <div class="step-name" style="color:#6b7280;">Self-review (WriterAgent 내장) <span class="tag tag-disabled">DISABLED</span></div>
+      <div class="step-desc" style="color:#4b5563;">
+        WriterAgent가 생성 후 자체 검토. 비활성화 이유: 추가 LLM 호출 대비 효과 미미.
+      </div>
     </div>
   </div>
 </div>
 
 <!-- ============================================================ -->
-<h2>4. 결정적 스코어러 — 10차원 코드 기반 평가</h2>
+<h2>4. 인과 그래프 검증 (Causal Graph Validation)</h2>
+<!-- ============================================================ -->
+
+<div class="card" style="border-color: #059669;">
+  <h3 style="color: #6ee7b7;">인과 그래프 검증 <span class="tag tag-green">NEW</span> <span class="tag tag-zinc">코드 &middot; $0 &middot; &lt;1ms</span></h3>
+  <p style="font-size:13px; color:#9ca3af; margin-bottom: 12px;">
+    개연성 검증과 챕터 생성 사이에 실행. 시드의 인과 구조를 그래프로 모델링하여 논리적 결함 사전 검출.<br>
+    <strong>순수 계산 — LLM 호출 0회, 비용 $0</strong>
+  </p>
+
+  <div class="grid grid-3" style="gap: 10px; margin-bottom: 12px;">
+    <div style="padding: 10px; background: #1a1a2a; border-radius: 8px; border-left: 3px solid #059669;">
+      <div style="font-size: 12px; font-weight: 600; color: #6ee7b7;">인과 완전성</div>
+      <div style="font-size: 11px; color: #6b7280;">모든 사건이 원인을 가지는가?</div>
+    </div>
+    <div style="padding: 10px; background: #1a1a2a; border-radius: 8px; border-left: 3px solid #059669;">
+      <div style="font-size: 12px; font-weight: 600; color: #6ee7b7;">데드엔드 감지</div>
+      <div style="font-size: 11px; color: #6b7280;">결과 없이 끝나는 사건</div>
+    </div>
+    <div style="padding: 10px; background: #1a1a2a; border-radius: 8px; border-left: 3px solid #059669;">
+      <div style="font-size: 12px; font-weight: 600; color: #6ee7b7;">고아 이벤트</div>
+      <div style="font-size: 11px; color: #6b7280;">연결되지 않은 독립 사건</div>
+    </div>
+    <div style="padding: 10px; background: #1a1a2a; border-radius: 8px; border-left: 3px solid #059669;">
+      <div style="font-size: 12px; font-weight: 600; color: #6ee7b7;">클라이맥스 도달성</div>
+      <div style="font-size: 11px; color: #6b7280;">모든 경로가 클라이맥스에 도달하는가?</div>
+    </div>
+    <div style="padding: 10px; background: #1a1a2a; border-radius: 8px; border-left: 3px solid #059669;">
+      <div style="font-size: 12px; font-weight: 600; color: #6ee7b7;">스레드 커버리지</div>
+      <div style="font-size: 11px; color: #6b7280;">서사 스레드가 모두 연결되는가?</div>
+    </div>
+    <div style="padding: 10px; background: #1a1a2a; border-radius: 8px; border-left: 3px solid #059669;">
+      <div style="font-size: 12px; font-weight: 600; color: #6ee7b7;">전제조건 검증</div>
+      <div style="font-size: 11px; color: #6b7280;">사건 발생 전 필수 조건 충족 여부</div>
+    </div>
+  </div>
+
+  <div style="padding: 10px; background: #0a0a0f; border-radius: 8px; font-size: 12px; color: #6b7280;">
+    Critical 이슈는 Writer 컨텍스트에 경고로 주입 &rarr; 생성 단계에서 자동 반영
+  </div>
+
+  <div class="file-list">
+    <code>src/lib/evaluators/causal-graph.ts</code> &mdash; validateCausalGraph()<br>
+    <code>src/lib/harness/harness.ts</code> &mdash; stepPlan() 내에서 호출
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2>5. 결정적 스코어러 — 14차원 코드 기반 평가</h2>
 <!-- ============================================================ -->
 
 <div class="card card-pink">
   <h3>DeterministicScorer <span class="tag tag-pink">LLM 0회, $0, &lt;1ms</span></h3>
   <p style="font-size:13px; color:#9ca3af; margin-bottom: 16px;">
-    통계 분석, 패턴 매칭, 언어학 규칙 + <strong style="color:#f9a8d4;">정보 이론(Shannon Entropy, JSD, Fourier)</strong>으로 품질 평가. 100% 재현 가능, 즉시 실행.
+    통계 분석, 패턴 매칭, 언어학 규칙 + <strong style="color:#f9a8d4;">정보 이론(Shannon Entropy, JSD, Fourier, Hurst 지수)</strong>으로 품질 평가. 100% 재현 가능, 즉시 실행.
   </p>
 
+  <!-- Information Theory group -->
   <div class="score-bar">
     <div class="score-bar-label" style="color:#ec4899;">정보이론 구조</div>
     <div class="score-bar-track"><div class="score-bar-fill" style="width:100%; background:#ec4899;"></div></div>
-    <div class="score-bar-value">21%</div>
-  </div>
-  <div style="font-size:11px; color:#ec4899; margin-left:108px; margin-bottom:8px;">Shannon 엔트로피 역동성 · JSD 반전 감지 · 감정곡선-블루프린트 상관 · 정체 구간 탐지</div>
-
-  <div class="score-bar">
-    <div class="score-bar-label">서사 전개</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:75%; background:#a78bfa;"></div></div>
     <div class="score-bar-value">15%</div>
   </div>
-  <div style="font-size:11px; color:#6b7280; margin-left:108px; margin-bottom:8px;">정보 밀도 곡선 · 인과관계 접속사 · 긴장 에스컬레이션</div>
+  <div style="font-size:11px; color:#ec4899; margin-left:128px; margin-bottom:8px;">Shannon 엔트로피 역동성 &middot; JSD 반전 감지 &middot; 감정곡선-블루프린트 상관 &middot; 정체 구간 탐지</div>
+
+  <div class="score-bar">
+    <div class="score-bar-label" style="color:#ec4899;">독자 몰입도</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:87%; background:#ec4899;"></div></div>
+    <div class="score-bar-value">13%</div>
+  </div>
+  <div style="font-size:11px; color:#ec4899; margin-left:128px; margin-bottom:8px;">고구마-사이다 곡선 &middot; 1화 임팩트 &middot; 엔딩 감정</div>
+
+  <!-- Core dimensions -->
+  <div class="score-bar">
+    <div class="score-bar-label">서사 전개</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:73%; background:#a78bfa;"></div></div>
+    <div class="score-bar-value">11%</div>
+  </div>
+  <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">정보 밀도 곡선 &middot; 인과관계 접속사 &middot; 긴장 에스컬레이션</div>
 
   <div class="score-bar">
     <div class="score-bar-label">캐릭터 음성</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:57%; background:#a78bfa;"></div></div>
-    <div class="score-bar-value">12%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:60%; background:#a78bfa;"></div></div>
+    <div class="score-bar-value">9%</div>
   </div>
-  <div style="font-size:11px; color:#6b7280; margin-left:108px; margin-bottom:8px;">말투 패턴 매칭 · 존댓말/반말 일관성</div>
+  <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">말투 패턴 매칭 &middot; 존댓말/반말 일관성</div>
 
   <div class="score-bar">
     <div class="score-bar-label">몰입감</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:57%; background:#a78bfa;"></div></div>
-    <div class="score-bar-value">12%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:60%; background:#a78bfa;"></div></div>
+    <div class="score-bar-value">9%</div>
   </div>
-  <div style="font-size:11px; color:#6b7280; margin-left:108px; margin-bottom:8px;">구체성 비율 · 장면 접지 · 심리적 거리 · 대화 모멘텀</div>
+  <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">구체성 비율 &middot; 장면 접지 &middot; 심리적 거리 &middot; 대화 모멘텀</div>
 
   <div class="score-bar">
     <div class="score-bar-label">리듬</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:48%; background:#7dd3fc;"></div></div>
-    <div class="score-bar-value">10%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:47%; background:#7dd3fc;"></div></div>
+    <div class="score-bar-value">7%</div>
   </div>
-  <div style="font-size:11px; color:#6b7280; margin-left:108px; margin-bottom:8px;">문장 길이 분포 · 어미 다양성 · 장단 교차</div>
+  <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">문장 길이 분포 &middot; 어미 다양성 &middot; 장단 교차</div>
 
   <div class="score-bar">
     <div class="score-bar-label">후킹 엔딩</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:38%; background:#7dd3fc;"></div></div>
-    <div class="score-bar-value">8%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:47%; background:#7dd3fc;"></div></div>
+    <div class="score-bar-value">7%</div>
   </div>
-  <div style="font-size:11px; color:#6b7280; margin-left:108px; margin-bottom:8px;">마지막 문단 패턴 (?, ..., 위기 키워드)</div>
+  <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">마지막 문단 패턴 (?, ..., 위기 키워드)</div>
 
   <div class="score-bar">
     <div class="score-bar-label">반복 회피</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:38%; background:#7dd3fc;"></div></div>
-    <div class="score-bar-value">8%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:33%; background:#7dd3fc;"></div></div>
+    <div class="score-bar-value">5%</div>
   </div>
-  <div style="font-size:11px; color:#6b7280; margin-left:108px; margin-bottom:8px;">주어 반복 · 4-gram 반복</div>
+  <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">주어 반복 &middot; 4-gram 반복</div>
+
+  <!-- New dimensions -->
+  <div class="score-bar">
+    <div class="score-bar-label" style="color:#6ee7b7;">서사 루프 회피</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:33%; background:#059669;"></div></div>
+    <div class="score-bar-value">5%</div>
+  </div>
+  <div style="font-size:11px; color:#6ee7b7; margin-left:128px; margin-bottom:8px;">NEW — 인접 문단 명사 중복 감지 (서사 루프 방지)</div>
 
   <div class="score-bar">
-    <div class="score-bar-label">대사 비율</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:29%; background:#6b7280;"></div></div>
-    <div class="score-bar-value">6%</div>
+    <div class="score-bar-label" style="color:#6ee7b7;">대사 정보량</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:33%; background:#059669;"></div></div>
+    <div class="score-bar-value">5%</div>
   </div>
-  <div style="font-size:11px; color:#6b7280; margin-left:108px; margin-bottom:8px;">30~60% 최적</div>
+  <div style="font-size:11px; color:#6ee7b7; margin-left:128px; margin-bottom:8px;">NEW — 의미 있는 대사 vs 빈 대사 비율</div>
+
+  <div class="score-bar">
+    <div class="score-bar-label" style="color:#6ee7b7;">감정 아크</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:33%; background:#059669;"></div></div>
+    <div class="score-bar-value">5%</div>
+  </div>
+  <div style="font-size:11px; color:#6ee7b7; margin-left:128px; margin-bottom:8px;">NEW — Hurst 지수 기반 감정 변동 패턴</div>
+
+  <!-- Small dimensions -->
+  <div class="score-bar">
+    <div class="score-bar-label">대사 비율</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:20%; background:#6b7280;"></div></div>
+    <div class="score-bar-value">3%</div>
+  </div>
+  <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">30~60% 최적</div>
 
   <div class="score-bar">
     <div class="score-bar-label">감각 다양성</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:19%; background:#6b7280;"></div></div>
-    <div class="score-bar-value">4%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:20%; background:#6b7280;"></div></div>
+    <div class="score-bar-value">3%</div>
   </div>
-  <div style="font-size:11px; color:#6b7280; margin-left:108px; margin-bottom:8px;">5감 중 3개 이상</div>
+  <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">5감 중 3개 이상</div>
 
   <div class="score-bar">
     <div class="score-bar-label">분량</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:19%; background:#6b7280;"></div></div>
-    <div class="score-bar-value">4%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:20%; background:#6b7280;"></div></div>
+    <div class="score-bar-value">3%</div>
   </div>
-  <div style="font-size:11px; color:#6b7280; margin-left:108px; margin-bottom:8px;">3000~4000자</div>
+  <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">2800~4200자 (목표 3500)</div>
+
+  <div style="margin-top: 12px; padding: 10px; background: #0a0a0f; border-radius: 8px; font-size: 12px; color: #6b7280;">
+    합계: 100% = 15 + 13 + 11 + 9 + 9 + 7 + 7 + 5 + 5 + 5 + 5 + 3 + 3 + 3
+  </div>
 
   <div class="file-list" style="margin-top:16px;">
-    📁 <code>evaluators/deterministic-scorer.ts</code> — computeDeterministicScores()<br>
-    📁 <code>evaluators/narrative-information-scorer.ts</code> — computeNarrativeInformationScores()
+    <code>evaluators/deterministic-scorer.ts</code> — computeDeterministicScores()<br>
+    <code>evaluators/narrative-information-scorer.ts</code> — computeNarrativeInformationScores()<br>
+    <code>evaluators/mathematical-checks.ts</code> — loopAvoidance, dialogueQuality, sentimentArc
   </div>
-
 </div>
 
 <!-- Information Theory detail card -->
 <div class="card" style="margin-top:16px; border-color:#ec4899;">
-  <h3 style="color:#f9a8d4;">정보이론 기반 서사 구조 분석 (21%)</h3>
+  <h3 style="color:#f9a8d4;">정보이론 기반 서사 구조 분석 (15%)</h3>
   <p style="font-size:12px; color:#6b7280; margin-bottom:16px;">
     Shannon Entropy, Jensen-Shannon Divergence, Pearson 상관계수 —
     학술 논문 검증 방법론을 시드/블루프린트 시스템에 적용
@@ -433,7 +568,7 @@
     <div style="padding:12px; background:#1a1a2a; border-radius:8px; border-left:3px solid #ec4899;">
       <div style="font-size:13px; font-weight:600; color:#f9a8d4;">엔트로피 역동성 (20%)</div>
       <div style="font-size:12px; color:#9ca3af; margin-top:4px;">
-        문단별 감정 분포의 Shannon 엔트로피 → 표준편차<br>
+        문단별 감정 분포의 Shannon 엔트로피 &rarr; 표준편차<br>
         <span style="color:#6ee7b7;">높음</span> = 감정 변화 풍부 (역동적)<br>
         <span style="color:#fca5a5;">낮음</span> = 감정 단조로움 (지루)
       </div>
@@ -442,22 +577,22 @@
       <div style="font-size:13px; font-weight:600; color:#f9a8d4;">피봇 실현 (35%)</div>
       <div style="font-size:12px; color:#9ca3af; margin-top:4px;">
         텍스트 1/3, 2/3 지점에서 JSD 측정<br>
-        <span style="color:#6ee7b7;">JSD > 0.1</span> = 반전/전환이 실현됨<br>
-        <span style="color:#fca5a5;">JSD < 0.1</span> = 의도된 반전이 묻힘
+        <span style="color:#6ee7b7;">JSD &gt; 0.1</span> = 반전/전환이 실현됨<br>
+        <span style="color:#fca5a5;">JSD &lt; 0.1</span> = 의도된 반전이 묻힘
       </div>
     </div>
     <div style="padding:12px; background:#1a1a2a; border-radius:8px; border-left:3px solid #ec4899;">
       <div style="font-size:13px; font-weight:600; color:#f9a8d4;">아크 상관계수 (30%)</div>
       <div style="font-size:12px; color:#9ca3af; margin-top:4px;">
         블루프린트 tension_level 곡선 vs 실제 감정 곡선<br>
-        <span style="color:#6ee7b7;">Pearson r > 0.6</span> = 의도대로 작성됨<br>
-        <span style="color:#fca5a5;">Pearson r < 0.3</span> = 의도와 괴리
+        <span style="color:#6ee7b7;">Pearson r &gt; 0.6</span> = 의도대로 작성됨<br>
+        <span style="color:#fca5a5;">Pearson r &lt; 0.3</span> = 의도와 괴리
       </div>
     </div>
     <div style="padding:12px; background:#1a1a2a; border-radius:8px; border-left:3px solid #ec4899;">
       <div style="font-size:13px; font-weight:600; color:#f9a8d4;">정체 방지 (15%)</div>
       <div style="font-size:12px; color:#9ca3af; margin-top:4px;">
-        JSD < 0.05인 문단이 3개 이상 연속 = 정체 구간<br>
+        JSD &lt; 0.05인 문단이 3개 이상 연속 = 정체 구간<br>
         <span style="color:#6ee7b7;">0개</span> = 완벽<br>
         <span style="color:#fca5a5;">3+ 연속</span> = "아무 일도 안 일어남" 경고
       </div>
@@ -467,52 +602,15 @@
   <div style="margin-top:16px; padding:14px; background:#0a0a0f; border-radius:8px; font-size:12px;">
     <div style="color:#f9a8d4; font-weight:600; margin-bottom:8px;">학술적 근거</div>
     <div style="color:#6b7280; line-height:1.8;">
-      • Narrative Information Theory (arXiv:2411.12907) — JSD로 서프라이즈/피봇 감지<br>
-      • Reagan et al. "Six Basic Shapes" — 5만 소설 분석, 감정 곡선 형태 분류<br>
-      • Fabula Entropy Indexing (arXiv:2104.07472) — 엔트로피 기반 코히어런스 측정
+      &bull; Narrative Information Theory (arXiv:2411.12907) — JSD로 서프라이즈/피봇 감지<br>
+      &bull; Reagan et al. "Six Basic Shapes" — 5만 소설 분석, 감정 곡선 형태 분류<br>
+      &bull; Fabula Entropy Indexing (arXiv:2104.07472) — 엔트로피 기반 코히어런스 측정
     </div>
   </div>
 </div>
 
-<!-- What changes section -->
-<div class="card" style="margin-top:16px; border-color:#7c3aed;">
-  <h3 style="color:#a78bfa;">정보이론 적용 전/후 비교</h3>
-  <table class="preset-table" style="margin-top:8px;">
-    <thead>
-      <tr><th>감지 대상</th><th>Before (프록시)</th><th>After (정보이론)</th></tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td style="color:#e0e0e0;">지루한 구간</td>
-        <td style="color:#fbbf24;">"그래서" 개수 세기</td>
-        <td style="color:#6ee7b7;">JSD < 0.05 연속 3문단 = 수학적 정체</td>
-      </tr>
-      <tr>
-        <td style="color:#e0e0e0;">반전 효과</td>
-        <td style="color:#fbbf24;">부정어 증가 여부</td>
-        <td style="color:#6ee7b7;">JSD 스파이크 + 블루프린트 tension 대조</td>
-      </tr>
-      <tr>
-        <td style="color:#e0e0e0;">의도 이행</td>
-        <td style="color:#fbbf24;">키워드 존재 여부</td>
-        <td style="color:#6ee7b7;">감정곡선 Pearson 상관계수 (r = -1~+1)</td>
-      </tr>
-      <tr>
-        <td style="color:#e0e0e0;">감정 다양성</td>
-        <td style="color:#fbbf24;">감정어 개수</td>
-        <td style="color:#6ee7b7;">Shannon 엔트로피 H(scene) 분포</td>
-      </tr>
-      <tr>
-        <td style="color:#e0e0e0;">오탐률</td>
-        <td style="color:#fca5a5;">~30% (무식한 프록시)</td>
-        <td style="color:#6ee7b7;">~10% (의도 vs 결과 비교)</td>
-      </tr>
-    </tbody>
-  </table>
-</div>
-
 <!-- ============================================================ -->
-<h2>5. 정보 관리 — 고정 vs 가변 vs 선택적 검색</h2>
+<h2>6. 정보 관리 — 고정 vs 가변 vs 선택적 검색</h2>
 <!-- ============================================================ -->
 
 <div class="card">
@@ -521,97 +619,97 @@
   <div class="mem-layer mem-fixed">
     <div style="width:80px; font-size:12px; color:#a78bfa; font-weight:600;">고정<br>(항상)</div>
     <div style="flex:1; font-size:13px;">
-      세계관 (장소, 세력, 규칙) · 캐릭터 프로필 (voice, backstory, gender) · 블루프린트 (씬 목적, 감정톤) · 복선 지시
+      세계관 (장소, 세력, 규칙) &middot; 캐릭터 프로필 (voice, backstory, gender) &middot; 블루프린트 (씬 목적, 감정톤) &middot; 복선 지시
     </div>
   </div>
 
   <div class="mem-layer mem-mutable">
     <div style="width:80px; font-size:12px; color:#fbbf24; font-weight:600;">가변<br>(화마다)</div>
     <div style="flex:1; font-size:13px;">
-      캐릭터 현재 상태 (감정, 관계, 위치, 비밀) · 이전 화 마지막 500자 · 톤 가이드 · 교정 컨텍스트
+      캐릭터 현재 상태 (감정, 관계, 위치, 비밀) &middot; 이전 화 마지막 500자 &middot; 톤 가이드 &middot; 교정 컨텍스트 &middot; 인과그래프 경고
     </div>
   </div>
 
   <div class="mem-layer mem-selective">
     <div style="width:80px; font-size:12px; color:#67e8f9; font-weight:600;">선택적<br>(관련만)</div>
     <div style="flex:1; font-size:13px;">
-      이벤트 타임라인 (이 캐릭터의 미해결 사건만) · 서사 스레드 (긴급/권장만) · 계층적 메모리 (최근 2화 + 아크 요약)
+      이벤트 타임라인 (이 캐릭터의 미해결 사건만) &middot; 서사 스레드 (긴급/권장만) &middot; 계층적 메모리 (최근 2화 + 아크 요약)
     </div>
   </div>
 
   <div style="margin-top:12px; padding:12px; background:#0a0a0f; border-radius:8px; font-size:12px; color:#6b7280;">
-    ✕ 전달 안 함: 30화 전 상세 내용, 관련 없는 캐릭터 상태, 해결된 사건 → 토큰 절약
+    &times; 전달 안 함: 30화 전 상세 내용, 관련 없는 캐릭터 상태, 해결된 사건 &rarr; 토큰 절약
   </div>
 </div>
 
 <!-- ============================================================ -->
-<h2>6. 트래킹 시스템 (7개)</h2>
+<h2>7. 트래킹 시스템 (7개)</h2>
 <!-- ============================================================ -->
 
 <div class="grid grid-2">
   <div class="card card-blue">
-    <h3>📚 HierarchicalMemory</h3>
-    <p style="font-size:13px;">3단계 기억: 단기(최근 2화) · 중기(아크 요약) · 장기(전체 압축)</p>
+    <h3>HierarchicalMemory</h3>
+    <p style="font-size:13px;">3단계 기억: 단기(최근 2화) &middot; 중기(아크 요약) &middot; 장기(전체 압축)</p>
     <div class="file-list"><code>memory/hierarchical-memory.ts</code></div>
   </div>
 
   <div class="card card-amber">
-    <h3>👤 CharacterTracker</h3>
-    <p style="font-size:13px;">화마다 스냅샷: 감정 · 관계 변화 · 위치 · 비밀. seed.characters.state도 동기 업데이트</p>
+    <h3>CharacterTracker</h3>
+    <p style="font-size:13px;">화마다 스냅샷: 감정 &middot; 관계 변화 &middot; 위치 &middot; 비밀. seed.characters.state도 동기 업데이트</p>
     <div class="file-list"><code>tracking/character-tracker.ts</code></div>
   </div>
 
   <div class="card card-green">
-    <h3>🧵 ThreadTracker</h3>
+    <h3>ThreadTracker</h3>
     <p style="font-size:13px;">미해결 서사 스레드 관리. 데드라인 접근 시 긴급 리마인더 주입</p>
     <div class="file-list"><code>tracking/thread-tracker.ts</code> + <code>thread-extractor.ts</code></div>
   </div>
 
   <div class="card card-cyan">
-    <h3>📅 EventTimeline</h3>
+    <h3>EventTimeline</h3>
     <p style="font-size:13px;">사건 인덱스. 캐릭터별/장소별/타입별 검색. 미해결 사건만 선택적 주입</p>
     <div class="file-list"><code>tracking/event-timeline.ts</code></div>
   </div>
 
   <div class="card">
-    <h3>🎵 ToneManager</h3>
+    <h3>ToneManager</h3>
     <p style="font-size:13px;">아크별 톤 프로필. 긴장도 커브에 맞는 톤 가이드 생성</p>
     <div class="file-list"><code>tracking/tone-profile.ts</code></div>
   </div>
 
   <div class="card">
-    <h3>📊 ProgressMonitor</h3>
+    <h3>ProgressMonitor</h3>
     <p style="font-size:13px;">아크 진행률 추적. 페이싱 피드백 (너무 빠름/느림)</p>
     <div class="file-list"><code>tracking/progress-monitor.ts</code></div>
   </div>
 
   <div class="card card-red">
-    <h3>🔄 FeedbackAccumulator</h3>
+    <h3>FeedbackAccumulator</h3>
     <p style="font-size:13px;">바텀업 피드백 수집. 임계치 초과 시 교정 계획 생성 (rewrite/adjust)</p>
     <div class="file-list"><code>feedback/feedback-accumulator.ts</code> + <code>chapter-post-processor.ts</code></div>
   </div>
 </div>
 
 <!-- ============================================================ -->
-<h2>7. 검증 레이어 (생성과 분리)</h2>
+<h2>8. 검증 레이어 (생성과 분리)</h2>
 <!-- ============================================================ -->
 
 <div class="grid grid-2">
   <div class="card card-amber">
-    <h3>📏 규칙 검증 <span class="tag tag-zinc">코드 · $0</span></h3>
+    <h3>규칙 검증 <span class="tag tag-zinc">코드 &middot; $0</span> <span class="tag tag-green">ACTIVE</span></h3>
     <p style="font-size:12px; color:#9ca3af;">RuleGuardAgent — 순수 로직</p>
     <ul style="font-size:13px; margin-top:8px; padding-left:16px;">
       <li>어미 반복 (3연속 같은 어미)</li>
       <li>금지 표현 ("결심을 굳혔다" 등)</li>
       <li>문장 시작 반복</li>
-      <li>분량 검증 (3000~4000자)</li>
+      <li>분량 검증 (2800~4200자)</li>
       <li>대사 비율 검증</li>
     </ul>
-    <div class="file-list"><code>rule-guard.ts</code> · <code>scene-validator.ts</code></div>
+    <div class="file-list"><code>rule-guard.ts</code> &middot; <code>scene-validator.ts</code></div>
   </div>
 
   <div class="card card-pink">
-    <h3>🔢 수학적 검증 <span class="tag tag-pink">코드 · $0 · NEW</span></h3>
+    <h3>수학적 검증 <span class="tag tag-pink">코드 &middot; $0</span> <span class="tag tag-green">ACTIVE</span></h3>
     <p style="font-size:12px; color:#9ca3af;">ConstraintChecker — 지식 그래프 + 상태 머신</p>
     <ul style="font-size:13px; margin-top:8px; padding-left:16px;">
       <li>죽은 캐릭터 등장</li>
@@ -623,90 +721,32 @@
     <div class="file-list"><code>evaluators/constraint-checker.ts</code></div>
   </div>
 
-  <div class="card card-green">
-    <h3>🔗 설정 일관성 <span class="tag tag-green">LLM 1회</span></h3>
-    <p style="font-size:12px; color:#9ca3af;">ConsistencyChecker — 설정집 대조</p>
-    <ul style="font-size:13px; margin-top:8px; padding-left:16px;">
-      <li>캐릭터 말투 일관성</li>
-      <li>세계관 규칙 위반</li>
-      <li>타임라인 충돌</li>
-      <li>캐릭터 상태 모순</li>
-      <li>위치 연속성</li>
-    </ul>
+  <div class="card" style="border-color: #3f3f46;">
+    <h3 style="color: #6b7280;">설정 일관성 <span class="tag tag-disabled">DISABLED</span></h3>
+    <p style="font-size:12px; color:#4b5563;">ConsistencyChecker — 설정집 대조 (LLM 1회)</p>
+    <p style="font-size:11px; color:#fca5a5; margin-top: 4px;">비활성화: LLM rewrite가 RuleGuard 수정을 덮어씀</p>
     <div class="file-list"><code>consistency-checker.ts</code></div>
   </div>
 
-  <div class="card card-blue">
-    <h3>⭐ 문체 품질 <span class="tag tag-blue">LLM 기반</span></h3>
-    <p style="font-size:12px; color:#9ca3af;">CriticAgent (5차원) + SurgeonAgent</p>
-    <ul style="font-size:13px; margin-top:8px; padding-left:16px;">
-      <li>서사 전개 (25%)</li>
-      <li>캐릭터 음성 (25%)</li>
-      <li>문장 리듬 (20%)</li>
-      <li>후킹 엔딩 (15%)</li>
-      <li>몰입감 (15%)</li>
-    </ul>
-    <div class="file-list"><code>critic-agent.ts</code> · <code>surgeon-agent.ts</code></div>
+  <div class="card" style="border-color: #3f3f46;">
+    <h3 style="color: #6b7280;">문체 품질 <span class="tag tag-disabled">DISABLED</span></h3>
+    <p style="font-size:12px; color:#4b5563;">CriticAgent + SurgeonAgent (LLM 기반)</p>
+    <p style="font-size:11px; color:#fca5a5; margin-top: 4px;">비활성화: A/B 테스트에서 품질 저하 증명 (0.78 &rarr; 0.82 without)</p>
+    <div class="file-list"><code>critic-agent.ts</code> &middot; <code>surgeon-agent.ts</code></div>
   </div>
 </div>
 
 <div class="card" style="margin-top:16px;">
-  <h3>🔍 개연성 검증 (시드 레벨)</h3>
+  <h3>개연성 검증 (시드 레벨)</h3>
   <p style="font-size:13px; color:#9ca3af;">
-    소설 설계 단계에서 논리적 구멍 사전 검출 → 자동 수정<br>
-    정체 위장 합리성 · 정보 비대칭 · 동기 충분성 · 세계관 규칙 · 시간선 논리
+    소설 설계 단계에서 논리적 구멍 사전 검출 &rarr; 자동 수정<br>
+    정체 위장 합리성 &middot; 정보 비대칭 &middot; 동기 충분성 &middot; 세계관 규칙 &middot; 시간선 논리
   </p>
   <div class="file-list"><code>evaluators/plausibility.ts</code></div>
 </div>
 
-<div class="card" style="margin-top:16px; border-color:#ec4899;">
-  <h3>📊 결정적 평가 (9차원) <span class="tag tag-pink">코드 · $0 · NEW</span></h3>
-  <p style="font-size:13px; color:#9ca3af;">
-    DeterministicScorer — LLM CriticAgent의 1차 게이트로 사용 예정<br>
-  </p>
-  <div style="margin-top:12px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; font-size:12px;">
-    <div style="padding:8px; background:#1a1a2a; border-radius:6px;">
-      <div style="color:#a78bfa; font-weight:600;">서사 전개 20%</div>
-      <div style="color:#6b7280;">정보밀도 · 인과관계 · 긴장</div>
-    </div>
-    <div style="padding:8px; background:#1a1a2a; border-radius:6px;">
-      <div style="color:#a78bfa; font-weight:600;">캐릭터 음성 15%</div>
-      <div style="color:#6b7280;">말투 매칭 · 존댓말 일관성</div>
-    </div>
-    <div style="padding:8px; background:#1a1a2a; border-radius:6px;">
-      <div style="color:#a78bfa; font-weight:600;">몰입감 15%</div>
-      <div style="color:#6b7280;">구체성 · 접지 · 심리거리</div>
-    </div>
-    <div style="padding:8px; background:#1a1a2a; border-radius:6px;">
-      <div style="color:#7dd3fc; font-weight:600;">리듬 12%</div>
-      <div style="color:#6b7280;">장단 교차 · 어미 다양성</div>
-    </div>
-    <div style="padding:8px; background:#1a1a2a; border-radius:6px;">
-      <div style="color:#7dd3fc; font-weight:600;">후킹 10%</div>
-      <div style="color:#6b7280;">마지막 문단 패턴</div>
-    </div>
-    <div style="padding:8px; background:#1a1a2a; border-radius:6px;">
-      <div style="color:#7dd3fc; font-weight:600;">반복 회피 10%</div>
-      <div style="color:#6b7280;">주어/4-gram 반복</div>
-    </div>
-    <div style="padding:8px; background:#1a1a2a; border-radius:6px;">
-      <div style="color:#6b7280; font-weight:600;">대사 비율 8%</div>
-      <div style="color:#6b7280;">30~60% 최적</div>
-    </div>
-    <div style="padding:8px; background:#1a1a2a; border-radius:6px;">
-      <div style="color:#6b7280; font-weight:600;">감각 다양성 5%</div>
-      <div style="color:#6b7280;">5감 중 3개+</div>
-    </div>
-    <div style="padding:8px; background:#1a1a2a; border-radius:6px;">
-      <div style="color:#6b7280; font-weight:600;">분량 5%</div>
-      <div style="color:#6b7280;">3000~4000자</div>
-    </div>
-  </div>
-  <div class="file-list" style="margin-top:12px;"><code>evaluators/deterministic-scorer.ts</code></div>
-</div>
-
 <!-- ============================================================ -->
-<h2>8. 계층적 플래닝</h2>
+<h2>9. 계층적 플래닝</h2>
 <!-- ============================================================ -->
 
 <div class="section-flow">
@@ -715,17 +755,17 @@
       <strong>L1: MasterPlan</strong><br>
       <span style="font-size:11px; color:#9ca3af;">3~5개 대막 (50~70화씩)</span>
     </div>
-    <span class="flow-arrow">→</span>
+    <span class="flow-arrow">&rarr;</span>
     <div class="flow-item" style="border-color:#d97706;">
       <strong>L2: ArcPlan</strong><br>
       <span style="font-size:11px; color:#9ca3af;">8~15화 단위 아크</span>
     </div>
-    <span class="flow-arrow">→</span>
+    <span class="flow-arrow">&rarr;</span>
     <div class="flow-item" style="border-color:#2563eb;">
       <strong>L3: Blueprint</strong><br>
-      <span style="font-size:11px; color:#9ca3af;">화별 씬 목록</span>
+      <span style="font-size:11px; color:#9ca3af;">화별 씬 목록 (per-chapter)</span>
     </div>
-    <span class="flow-arrow">→</span>
+    <span class="flow-arrow">&rarr;</span>
     <div class="flow-item" style="border-color:#7c3aed;">
       <strong>L4: Beat</strong><br>
       <span style="font-size:11px; color:#9ca3af;">씬 내 구조 비트</span>
@@ -738,12 +778,12 @@
     <strong>최소 3파트:</strong> 마스터플랜은 반드시 3개 이상의 대막 생성. 미달 시 자동 보충.
   </div>
   <div class="file-list" style="margin-top:8px;">
-    <code>planning/master-planner.ts</code> · <code>arc-planner.ts</code> · <code>chapter-planner.ts</code> · <code>lazy-scheduler.ts</code>
+    <code>planning/master-planner.ts</code> &middot; <code>arc-planner.ts</code> &middot; <code>chapter-planner.ts</code> &middot; <code>lazy-scheduler.ts</code>
   </div>
 </div>
 
 <!-- ============================================================ -->
-<h2>9. 캐릭터 시스템</h2>
+<h2>10. 캐릭터 시스템</h2>
 <!-- ============================================================ -->
 
 <div class="grid grid-2">
@@ -759,19 +799,19 @@
   <div class="card card-amber">
     <h3>가변 상태 (화마다 업데이트)</h3>
     <div style="font-size:13px; margin-top:8px;">
-      <div style="padding:4px 0;"><span class="tag tag-amber">emotional_state</span> "불안" → "결의" → "위기감"</div>
-      <div style="padding:4px 0;"><span class="tag tag-amber">relationships</span> {"카이": "경계→호기심"}</div>
-      <div style="padding:4px 0;"><span class="tag tag-amber">location</span> "기사단 숙소" → "훈련장"</div>
+      <div style="padding:4px 0;"><span class="tag tag-amber">emotional_state</span> "불안" &rarr; "결의" &rarr; "위기감"</div>
+      <div style="padding:4px 0;"><span class="tag tag-amber">relationships</span> {"카이": "경계&rarr;호기심"}</div>
+      <div style="padding:4px 0;"><span class="tag tag-amber">location</span> "기사단 숙소" &rarr; "훈련장"</div>
       <div style="padding:4px 0;"><span class="tag tag-red">secrets_known</span> ["왕의 비밀", "배신자 정체"]</div>
     </div>
     <div class="file-list" style="margin-top:8px;">
-      추출: <code>chapter-summarizer.ts</code> → 저장: <code>character-tracker.ts</code> → 주입: <code>scene-writer.ts</code>
+      추출: <code>chapter-summarizer.ts</code> &rarr; 저장: <code>character-tracker.ts</code> &rarr; 주입: <code>scene-writer.ts</code>
     </div>
   </div>
 </div>
 
 <!-- ============================================================ -->
-<h2>10. 비용 구조 — 검증 레이어별</h2>
+<h2>11. 비용 구조 — 검증 레이어별</h2>
 <!-- ============================================================ -->
 
 <div class="section-flow">
@@ -782,7 +822,7 @@
         <th>방식</th>
         <th>비용/화</th>
         <th>속도</th>
-        <th>정확도</th>
+        <th>상태</th>
       </tr>
     </thead>
     <tbody>
@@ -791,58 +831,128 @@
         <td><span class="tag tag-zinc">코드</span></td>
         <td style="color:#6ee7b7;">$0</td>
         <td>&lt;1ms</td>
-        <td>100% (규칙 기반)</td>
+        <td><span class="tag tag-green">ACTIVE</span></td>
       </tr>
       <tr>
         <td>ConstraintChecker</td>
         <td><span class="tag tag-pink">코드</span></td>
         <td style="color:#6ee7b7;">$0</td>
         <td>&lt;1ms</td>
-        <td>100% (논리 기반)</td>
+        <td><span class="tag tag-green">ACTIVE</span></td>
       </tr>
       <tr>
-        <td>DeterministicScorer</td>
+        <td>DeterministicScorer (14차원)</td>
         <td><span class="tag tag-pink">코드</span></td>
         <td style="color:#6ee7b7;">$0</td>
         <td>&lt;1ms</td>
-        <td>~70% (프록시 지표)</td>
+        <td><span class="tag tag-green">ACTIVE</span></td>
       </tr>
       <tr>
+        <td>CausalGraph</td>
+        <td><span class="tag tag-green">코드</span></td>
+        <td style="color:#6ee7b7;">$0</td>
+        <td>&lt;1ms</td>
+        <td><span class="tag tag-green">ACTIVE</span></td>
+      </tr>
+      <tr style="opacity:0.5;">
         <td>ConsistencyChecker</td>
-        <td><span class="tag tag-green">LLM</span></td>
-        <td style="color:#fbbf24;">~$0.01</td>
+        <td><span class="tag tag-zinc">LLM</span></td>
+        <td style="color:#6b7280;">~$0.01</td>
         <td>3~8초</td>
-        <td>~90%</td>
+        <td><span class="tag tag-disabled">DISABLED</span></td>
       </tr>
-      <tr>
+      <tr style="opacity:0.5;">
         <td>CriticAgent</td>
-        <td><span class="tag tag-blue">LLM</span></td>
-        <td style="color:#fbbf24;">~$0.03</td>
+        <td><span class="tag tag-zinc">LLM</span></td>
+        <td style="color:#6b7280;">~$0.03</td>
         <td>5~15초</td>
-        <td>~85%</td>
+        <td><span class="tag tag-disabled">DISABLED</span></td>
       </tr>
-      <tr>
-        <td>SurgeonAgent (반복)</td>
-        <td><span class="tag tag-red">LLM</span></td>
-        <td style="color:#fca5a5;">~$0.02/회</td>
+      <tr style="opacity:0.5;">
+        <td>SurgeonAgent</td>
+        <td><span class="tag tag-zinc">LLM</span></td>
+        <td style="color:#6b7280;">~$0.02/회</td>
         <td>5~10초/회</td>
-        <td>가변적</td>
+        <td><span class="tag tag-disabled">DISABLED</span></td>
       </tr>
     </tbody>
   </table>
   <div style="margin-top:12px; padding:12px; background:#0a0a0f; border-radius:8px; font-size:12px; color:#6b7280;">
-    💡 <strong>전략:</strong> 결정적 검증 (코드)으로 70%를 걸러내고, LLM은 진짜 어려운 30%에만 집중.
-    DeterministicScorer 통합 시 예상 비용: 화당 $0.05 → $0.02
+    <strong style="color:#6ee7b7;">현재 전략:</strong> 결정적 검증 (코드)만 사용. LLM 후처리를 제거한 결과 비용 66% 절감 + 품질 향상.
   </div>
 </div>
 
 <!-- ============================================================ -->
-<h2>11. 한계 인식</h2>
+<h2>12. E2E 테스트 결과</h2>
+<!-- ============================================================ -->
+
+<div class="grid grid-4" style="margin-bottom: 16px;">
+  <div class="card card-accent" style="text-align: center;">
+    <div class="stat" style="color: #6ee7b7;">0.77</div>
+    <div class="stat-label">Score (2화 평균)</div>
+  </div>
+  <div class="card card-accent" style="text-align: center;">
+    <div class="stat" style="color: #6ee7b7;">$0.047</div>
+    <div class="stat-label">비용 (2화, 66% 절감)</div>
+  </div>
+  <div class="card card-accent" style="text-align: center;">
+    <div class="stat" style="color: #6ee7b7;">0건</div>
+    <div class="stat-label">RuleGuard 위반</div>
+  </div>
+  <div class="card card-accent" style="text-align: center;">
+    <div class="stat" style="color: #6ee7b7;">1.00</div>
+    <div class="stat-label">Loop / Dialogue</div>
+  </div>
+</div>
+
+<div class="card" style="border-color: #059669;">
+  <h3 style="color: #6ee7b7;">실측 데이터 요약</h3>
+  <table class="preset-table">
+    <thead>
+      <tr><th>지표</th><th>값</th><th>비고</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>결정적 점수 (2화 평균)</td>
+        <td style="color: #6ee7b7; font-weight: 600;">0.77</td>
+        <td>상태 머신 PASS 임계값 0.85 미만 &mdash; REPAIR 경로 동작 확인</td>
+      </tr>
+      <tr>
+        <td>총 비용 (2화)</td>
+        <td style="color: #6ee7b7; font-weight: 600;">$0.047</td>
+        <td>기존 대비 66% 절감 (LLM 후처리 제거 효과)</td>
+      </tr>
+      <tr>
+        <td>RuleGuard 위반</td>
+        <td style="color: #6ee7b7; font-weight: 600;">0건</td>
+        <td>어미 반복, 금지 표현, 분량 등 모든 규칙 통과</td>
+      </tr>
+      <tr>
+        <td>서사 루프 (loopAvoidance)</td>
+        <td style="color: #6ee7b7; font-weight: 600;">1.00</td>
+        <td>인접 문단 명사 중복 없음</td>
+      </tr>
+      <tr>
+        <td>대사 정보량 (dialogueQuality)</td>
+        <td style="color: #6ee7b7; font-weight: 600;">1.00</td>
+        <td>빈 대사 비율 0%</td>
+      </tr>
+      <tr>
+        <td>LLM 호출 수/화</td>
+        <td style="color: #6ee7b7; font-weight: 600;">~3-5회</td>
+        <td>기존 ~25-35회 대비 대폭 감소</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================================ -->
+<h2>13. 한계 인식</h2>
 <!-- ============================================================ -->
 
 <div class="grid grid-2">
   <div class="card" style="border-color:#059669;">
-    <h3 style="color:#6ee7b7;">✅ 결정적 평가가 잘 하는 것</h3>
+    <h3 style="color:#6ee7b7;">결정적 평가가 잘 하는 것</h3>
     <ul style="font-size:13px; margin-top:8px; padding-left:16px; color:#9ca3af;">
       <li>기본적인 실수 잡기 (어미 반복, 대사 부족, 분량 초과)</li>
       <li>"최소 품질 기준선" 설정 (이 이하면 확실히 나쁨)</li>
@@ -851,24 +961,31 @@
       <li style="color:#f9a8d4;"><strong>정체 구간 자동 감지</strong> — JSD로 "아무 일도 안 일어나는" 구간 특정</li>
       <li style="color:#f9a8d4;"><strong>묻힌 반전 감지</strong> — 블루프린트 의도 vs 실제 JSD 비교</li>
       <li style="color:#f9a8d4;"><strong>의도 이행률</strong> — 감정 곡선 상관계수로 "얼마나 의도대로 썼는가?"</li>
+      <li style="color:#6ee7b7;"><strong>서사 루프 감지</strong> — 인접 문단 명사 반복으로 루프 탐지</li>
+      <li style="color:#6ee7b7;"><strong>빈 대사 감지</strong> — 정보량 없는 대사 식별</li>
+      <li style="color:#6ee7b7;"><strong>감정 아크 패턴</strong> — Hurst 지수로 자연스러운 감정 변동 측정</li>
     </ul>
   </div>
   <div class="card" style="border-color:#dc2626;">
-    <h3 style="color:#fca5a5;">❌ 여전히 LLM이 필요한 것</h3>
+    <h3 style="color:#fca5a5;">여전히 LLM이 필요한 것</h3>
     <ul style="font-size:13px; margin-top:8px; padding-left:16px; color:#9ca3af;">
       <li>"이 글이 감동적인가?" — 감정 사전은 키워드만, 맥락은 모름</li>
       <li>"이 반전이 놀라운가?" — JSD는 "변화가 있었다"만, "좋은 변화인지"는 모름</li>
       <li>"이 대사가 자연스러운가?" — 패턴 매칭은 형태만, 뉘앙스는 모름</li>
       <li>독자의 실제 반응 예측 — 구조적 신호일 뿐, 종합적 재미 판단은 불가</li>
     </ul>
+    <div style="margin-top: 16px; padding: 10px; background: #dc262611; border: 1px solid #dc262633; border-radius: 8px; font-size: 12px; color: #fca5a5;">
+      <strong>그러나</strong> A/B 테스트 결과, LLM 후처리가 오히려 품질을 해친다는 것이 증명됨.
+      현재 전략: 결정적 검증만 사용하고 LLM은 생성(Writer)에만 집중.
+    </div>
   </div>
 </div>
 
 <div style="margin-top:16px; padding:16px; background:#12121a; border:1px solid #2a2a3a; border-radius:12px; font-size:13px; color:#9ca3af; text-align:center;">
   <strong style="color:#a78bfa;">결론:</strong>
-  정보이론 도입으로 <strong>"확실히 나쁜 것"</strong>에서 <strong>"구조적으로 문제인 것"</strong>까지 범위 확장.<br>
-  <strong>"진짜 좋은 것"</strong>을 판단하는 건 여전히 LLM의 몫.
-  둘을 조합하면 비용 70% 절감 + 품질 유지.
+  LLM 후처리를 제거하고 결정적 검증(14차원) + 상태 머신으로 전환.<br>
+  <strong style="color:#6ee7b7;">비용 66% 절감, 품질 향상 (0.78 &rarr; 0.82), LLM 호출 ~3-5회/화.</strong><br>
+  "적게 쓰되 잘 쓴다"가 현재 아키텍처의 핵심 철학.
 </div>
 
 </body>

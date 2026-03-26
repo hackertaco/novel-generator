@@ -368,6 +368,13 @@ export function useStreamingGeneration() {
                       addPipelineLog(`  ✓ ${fix}`, "info");
                     }
                     break;
+                  case "deterministic_scores":
+                    // Store detailed dimension scores for user-friendly feedback display
+                    setEvaluationResult({
+                      ...parsed.scores,
+                      _type: "deterministic",
+                    });
+                    break;
                   case "harness_done":
                     addPipelineLog(
                       `하네스 완료 (${parsed.config}) — $${(parsed.totalCostUsd ?? 0).toFixed(4)}, ${((parsed.totalDurationMs ?? 0) / 1000).toFixed(1)}초`,

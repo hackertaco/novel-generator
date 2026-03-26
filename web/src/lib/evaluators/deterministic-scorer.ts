@@ -666,10 +666,8 @@ export function computeDeterministicScores(
     dialogueQualityScore = dialogueInfoResult.score;
 
     const arcResult = analyzeSentimentArc(text);
-    // Optimal Hurst is 0.55-0.65 (anti-persistent but not random)
-    const hurst = arcResult.hurstScore ?? 0.5;
-    const optimalDist = Math.abs(hurst - 0.6);
-    sentimentArcScore = Math.max(0, 1 - optimalDist * 4);
+    // Use the score computed by analyzeSentimentArc directly (no double penalty)
+    sentimentArcScore = arcResult.hurstScore;
   } catch {
     // Non-blocking: use defaults on failure
   }
