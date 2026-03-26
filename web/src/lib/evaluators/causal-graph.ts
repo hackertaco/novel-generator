@@ -31,6 +31,7 @@ export interface CausalNode {
   what: string;
   why: string;
   reveal: string;        // "immediate" | "delayed" | "implicit"
+  prerequisite: string;  // what the reader must know before this event
   threads: string[];     // which story threads this advances
 }
 
@@ -80,7 +81,7 @@ export function buildCausalGraph(seed: NovelSeed): CausalGraph {
       const nodeId = `ch${ch}_${i}`;
 
       if (typeof point === "string") {
-        nodes.push({ id: nodeId, chapter: ch, what: point, why: "", reveal: "immediate", threads });
+        nodes.push({ id: nodeId, chapter: ch, what: point, why: "", reveal: "immediate", prerequisite: "", threads });
       } else {
         nodes.push({
           id: nodeId,
@@ -88,6 +89,7 @@ export function buildCausalGraph(seed: NovelSeed): CausalGraph {
           what: point.what,
           why: point.why || "",
           reveal: point.reveal || "immediate",
+          prerequisite: point.prerequisite || "",
           threads,
         });
       }
@@ -101,6 +103,7 @@ export function buildCausalGraph(seed: NovelSeed): CausalGraph {
         what: outline.one_liner,
         why: "",
         reveal: "immediate",
+        prerequisite: "",
         threads,
       });
     }
@@ -155,6 +158,30 @@ export function validateCausalGraph(seed: NovelSeed): CausalValidationResult {
         severity: "critical",
         chapter: node.chapter,
         description: `${node.chapter}화 "${node.what}" — 이유(why)가 없습니다. 이 사건이 왜 일어나는지 정의해야 합니다.`,
+      });
+    }
+  }
+
+  // 1b. Prerequisite Check — if an event has a prerequisite, verify it was established earlier
+  for (const node of graph.nodes) {
+    if (!node.prerequisite) continue;
+    const prereqKeywords = extractKeywords(node.prerequisite);
+    if (prereqKeywords.length === 0) continue;
+
+    // Check if any earlier node's "what" contains the prerequisite keywords
+    const earlierNodes = graph.nodes.filter((n) => n.chapter < node.chapter);
+    const established = earlierNodes.some((earlier) => {
+      const earlierKeywords = extractKeywords(earlier.what);
+      const overlap = prereqKeywords.filter((k) => earlierKeywords.includes(k));
+      return overlap.length >= Math.ceil(prereqKeywords.length * 0.5);
+    });
+
+    if (!established) {
+      issues.push({
+        type: "missing_cause" as const,
+        severity: "critical" as const,
+        chapter: node.chapter,
+        description: `${node.chapter}화 "${node.what}" — 전제조건 "${node.prerequisite}"이 이전 화에서 확립되지 않았습니다. 독자가 이 사건을 이해하려면 먼저 알아야 할 정보입니다.`,
       });
     }
   }

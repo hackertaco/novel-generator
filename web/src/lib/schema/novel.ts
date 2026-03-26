@@ -50,6 +50,7 @@ export const PlotPointSchema = z.union([
       "immediate: 독자에게 바로 설명. delayed: 숨기고 나중에 밝힘 (서스펜스). implicit: 힌트만 주고 추론하게 함"
     ),
     reveal_at: z.number().int().optional().describe("delayed일 때, 몇 화에서 밝히는지"),
+    prerequisite: z.string().optional().describe("이 사건이 일어나려면 독자가 미리 알아야 할 전제 (예: '에단에게 마력이 있다')"),
   }),
 ]);
 

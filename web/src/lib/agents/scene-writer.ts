@@ -658,7 +658,41 @@ export async function writeChapterParallel(
     totalUsage = addUsage(totalUsage, r.usage);
   }
 
-  // --- Phase 1.5: Cross-scene deduplication ---
+  // --- Phase 1.5a: Scene boundary dedup ---
+  // If scene B's first 2 sentences overlap with scene A's last 2, trim scene B's opening
+  if (sceneTexts.length >= 2) {
+    for (let si = 1; si < sceneTexts.length; si++) {
+      const prevText = sceneTexts[si - 1];
+      const currText = sceneTexts[si];
+
+      // Extract last 2 sentences of previous scene
+      const prevSentences = prevText.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 0);
+      const lastTwo = prevSentences.slice(-2).map((s) => s.trim());
+
+      // Extract first 3 sentences of current scene
+      const currSentences = currText.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 0);
+      const firstThree = currSentences.slice(0, 3);
+
+      // Check if any of first 3 sentences share 60%+ nouns with last 2
+      const lastNouns = new Set((lastTwo.join(" ").match(/[가-힣]{2,}/g) || []));
+      if (lastNouns.size >= 2) {
+        let trimCount = 0;
+        for (const sent of firstThree) {
+          const sentNouns = new Set((sent.match(/[가-힣]{2,}/g) || []).filter((n) => n.length >= 2));
+          if (sentNouns.size < 2) break;
+          const overlap = [...sentNouns].filter((n) => lastNouns.has(n)).length / sentNouns.size;
+          if (overlap >= 0.6) trimCount++;
+          else break;
+        }
+        if (trimCount > 0) {
+          const remaining = currSentences.slice(trimCount);
+          sceneTexts[si] = remaining.join(" ");
+        }
+      }
+    }
+  }
+
+  // --- Phase 1.5b: Cross-scene paragraph deduplication ---
   // Remove paragraphs in later scenes that duplicate earlier scene content
   if (sceneTexts.length >= 2) {
     for (let si = 1; si < sceneTexts.length; si++) {
