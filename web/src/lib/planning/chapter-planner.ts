@@ -27,18 +27,19 @@ export async function generateChapterBlueprints(
     ongoing_action: string;
     unresolved_tension: string;
   } | null,
+  targetChapter?: number,
 ): Promise<{ data: ChapterBlueprint[]; usage: TokenUsage }> {
   const agent = getAgent();
-  const prompt = getChapterBlueprintPrompt(seed, arc, previousChapterSummaries, previousChapterEnding, endingSceneState);
+  const prompt = getChapterBlueprintPrompt(seed, arc, previousChapterSummaries, previousChapterEnding, endingSceneState, targetChapter);
 
   const result = await agent.callStructured({
     prompt,
     system: "당신은 한국 웹소설 화별 구성을 설계하는 전문가입니다. JSON 형식으로 출력하세요.",
     temperature: 0.6,
-    maxTokens: 16000,
+    maxTokens: 4000,
     schema: ChapterBlueprintResponseSchema,
     format: "json",
-    taskId: `chapter-blueprints-${arc.id}`,
+    taskId: `chapter-blueprints-${arc.id}-ch${targetChapter ?? arc.start_chapter}`,
   });
 
   // Post-validation

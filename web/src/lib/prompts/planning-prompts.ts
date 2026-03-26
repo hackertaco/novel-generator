@@ -183,6 +183,7 @@ export function getChapterBlueprintPrompt(
     ongoing_action: string;
     unresolved_tension: string;
   } | null,
+  targetChapter?: number,
 ): string {
   const recentSummaries = previousChapterSummaries.slice(-5);
 
@@ -251,7 +252,7 @@ ${previousChapterEnding}
 
 ## 지시사항
 
-${arc.start_chapter}화부터 ${Math.min(arc.start_chapter + 4, arc.end_chapter)}화까지 블루프린트를 작성하세요 (최대 5화):
+${targetChapter ?? arc.start_chapter}화의 블루프린트를 1개만 작성하세요:
 1. **씬 구성**: 각 씬의 목적, 타입, 예상 분량
    - **purpose에는 반드시 캐릭터의 한국어 이름을 사용하세요** (ID가 아닌 이름! ❌ "char_1이" → ✅ "이수련이")
    - **purpose는 반드시 구체적으로**: "누가 무엇을 하고, 그 결과 어떤 변화가 생기는지" 포함

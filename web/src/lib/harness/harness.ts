@@ -336,8 +336,8 @@ export class NovelHarness {
       }
       if (arc && scheduler.needsChapterBlueprint(chapterNumber)) {
         try {
-          const bpResult = await generateChapterBlueprints(seed, arc, previousSummaries, previousChapterEnding, endingSceneState);
-          arc.chapter_blueprints = bpResult.data;
+          const bpResult = await generateChapterBlueprints(seed, arc, previousSummaries, previousChapterEnding, endingSceneState, chapterNumber);
+          arc.chapter_blueprints = [...(arc.chapter_blueprints || []).filter(bp => bp.chapter_number !== chapterNumber), ...bpResult.data];
         } catch (err) {
           console.warn(`[harness] 블루프린트 생성 실패, 최소 블루프린트 생성: ${err instanceof Error ? err.message : err}`);
           if (err instanceof Error) console.warn(err.stack);
