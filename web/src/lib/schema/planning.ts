@@ -36,7 +36,10 @@ export type SceneSpec = z.infer<typeof SceneSpecSchema>;
 
 export const ForeshadowingActionRefSchema = z.object({
   id: z.string(),
-  action: z.enum(["plant", "hint", "reveal"]),
+  action: z.string().transform((v) => {
+    const valid = ["plant", "hint", "reveal"];
+    return valid.includes(v) ? v : "hint";
+  }) as unknown as z.ZodType<"plant" | "hint" | "reveal">,
 });
 
 // --- Chapter Blueprint (replaces ChapterOutline) ---
@@ -58,7 +61,10 @@ export const ChapterBlueprintSchema = z
     dependencies: z.array(z.union([z.string(), z.number().transform(String)])).default([]).describe("What this chapter needs from prior chapters"),
     target_word_count: z.number().int().optional().describe("Target char count; derived from scenes if omitted"),
     emotional_arc: z.string().default("").describe("e.g. 긴장→갈등→충격"),
-    key_points: z.array(z.string()).default([]),
+    key_points: z.array(z.union([
+      z.string(),
+      z.object({ what: z.string(), why: z.string().optional(), reveal: z.string().optional() }).transform((o) => o.what),
+    ])).default([]),
     characters_involved: z.array(z.string()).default([]),
     tension_level: z.number().int().min(1).max(10).default(5),
     foreshadowing_actions: z.array(ForeshadowingActionRefSchema).default([]),
