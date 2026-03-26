@@ -57,7 +57,7 @@ svg text { font-family:-apple-system,'Pretendard',sans-serif; }
   <div class="tab active" onclick="switchTab('overview')">1. Overview</div>
   <div class="tab" onclick="switchTab('statemachine')">2. State Machine</div>
   <div class="tab" onclick="switchTab('tracking')">3. Top-Down + Bottom-Up</div>
-  <div class="tab" onclick="switchTab('scorer')">4. Scorer (14D)</div>
+  <div class="tab" onclick="switchTab('scorer')">4. Scorer (18D)</div>
   <div class="tab" onclick="switchTab('modules')">5. All Modules</div>
 </div>
 
@@ -114,7 +114,7 @@ svg text { font-family:-apple-system,'Pretendard',sans-serif; }
   <text x="250" y="552" text-anchor="middle" fill="#c084fc" font-size="11" font-weight="600">Browser receives SSE events:</text>
   <text x="120" y="572" fill="#22c55e" font-size="10">chunk</text><text x="200" y="572" fill="#888" font-size="10">real-time text streaming</text>
   <text x="120" y="588" fill="#eab308" font-size="10">stage_change</text><text x="200" y="588" fill="#888" font-size="10">"writer is typing..."</text>
-  <text x="120" y="604" fill="#60a5fa" font-size="10">deterministic_scores</text><text x="255" y="604" fill="#888" font-size="10">14D score breakdown</text>
+  <text x="120" y="604" fill="#60a5fa" font-size="10">deterministic_scores</text><text x="255" y="604" fill="#888" font-size="10">18D score breakdown</text>
   <text x="120" y="620" fill="#f97316" font-size="10">gate_decision</text><text x="220" y="620" fill="#888" font-size="10">pass / repair / regenerate</text>
   <text x="120" y="636" fill="#f97316" font-size="10">replace_text</text><text x="200" y="636" fill="#888" font-size="10">repaired/polished version</text>
   <text x="120" y="652" fill="#34d399" font-size="10">complete</text><text x="200" y="652" fill="#888" font-size="10">save to localStorage</text>
@@ -153,7 +153,7 @@ svg text { font-family:-apple-system,'Pretendard',sans-serif; }
   <text x="350" y="230" text-anchor="middle" fill="#60a5fa" font-size="13" font-weight="700">VALIDATE</text>
   <text x="350" y="248" text-anchor="middle" fill="#888" font-size="9">1. SceneVerifier (dialogue, endings) [CODE]</text>
   <text x="350" y="262" text-anchor="middle" fill="#888" font-size="9">2. RuleGuardAgent (sanitize + rule check) [CODE]</text>
-  <text x="350" y="276" text-anchor="middle" fill="#888" font-size="9">3. DeterministicScorer (14 dimensions) [CODE]</text>
+  <text x="350" y="276" text-anchor="middle" fill="#888" font-size="9">3. DeterministicScorer (18 dimensions) [CODE]</text>
   <text x="350" y="290" text-anchor="middle" fill="#888" font-size="9">4. ConflictGate (tension/resolution) [CODE]</text>
 
   <!-- Decision diamond -->
@@ -274,7 +274,7 @@ svg text { font-family:-apple-system,'Pretendard',sans-serif; }
   <!-- Active Validators -->
   <rect x="340" y="450" width="280" height="52" rx="8" fill="#111" stroke="#2563eb44"/>
   <text x="480" y="468" text-anchor="middle" fill="#60a5fa" font-size="11" font-weight="600">Active: 3 Code Validators</text>
-  <text x="480" y="484" text-anchor="middle" fill="#888" font-size="9">SceneVerifier | RuleGuard | DeterministicScorer(14D)</text>
+  <text x="480" y="484" text-anchor="middle" fill="#888" font-size="9">SceneVerifier | RuleGuard | DeterministicScorer(18D)</text>
   <text x="480" y="496" text-anchor="middle" fill="#666" font-size="8">+ ConflictGate, BlueprintEval (non-blocking)</text>
 
   <line x1="480" y1="502" x2="480" y2="524" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#a3b)"/>
@@ -354,89 +354,121 @@ svg text { font-family:-apple-system,'Pretendard',sans-serif; }
 
 <!-- ==================== TAB 4: SCORER ==================== -->
 <div id="scorer" class="view">
-<svg viewBox="0 0 700 560" style="max-width:700px;margin:0 auto;display:block">
-  <text x="350" y="24" text-anchor="middle" fill="#666" font-size="11" letter-spacing="2">DETERMINISTIC SCORER: 14 DIMENSIONS</text>
+<svg viewBox="0 0 700 680" style="max-width:700px;margin:0 auto;display:block">
+  <text x="350" y="24" text-anchor="middle" fill="#666" font-size="11" letter-spacing="2">DETERMINISTIC SCORER: 18 DIMENSIONS</text>
+
+  <!-- Category labels -->
+  <text x="70" y="48" fill="#60a5fa" font-size="9" font-weight="600">INFORMATION THEORY (20%)</text>
 
   <!-- Header row -->
-  <rect x="50" y="44" width="600" height="30" rx="6" fill="#1a1a1a"/>
-  <text x="70" y="64" fill="#888" font-size="10" font-weight="600">Dimension</text>
-  <text x="350" y="64" text-anchor="middle" fill="#888" font-size="10" font-weight="600">Weight</text>
-  <text x="520" y="64" text-anchor="middle" fill="#888" font-size="10" font-weight="600">Category</text>
+  <rect x="50" y="54" width="600" height="24" rx="6" fill="#1a1a1a"/>
+  <text x="70" y="70" fill="#888" font-size="10" font-weight="600">Dimension</text>
+  <text x="350" y="70" text-anchor="middle" fill="#888" font-size="10" font-weight="600">Weight</text>
+  <text x="520" y="70" text-anchor="middle" fill="#888" font-size="10" font-weight="600">Category</text>
 
-  <!-- Rows -->
-  <rect x="50" y="80" width="600" height="26" rx="4" fill="#111"/>
+  <!-- Information Theory (20%) -->
+  <rect x="50" y="82" width="600" height="24" rx="4" fill="#111"/>
   <text x="70" y="98" fill="#fff" font-size="10">narrativeInformation</text>
-  <rect x="300" y="86" width="100" height="12" rx="3" fill="#2563eb22"/><rect x="300" y="86" width="100" height="12" rx="3" fill="#2563eb44" style="width:100px"/><text x="350" y="96" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">15%</text>
+  <rect x="300" y="88" width="80" height="10" rx="3" fill="#2563eb44"/><text x="350" y="97" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">12%</text>
   <text x="520" y="98" text-anchor="middle" fill="#888" font-size="9">story info density</text>
 
-  <rect x="50" y="110" width="600" height="26" rx="4" fill="#0d0d0d"/>
-  <text x="70" y="128" fill="#fff" font-size="10">engagement</text>
-  <rect x="300" y="116" width="87" height="12" rx="3" fill="#2563eb44"/><text x="350" y="126" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">13%</text>
-  <text x="520" y="128" text-anchor="middle" fill="#888" font-size="9">reader engagement</text>
+  <rect x="50" y="108" width="600" height="24" rx="4" fill="#0d0d0d"/>
+  <text x="70" y="124" fill="#fff" font-size="10">engagement</text>
+  <rect x="300" y="114" width="53" height="10" rx="3" fill="#2563eb44"/><text x="350" y="123" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">8%</text>
+  <text x="520" y="124" text-anchor="middle" fill="#888" font-size="9">reader engagement</text>
 
-  <rect x="50" y="140" width="600" height="26" rx="4" fill="#111"/>
-  <text x="70" y="158" fill="#fff" font-size="10">narrative</text>
-  <rect x="300" y="146" width="73" height="12" rx="3" fill="#2563eb44"/><text x="350" y="156" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">11%</text>
-  <text x="520" y="158" text-anchor="middle" fill="#888" font-size="9">story structure</text>
+  <!-- Structure/Technique (40%) -->
+  <text x="70" y="150" fill="#a78bfa" font-size="9" font-weight="600">STRUCTURE / TECHNIQUE (40%)</text>
 
-  <rect x="50" y="170" width="600" height="26" rx="4" fill="#0d0d0d"/>
-  <text x="70" y="188" fill="#fff" font-size="10">characterVoice</text>
-  <rect x="300" y="176" width="60" height="12" rx="3" fill="#2563eb44"/><text x="350" y="186" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">9%</text>
-  <text x="520" y="188" text-anchor="middle" fill="#888" font-size="9">distinct voices</text>
+  <rect x="50" y="156" width="600" height="24" rx="4" fill="#111"/>
+  <text x="70" y="172" fill="#fff" font-size="10">narrative</text>
+  <rect x="300" y="162" width="53" height="10" rx="3" fill="#a78bfa44"/><text x="350" y="171" text-anchor="middle" fill="#a78bfa" font-size="9" font-weight="600">8%</text>
+  <text x="520" y="172" text-anchor="middle" fill="#888" font-size="9">story structure</text>
 
-  <rect x="50" y="200" width="600" height="26" rx="4" fill="#111"/>
-  <text x="70" y="218" fill="#fff" font-size="10">immersion</text>
-  <rect x="300" y="206" width="60" height="12" rx="3" fill="#2563eb44"/><text x="350" y="216" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">9%</text>
-  <text x="520" y="218" text-anchor="middle" fill="#888" font-size="9">world immersion</text>
+  <rect x="50" y="182" width="600" height="24" rx="4" fill="#0d0d0d"/>
+  <text x="70" y="198" fill="#fff" font-size="10">characterVoice</text>
+  <rect x="300" y="188" width="47" height="10" rx="3" fill="#a78bfa44"/><text x="350" y="197" text-anchor="middle" fill="#a78bfa" font-size="9" font-weight="600">7%</text>
+  <text x="520" y="198" text-anchor="middle" fill="#888" font-size="9">distinct voices</text>
 
-  <rect x="50" y="230" width="600" height="26" rx="4" fill="#0d0d0d"/>
-  <text x="70" y="248" fill="#fff" font-size="10">rhythm</text>
-  <rect x="300" y="236" width="47" height="12" rx="3" fill="#2563eb44"/><text x="350" y="246" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">7%</text>
-  <text x="520" y="248" text-anchor="middle" fill="#888" font-size="9">sentence rhythm</text>
+  <rect x="50" y="208" width="600" height="24" rx="4" fill="#111"/>
+  <text x="70" y="224" fill="#fff" font-size="10">immersion</text>
+  <rect x="300" y="214" width="40" height="10" rx="3" fill="#a78bfa44"/><text x="350" y="223" text-anchor="middle" fill="#a78bfa" font-size="9" font-weight="600">6%</text>
+  <text x="520" y="224" text-anchor="middle" fill="#888" font-size="9">world immersion</text>
 
-  <rect x="50" y="260" width="600" height="26" rx="4" fill="#111"/>
-  <text x="70" y="278" fill="#fff" font-size="10">hookEnding</text>
-  <rect x="300" y="266" width="47" height="12" rx="3" fill="#2563eb44"/><text x="350" y="276" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">7%</text>
-  <text x="520" y="278" text-anchor="middle" fill="#888" font-size="9">chapter hook/ending</text>
+  <rect x="50" y="234" width="600" height="24" rx="4" fill="#0d0d0d"/>
+  <text x="70" y="250" fill="#fff" font-size="10">rhythm</text>
+  <rect x="300" y="240" width="33" height="10" rx="3" fill="#a78bfa44"/><text x="350" y="249" text-anchor="middle" fill="#a78bfa" font-size="9" font-weight="600">5%</text>
+  <text x="520" y="250" text-anchor="middle" fill="#888" font-size="9">sentence rhythm</text>
 
-  <rect x="50" y="290" width="600" height="26" rx="4" fill="#0d0d0d"/>
-  <text x="70" y="308" fill="#e11d48" font-size="10" font-weight="600">loopAvoidance</text>
-  <rect x="300" y="296" width="33" height="12" rx="3" fill="#e11d4844"/><text x="350" y="306" text-anchor="middle" fill="#e11d48" font-size="9" font-weight="600">5%</text>
-  <text x="520" y="308" text-anchor="middle" fill="#e11d48" font-size="9">NEW - narrative loop detection</text>
+  <rect x="50" y="260" width="600" height="24" rx="4" fill="#111"/>
+  <text x="70" y="276" fill="#fff" font-size="10">hookEnding</text>
+  <rect x="300" y="266" width="27" height="10" rx="3" fill="#a78bfa44"/><text x="350" y="275" text-anchor="middle" fill="#a78bfa" font-size="9" font-weight="600">4%</text>
+  <text x="520" y="276" text-anchor="middle" fill="#888" font-size="9">chapter hook/ending</text>
 
-  <rect x="50" y="320" width="600" height="26" rx="4" fill="#111"/>
-  <text x="70" y="338" fill="#e11d48" font-size="10" font-weight="600">dialogueQuality</text>
-  <rect x="300" y="326" width="33" height="12" rx="3" fill="#e11d4844"/><text x="350" y="336" text-anchor="middle" fill="#e11d48" font-size="9" font-weight="600">5%</text>
-  <text x="520" y="338" text-anchor="middle" fill="#e11d48" font-size="9">NEW - informative dialogue</text>
+  <rect x="50" y="286" width="600" height="24" rx="4" fill="#0d0d0d"/>
+  <text x="70" y="302" fill="#fff" font-size="10">antiRepetition</text>
+  <rect x="300" y="292" width="27" height="10" rx="3" fill="#a78bfa44"/><text x="350" y="301" text-anchor="middle" fill="#a78bfa" font-size="9" font-weight="600">4%</text>
+  <text x="520" y="302" text-anchor="middle" fill="#888" font-size="9">n-gram dedup</text>
 
-  <rect x="50" y="350" width="600" height="26" rx="4" fill="#0d0d0d"/>
-  <text x="70" y="368" fill="#e11d48" font-size="10" font-weight="600">sentimentArc</text>
-  <rect x="300" y="356" width="33" height="12" rx="3" fill="#e11d4844"/><text x="350" y="366" text-anchor="middle" fill="#e11d48" font-size="9" font-weight="600">5%</text>
-  <text x="520" y="368" text-anchor="middle" fill="#e11d48" font-size="9">NEW - Hurst index arc</text>
+  <rect x="50" y="312" width="600" height="24" rx="4" fill="#111"/>
+  <text x="70" y="328" fill="#fff" font-size="10">sensoryDiversity</text>
+  <rect x="300" y="318" width="13" height="10" rx="3" fill="#a78bfa44"/><text x="350" y="327" text-anchor="middle" fill="#a78bfa" font-size="9" font-weight="600">2%</text>
+  <text x="520" y="328" text-anchor="middle" fill="#888" font-size="9">5-sense coverage</text>
 
-  <rect x="50" y="380" width="600" height="26" rx="4" fill="#111"/>
-  <text x="70" y="398" fill="#fff" font-size="10">antiRepetition</text>
-  <rect x="300" y="386" width="33" height="12" rx="3" fill="#2563eb44"/><text x="350" y="396" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">5%</text>
-  <text x="520" y="398" text-anchor="middle" fill="#888" font-size="9">n-gram dedup</text>
+  <rect x="50" y="338" width="600" height="24" rx="4" fill="#0d0d0d"/>
+  <text x="70" y="354" fill="#fff" font-size="10">dialogueRatio</text>
+  <rect x="300" y="344" width="13" height="10" rx="3" fill="#a78bfa44"/><text x="350" y="353" text-anchor="middle" fill="#a78bfa" font-size="9" font-weight="600">2%</text>
+  <text x="520" y="354" text-anchor="middle" fill="#888" font-size="9">dialogue balance</text>
 
-  <rect x="50" y="410" width="600" height="26" rx="4" fill="#0d0d0d"/>
-  <text x="70" y="428" fill="#fff" font-size="10">dialogueRatio</text>
-  <rect x="300" y="416" width="20" height="12" rx="3" fill="#2563eb44"/><text x="350" y="426" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">3%</text>
-  <text x="520" y="428" text-anchor="middle" fill="#888" font-size="9">dialogue balance</text>
+  <rect x="50" y="364" width="600" height="24" rx="4" fill="#111"/>
+  <text x="70" y="380" fill="#fff" font-size="10">lengthScore</text>
+  <rect x="300" y="370" width="13" height="10" rx="3" fill="#a78bfa44"/><text x="350" y="379" text-anchor="middle" fill="#a78bfa" font-size="9" font-weight="600">2%</text>
+  <text x="520" y="380" text-anchor="middle" fill="#888" font-size="9">target 3500 (2800-4200)</text>
 
-  <rect x="50" y="440" width="600" height="26" rx="4" fill="#111"/>
-  <text x="70" y="458" fill="#fff" font-size="10">lengthScore</text>
-  <rect x="300" y="446" width="20" height="12" rx="3" fill="#2563eb44"/><text x="350" y="456" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">3%</text>
-  <text x="520" y="458" text-anchor="middle" fill="#888" font-size="9">target 3500 (2800-4200)</text>
+  <!-- Mathematical Checks (12%) -->
+  <text x="70" y="408" fill="#e11d48" font-size="9" font-weight="600">MATHEMATICAL CHECKS (12%)</text>
 
-  <rect x="50" y="470" width="600" height="26" rx="4" fill="#0d0d0d"/>
-  <text x="70" y="488" fill="#fff" font-size="10">sensoryDiversity</text>
-  <rect x="300" y="476" width="20" height="12" rx="3" fill="#2563eb44"/><text x="350" y="486" text-anchor="middle" fill="#60a5fa" font-size="9" font-weight="600">3%</text>
-  <text x="520" y="488" text-anchor="middle" fill="#888" font-size="9">5-sense coverage</text>
+  <rect x="50" y="414" width="600" height="24" rx="4" fill="#0d0d0d"/>
+  <text x="70" y="430" fill="#e11d48" font-size="10" font-weight="600">loopAvoidance</text>
+  <rect x="300" y="420" width="27" height="10" rx="3" fill="#e11d4844"/><text x="350" y="429" text-anchor="middle" fill="#e11d48" font-size="9" font-weight="600">4%</text>
+  <text x="520" y="430" text-anchor="middle" fill="#e11d48" font-size="9">narrative loop detection</text>
+
+  <rect x="50" y="440" width="600" height="24" rx="4" fill="#111"/>
+  <text x="70" y="456" fill="#e11d48" font-size="10" font-weight="600">dialogueQuality</text>
+  <rect x="300" y="446" width="27" height="10" rx="3" fill="#e11d4844"/><text x="350" y="455" text-anchor="middle" fill="#e11d48" font-size="9" font-weight="600">4%</text>
+  <text x="520" y="456" text-anchor="middle" fill="#e11d48" font-size="9">informative dialogue</text>
+
+  <rect x="50" y="466" width="600" height="24" rx="4" fill="#0d0d0d"/>
+  <text x="70" y="482" fill="#e11d48" font-size="10" font-weight="600">sentimentArc</text>
+  <rect x="300" y="472" width="27" height="10" rx="3" fill="#e11d4844"/><text x="350" y="481" text-anchor="middle" fill="#e11d48" font-size="9" font-weight="600">4%</text>
+  <text x="520" y="482" text-anchor="middle" fill="#e11d48" font-size="9">Hurst index arc</text>
+
+  <!-- Fun / Emotion / Originality / Page-Turner (28% NEW) -->
+  <text x="70" y="510" fill="#f59e0b" font-size="9" font-weight="600">FUN / EMOTION / ORIGINALITY / PAGE-TURNER (28% NEW)</text>
+
+  <rect x="50" y="516" width="600" height="24" rx="4" fill="#111"/>
+  <text x="70" y="532" fill="#f59e0b" font-size="10" font-weight="600">curiosityGap</text>
+  <rect x="300" y="522" width="47" height="10" rx="3" fill="#f59e0b44"/><text x="350" y="531" text-anchor="middle" fill="#f59e0b" font-size="9" font-weight="600">7%</text>
+  <text x="520" y="532" text-anchor="middle" fill="#f59e0b" font-size="9">NEW - open questions, mystery hooks</text>
+
+  <rect x="50" y="542" width="600" height="24" rx="4" fill="#0d0d0d"/>
+  <text x="70" y="558" fill="#f59e0b" font-size="10" font-weight="600">emotionalImpact</text>
+  <rect x="300" y="548" width="47" height="10" rx="3" fill="#f59e0b44"/><text x="350" y="557" text-anchor="middle" fill="#f59e0b" font-size="9" font-weight="600">7%</text>
+  <text x="520" y="558" text-anchor="middle" fill="#f59e0b" font-size="9">NEW - emotional drop, catharsis</text>
+
+  <rect x="50" y="568" width="600" height="24" rx="4" fill="#111"/>
+  <text x="70" y="584" fill="#f59e0b" font-size="10" font-weight="600">originality</text>
+  <rect x="300" y="574" width="47" height="10" rx="3" fill="#f59e0b44"/><text x="350" y="583" text-anchor="middle" fill="#f59e0b" font-size="9" font-weight="600">7%</text>
+  <text x="520" y="584" text-anchor="middle" fill="#f59e0b" font-size="9">NEW - cliche dict, TTR diversity</text>
+
+  <rect x="50" y="594" width="600" height="24" rx="4" fill="#0d0d0d"/>
+  <text x="70" y="610" fill="#f59e0b" font-size="10" font-weight="600">pageTurner</text>
+  <rect x="300" y="600" width="47" height="10" rx="3" fill="#f59e0b44"/><text x="350" y="609" text-anchor="middle" fill="#f59e0b" font-size="9" font-weight="600">7%</text>
+  <text x="520" y="610" text-anchor="middle" fill="#f59e0b" font-size="9">NEW - cliffhanger, micro-hooks</text>
 
   <!-- E2E Results -->
-  <rect x="50" y="516" width="600" height="36" rx="8" fill="#059669" fill-opacity="0.1" stroke="#05966944"/>
-  <text x="350" y="540" text-anchor="middle" fill="#34d399" font-size="11" font-weight="600">E2E Results: score=0.77 | loop=1.00 | dialogue=1.00 | cost=$0.047/ch (-66%)</text>
+  <rect x="50" y="636" width="600" height="36" rx="8" fill="#059669" fill-opacity="0.1" stroke="#05966944"/>
+  <text x="350" y="660" text-anchor="middle" fill="#34d399" font-size="11" font-weight="600">E2E Results: score=0.77 | 18D scorer | 1035/1035 tests pass | cost=$0.047/ch (-66%)</text>
 </svg>
 </div>
 
@@ -460,16 +492,20 @@ svg text { font-family:-apple-system,'Pretendard',sans-serif; }
       </ul>
     </div>
     <div class="detail-card">
-      <h3 style="color:#2563eb">Code Validators / Evaluators (10)</h3>
+      <h3 style="color:#2563eb">Code Validators / Evaluators (14)</h3>
       <ul>
         <li>scene-validator.ts -- dialogue, endings <span class="tag tag-code">CODE</span></li>
         <li>rule-guard.ts -- sanitize + 79 rules <span class="tag tag-code">CODE</span></li>
-        <li>deterministic-scorer.ts -- 14D scorer <span class="tag tag-code">CODE</span></li>
+        <li>deterministic-scorer.ts -- 18D scorer <span class="tag tag-code">CODE</span></li>
         <li>repetition-detector.ts -- n-gram overlap <span class="tag tag-code">CODE</span></li>
         <li>sentiment-validator.ts -- emotional tone <span class="tag tag-code">CODE</span></li>
         <li>conflict-gate.ts -- premature resolve <span class="tag tag-code">CODE</span></li>
         <li>blueprint-evaluator.ts -- blueprint quality <span class="tag tag-code">CODE</span></li>
-        <li>causal-graph.ts -- DAG prerequisite <span class="tag tag-new">NEW</span> <span class="tag tag-code">CODE</span></li>
+        <li>causal-graph.ts -- DAG prerequisite <span class="tag tag-code">CODE</span></li>
+        <li>curiosity-gap.ts -- open questions, hooks <span class="tag tag-new">NEW</span> <span class="tag tag-code">CODE</span></li>
+        <li>emotional-impact.ts -- emotional drop <span class="tag tag-new">NEW</span> <span class="tag tag-code">CODE</span></li>
+        <li>originality.ts -- cliche dict, TTR <span class="tag tag-new">NEW</span> <span class="tag tag-code">CODE</span></li>
+        <li>page-turner.ts -- cliffhanger, hooks <span class="tag tag-new">NEW</span> <span class="tag tag-code">CODE</span></li>
         <li>tone-profile.ts <span class="tag tag-code">CODE</span></li>
         <li>progress-monitor.ts <span class="tag tag-code">CODE</span></li>
       </ul>

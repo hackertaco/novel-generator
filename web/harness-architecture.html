@@ -98,7 +98,7 @@
     <div style="font-size:10px; color:#6b7280;">Writer, SceneVerifier, RuleGuard</div>
   </div>
   <div class="card" style="text-align:center;">
-    <div class="stat">14</div>
+    <div class="stat">18</div>
     <div class="stat-label">결정적 평가 차원</div>
   </div>
   <div class="card" style="text-align:center;">
@@ -434,7 +434,7 @@
 </div>
 
 <!-- ============================================================ -->
-<h2>5. 결정적 스코어러 — 14차원 코드 기반 평가</h2>
+<h2>5. 결정적 스코어러 — 18차원 코드 기반 평가</h2>
 <!-- ============================================================ -->
 
 <div class="card card-pink">
@@ -443,122 +443,154 @@
     통계 분석, 패턴 매칭, 언어학 규칙 + <strong style="color:#f9a8d4;">정보 이론(Shannon Entropy, JSD, Fourier, Hurst 지수)</strong>으로 품질 평가. 100% 재현 가능, 즉시 실행.
   </p>
 
-  <!-- Information Theory group -->
+  <!-- Information Theory group (20%) -->
   <div class="score-bar">
     <div class="score-bar-label" style="color:#ec4899;">정보이론 구조</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:100%; background:#ec4899;"></div></div>
-    <div class="score-bar-value">15%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:80%; background:#ec4899;"></div></div>
+    <div class="score-bar-value">12%</div>
   </div>
   <div style="font-size:11px; color:#ec4899; margin-left:128px; margin-bottom:8px;">Shannon 엔트로피 역동성 &middot; JSD 반전 감지 &middot; 감정곡선-블루프린트 상관 &middot; 정체 구간 탐지</div>
 
   <div class="score-bar">
     <div class="score-bar-label" style="color:#ec4899;">독자 몰입도</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:87%; background:#ec4899;"></div></div>
-    <div class="score-bar-value">13%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:53%; background:#ec4899;"></div></div>
+    <div class="score-bar-value">8%</div>
   </div>
   <div style="font-size:11px; color:#ec4899; margin-left:128px; margin-bottom:8px;">고구마-사이다 곡선 &middot; 1화 임팩트 &middot; 엔딩 감정</div>
 
-  <!-- Core dimensions -->
+  <!-- Structure/technique (40%) -->
   <div class="score-bar">
     <div class="score-bar-label">서사 전개</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:73%; background:#a78bfa;"></div></div>
-    <div class="score-bar-value">11%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:53%; background:#a78bfa;"></div></div>
+    <div class="score-bar-value">8%</div>
   </div>
   <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">정보 밀도 곡선 &middot; 인과관계 접속사 &middot; 긴장 에스컬레이션</div>
 
   <div class="score-bar">
     <div class="score-bar-label">캐릭터 음성</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:60%; background:#a78bfa;"></div></div>
-    <div class="score-bar-value">9%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:47%; background:#a78bfa;"></div></div>
+    <div class="score-bar-value">7%</div>
   </div>
   <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">말투 패턴 매칭 &middot; 존댓말/반말 일관성</div>
 
   <div class="score-bar">
     <div class="score-bar-label">몰입감</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:60%; background:#a78bfa;"></div></div>
-    <div class="score-bar-value">9%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:40%; background:#a78bfa;"></div></div>
+    <div class="score-bar-value">6%</div>
   </div>
   <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">구체성 비율 &middot; 장면 접지 &middot; 심리적 거리 &middot; 대화 모멘텀</div>
 
   <div class="score-bar">
     <div class="score-bar-label">리듬</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:47%; background:#7dd3fc;"></div></div>
-    <div class="score-bar-value">7%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:33%; background:#7dd3fc;"></div></div>
+    <div class="score-bar-value">5%</div>
   </div>
   <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">문장 길이 분포 &middot; 어미 다양성 &middot; 장단 교차</div>
 
   <div class="score-bar">
     <div class="score-bar-label">후킹 엔딩</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:47%; background:#7dd3fc;"></div></div>
-    <div class="score-bar-value">7%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:27%; background:#7dd3fc;"></div></div>
+    <div class="score-bar-value">4%</div>
   </div>
   <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">마지막 문단 패턴 (?, ..., 위기 키워드)</div>
 
   <div class="score-bar">
     <div class="score-bar-label">반복 회피</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:33%; background:#7dd3fc;"></div></div>
-    <div class="score-bar-value">5%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:27%; background:#7dd3fc;"></div></div>
+    <div class="score-bar-value">4%</div>
   </div>
   <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">주어 반복 &middot; 4-gram 반복</div>
 
-  <!-- New dimensions -->
-  <div class="score-bar">
-    <div class="score-bar-label" style="color:#6ee7b7;">서사 루프 회피</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:33%; background:#059669;"></div></div>
-    <div class="score-bar-value">5%</div>
-  </div>
-  <div style="font-size:11px; color:#6ee7b7; margin-left:128px; margin-bottom:8px;">NEW — 인접 문단 명사 중복 감지 (서사 루프 방지)</div>
-
-  <div class="score-bar">
-    <div class="score-bar-label" style="color:#6ee7b7;">대사 정보량</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:33%; background:#059669;"></div></div>
-    <div class="score-bar-value">5%</div>
-  </div>
-  <div style="font-size:11px; color:#6ee7b7; margin-left:128px; margin-bottom:8px;">NEW — 의미 있는 대사 vs 빈 대사 비율</div>
-
-  <div class="score-bar">
-    <div class="score-bar-label" style="color:#6ee7b7;">감정 아크</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:33%; background:#059669;"></div></div>
-    <div class="score-bar-value">5%</div>
-  </div>
-  <div style="font-size:11px; color:#6ee7b7; margin-left:128px; margin-bottom:8px;">NEW — Hurst 지수 기반 감정 변동 패턴</div>
-
-  <!-- Small dimensions -->
-  <div class="score-bar">
-    <div class="score-bar-label">대사 비율</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:20%; background:#6b7280;"></div></div>
-    <div class="score-bar-value">3%</div>
-  </div>
-  <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">30~60% 최적</div>
-
   <div class="score-bar">
     <div class="score-bar-label">감각 다양성</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:20%; background:#6b7280;"></div></div>
-    <div class="score-bar-value">3%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:13%; background:#6b7280;"></div></div>
+    <div class="score-bar-value">2%</div>
   </div>
   <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">5감 중 3개 이상</div>
 
   <div class="score-bar">
+    <div class="score-bar-label">대사 비율</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:13%; background:#6b7280;"></div></div>
+    <div class="score-bar-value">2%</div>
+  </div>
+  <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">30~60% 최적</div>
+
+  <div class="score-bar">
     <div class="score-bar-label">분량</div>
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:20%; background:#6b7280;"></div></div>
-    <div class="score-bar-value">3%</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:13%; background:#6b7280;"></div></div>
+    <div class="score-bar-value">2%</div>
   </div>
   <div style="font-size:11px; color:#6b7280; margin-left:128px; margin-bottom:8px;">2800~4200자 (목표 3500)</div>
 
+  <!-- Mathematical checks (12%) -->
+  <div class="score-bar">
+    <div class="score-bar-label" style="color:#6ee7b7;">서사 루프 회피</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:27%; background:#059669;"></div></div>
+    <div class="score-bar-value">4%</div>
+  </div>
+  <div style="font-size:11px; color:#6ee7b7; margin-left:128px; margin-bottom:8px;">인접 문단 명사 중복 감지 (서사 루프 방지)</div>
+
+  <div class="score-bar">
+    <div class="score-bar-label" style="color:#6ee7b7;">대사 정보량</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:27%; background:#059669;"></div></div>
+    <div class="score-bar-value">4%</div>
+  </div>
+  <div style="font-size:11px; color:#6ee7b7; margin-left:128px; margin-bottom:8px;">의미 있는 대사 vs 빈 대사 비율</div>
+
+  <div class="score-bar">
+    <div class="score-bar-label" style="color:#6ee7b7;">감정 아크</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:27%; background:#059669;"></div></div>
+    <div class="score-bar-value">4%</div>
+  </div>
+  <div style="font-size:11px; color:#6ee7b7; margin-left:128px; margin-bottom:8px;">Hurst 지수 기반 감정 변동 패턴</div>
+
+  <!-- Fun/emotion/originality/page-turner (28% NEW) -->
+  <div class="score-bar">
+    <div class="score-bar-label" style="color:#f59e0b;">호기심 갭</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:47%; background:#f59e0b;"></div></div>
+    <div class="score-bar-value">7%</div>
+  </div>
+  <div style="font-size:11px; color:#f59e0b; margin-left:128px; margin-bottom:8px;">NEW — 미해결 질문, 미스터리 마커, 복선, 해결 추적 (sweet spot: 2~4 unresolved hooks)</div>
+
+  <div class="score-bar">
+    <div class="score-bar-label" style="color:#f59e0b;">감정 낙차</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:47%; background:#f59e0b;"></div></div>
+    <div class="score-bar-value">7%</div>
+  </div>
+  <div style="font-size:11px; color:#f59e0b; margin-left:128px; margin-bottom:8px;">NEW — 클라이맥스 감정 낙차, 공감 마커 (한국어 17개), 카타르시스 패턴</div>
+
+  <div class="score-bar">
+    <div class="score-bar-label" style="color:#f59e0b;">독창성</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:47%; background:#f59e0b;"></div></div>
+    <div class="score-bar-value">7%</div>
+  </div>
+  <div style="font-size:11px; color:#f59e0b; margin-left:128px; margin-bottom:8px;">NEW — 90+ 한국어 클리셰 사전, TTR 어휘 다양성, 오프닝 엔트로피</div>
+
+  <div class="score-bar">
+    <div class="score-bar-label" style="color:#f59e0b;">절단신공</div>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:47%; background:#f59e0b;"></div></div>
+    <div class="score-bar-value">7%</div>
+  </div>
+  <div style="font-size:11px; color:#f59e0b; margin-left:128px; margin-bottom:8px;">NEW — 클리프행어 강도, 미해결 스레드, 정보 속도, 마이크로 훅</div>
+
   <div style="margin-top: 12px; padding: 10px; background: #0a0a0f; border-radius: 8px; font-size: 12px; color: #6b7280;">
-    합계: 100% = 15 + 13 + 11 + 9 + 9 + 7 + 7 + 5 + 5 + 5 + 5 + 3 + 3 + 3
+    합계: 100% = <span style="color:#ec4899;">정보이론 20% (12+8)</span> + <span style="color:#a78bfa;">구조/기법 40% (8+7+6+5+4+4+2+2+2)</span> + <span style="color:#6ee7b7;">수학 12% (4+4+4)</span> + <span style="color:#f59e0b;">재미/감정/독창성/절단신공 28% (7+7+7+7)</span>
   </div>
 
   <div class="file-list" style="margin-top:16px;">
     <code>evaluators/deterministic-scorer.ts</code> — computeDeterministicScores()<br>
     <code>evaluators/narrative-information-scorer.ts</code> — computeNarrativeInformationScores()<br>
-    <code>evaluators/mathematical-checks.ts</code> — loopAvoidance, dialogueQuality, sentimentArc
+    <code>evaluators/mathematical-checks.ts</code> — loopAvoidance, dialogueQuality, sentimentArc<br>
+    <code>evaluators/curiosity-gap.ts</code> — curiosityGap (호기심 갭)<br>
+    <code>evaluators/emotional-impact.ts</code> — emotionalImpact (감정 낙차)<br>
+    <code>evaluators/originality.ts</code> — originality (독창성)<br>
+    <code>evaluators/page-turner.ts</code> — pageTurner (절단신공)
   </div>
 </div>
 
 <!-- Information Theory detail card -->
 <div class="card" style="margin-top:16px; border-color:#ec4899;">
-  <h3 style="color:#f9a8d4;">정보이론 기반 서사 구조 분석 (15%)</h3>
+  <h3 style="color:#f9a8d4;">정보이론 기반 서사 구조 분석 (12%)</h3>
   <p style="font-size:12px; color:#6b7280; margin-bottom:16px;">
     Shannon Entropy, Jensen-Shannon Divergence, Pearson 상관계수 —
     학술 논문 검증 방법론을 시드/블루프린트 시스템에 적용
@@ -605,6 +637,49 @@
       &bull; Narrative Information Theory (arXiv:2411.12907) — JSD로 서프라이즈/피봇 감지<br>
       &bull; Reagan et al. "Six Basic Shapes" — 5만 소설 분석, 감정 곡선 형태 분류<br>
       &bull; Fabula Entropy Indexing (arXiv:2104.07472) — 엔트로피 기반 코히어런스 측정
+    </div>
+  </div>
+</div>
+
+<!-- "재미있는 글" evaluators detail card -->
+<div class="card" style="margin-top:16px; border-color:#f59e0b;">
+  <h3 style="color:#fbbf24;">재미있는 글 측정 — 4 NEW 평가 차원 (28%)</h3>
+  <p style="font-size:12px; color:#6b7280; margin-bottom:16px;">
+    호기심, 감정, 독창성, 페이지 터닝 — 독자의 "재미" 체감을 수학적으로 측정
+  </p>
+
+  <div class="grid grid-2" style="gap:12px;">
+    <div style="padding:12px; background:#1a1a2a; border-radius:8px; border-left:3px solid #f59e0b;">
+      <div style="font-size:13px; font-weight:600; color:#fbbf24;">curiosityGap 호기심 갭 (7%)</div>
+      <div style="font-size:12px; color:#9ca3af; margin-top:4px;">
+        미해결 질문, 미스터리 마커, 복선, 해결 추적<br>
+        <span style="color:#6ee7b7;">Sweet spot: 2~4 unresolved hooks</span><br>
+        <span style="color:#6b7280;">파일: <code>evaluators/curiosity-gap.ts</code></span>
+      </div>
+    </div>
+    <div style="padding:12px; background:#1a1a2a; border-radius:8px; border-left:3px solid #f59e0b;">
+      <div style="font-size:13px; font-weight:600; color:#fbbf24;">emotionalImpact 감정 낙차 (7%)</div>
+      <div style="font-size:12px; color:#9ca3af; margin-top:4px;">
+        클라이맥스 감정 낙차, 공감 마커 (한국어 17개), 카타르시스 패턴<br>
+        <span style="color:#6ee7b7;">감정 drop + 공감 + 카타르시스 = 재미</span><br>
+        <span style="color:#6b7280;">파일: <code>evaluators/emotional-impact.ts</code></span>
+      </div>
+    </div>
+    <div style="padding:12px; background:#1a1a2a; border-radius:8px; border-left:3px solid #f59e0b;">
+      <div style="font-size:13px; font-weight:600; color:#fbbf24;">originality 독창성 (7%)</div>
+      <div style="font-size:12px; color:#9ca3af; margin-top:4px;">
+        90+ 한국어 클리셰 사전, TTR 어휘 다양성, 오프닝 엔트로피<br>
+        <span style="color:#fca5a5;">클리셰 감지</span> = "그 순간" "눈을 감았다" 등<br>
+        <span style="color:#6b7280;">파일: <code>evaluators/originality.ts</code></span>
+      </div>
+    </div>
+    <div style="padding:12px; background:#1a1a2a; border-radius:8px; border-left:3px solid #f59e0b;">
+      <div style="font-size:13px; font-weight:600; color:#fbbf24;">pageTurner 절단신공 (7%)</div>
+      <div style="font-size:12px; color:#9ca3af; margin-top:4px;">
+        클리프행어 강도, 미해결 스레드, 정보 속도, 마이크로 훅<br>
+        <span style="color:#6ee7b7;">"다음 화가 궁금해서 못 멈추겠다"</span><br>
+        <span style="color:#6b7280;">파일: <code>evaluators/page-turner.ts</code></span>
+      </div>
     </div>
   </div>
 </div>
@@ -841,7 +916,7 @@
         <td><span class="tag tag-green">ACTIVE</span></td>
       </tr>
       <tr>
-        <td>DeterministicScorer (14차원)</td>
+        <td>DeterministicScorer (18차원)</td>
         <td><span class="tag tag-pink">코드</span></td>
         <td style="color:#6ee7b7;">$0</td>
         <td>&lt;1ms</td>
@@ -983,7 +1058,7 @@
 
 <div style="margin-top:16px; padding:16px; background:#12121a; border:1px solid #2a2a3a; border-radius:12px; font-size:13px; color:#9ca3af; text-align:center;">
   <strong style="color:#a78bfa;">결론:</strong>
-  LLM 후처리를 제거하고 결정적 검증(14차원) + 상태 머신으로 전환.<br>
+  LLM 후처리를 제거하고 결정적 검증(18차원) + 상태 머신으로 전환.<br>
   <strong style="color:#6ee7b7;">비용 66% 절감, 품질 향상 (0.78 &rarr; 0.82), LLM 호출 ~3-5회/화.</strong><br>
   "적게 쓰되 잘 쓴다"가 현재 아키텍처의 핵심 철학.
 </div>
