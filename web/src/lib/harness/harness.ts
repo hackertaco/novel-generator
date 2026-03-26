@@ -19,6 +19,7 @@ import { generateChapterBlueprints } from "../planning/chapter-planner";
 import { generateMasterPlan } from "../planning/master-planner";
 import { extractSummaryRuleBased } from "../evaluators/summary";
 import { checkPlausibility, fixPlausibilityIssues } from "../evaluators/plausibility";
+import { validateCausalGraph } from "../evaluators/causal-graph";
 import { ConstraintChecker } from "../evaluators/constraint-checker";
 
 // Full pipeline imports
@@ -73,7 +74,8 @@ export type HarnessEvent =
   | { type: "stage"; stage: "plots" | "seed" | "plausibility" | "master_plan" | "chapters" }
   | { type: "plots_generated"; plots: PlotOption[] }
   | { type: "plot_selected"; plot: PlotOption }
-  | { type: "seed_generated"; seed: NovelSeed };
+  | { type: "seed_generated"; seed: NovelSeed }
+  | { type: "causal_validated"; score: number; issues: Array<{ severity: string; description: string }> };
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -538,6 +540,27 @@ export class NovelHarness {
       } catch (err) {
         console.warn(`[harness] 개연성 검증 실패, 건너뜀: ${err instanceof Error ? err.message : err}`);
       }
+    }
+
+    // Causal graph validation — zero-cost deterministic check on seed structure
+    try {
+      const causalResult = validateCausalGraph(seed);
+      yield {
+        type: "causal_validated",
+        score: causalResult.score,
+        issues: causalResult.issues.map((i) => ({ severity: i.severity, description: i.description })),
+      };
+      // Inject critical causal warnings into writer context
+      const criticalCausal = causalResult.issues.filter((i) => i.severity === "critical");
+      if (criticalCausal.length > 0) {
+        const warnings = criticalCausal.map((i) => `- ${i.description}`).join("\n");
+        this.pendingCorrectionContext = [
+          this.pendingCorrectionContext || "",
+          `## 인과 구조 경고\n${warnings}\n위 문제를 회피하여 작성하세요.`,
+        ].filter(Boolean).join("\n\n");
+      }
+    } catch (err) {
+      console.warn(`[harness] 인과 그래프 검증 실패, 건너뜀: ${err instanceof Error ? err.message : err}`);
     }
 
     const chapters: ChapterResult[] = [];

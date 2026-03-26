@@ -13,7 +13,7 @@ import type { ChapterBlueprint } from "@/lib/schema/planning";
 // Constants
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_TARGET_CHARS = 4500;
+export const DEFAULT_TARGET_CHARS = 3500;
 export const DEFAULT_TOLERANCE = 0.2;
 
 // ---------------------------------------------------------------------------

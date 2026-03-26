@@ -21,6 +21,7 @@
 import type { NovelSeed } from "../schema/novel";
 import type { ChapterBlueprint } from "../schema/planning";
 import { computeNarrativeInformationScores, type NarrativeInformationScores } from "./narrative-information-scorer";
+import { detectNarrativeLoop, measureDialogueInformation, analyzeSentimentArc } from "./mathematical-checks";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,6 +50,12 @@ export interface DeterministicScores {
   narrativeInformation: number;
   /** 독자 몰입도 (0~1) — 고구마-사이다, 1화 임팩트, 엔딩 감정 */
   engagement: number;
+  /** 서사 루프 회피 (0~1) — 인접 문단 명사 중복 감지 */
+  loopAvoidance: number;
+  /** 대사 정보량 (0~1) — 의미 있는 대사 vs 빈 대사 비율 */
+  dialogueQuality: number;
+  /** 감정 아크 (0~1) — Hurst 지수 기반 감정 변동 패턴 */
+  sentimentArc: number;
   /** 종합 (가중 평균) */
   overall: number;
   /** 상세 데이터 */
@@ -606,17 +613,20 @@ function scoreEngagement(
 // ---------------------------------------------------------------------------
 
 const WEIGHTS = {
-  rhythm: 0.08,
-  hookEnding: 0.08,
-  characterVoice: 0.10,
-  dialogueRatio: 0.04,
-  lengthScore: 0.04,
-  antiRepetition: 0.06,
-  sensoryDiversity: 0.04,
-  narrative: 0.13,
-  immersion: 0.10,
-  narrativeInformation: 0.18,
-  engagement: 0.15,
+  rhythm: 0.07,
+  hookEnding: 0.07,
+  characterVoice: 0.09,
+  dialogueRatio: 0.03,
+  lengthScore: 0.03,
+  antiRepetition: 0.05,
+  sensoryDiversity: 0.03,
+  narrative: 0.11,
+  immersion: 0.09,
+  narrativeInformation: 0.15,
+  engagement: 0.13,
+  loopAvoidance: 0.05,
+  dialogueQuality: 0.05,
+  sentimentArc: 0.05,
 };
 
 export function computeDeterministicScores(
@@ -644,6 +654,26 @@ export function computeDeterministicScores(
   const genre = seed.world?.genre || "";
   const engagementResult = scoreEngagement(text, genre, chapterNumber);
 
+  // Mathematical checks (loop avoidance, dialogue quality, sentiment arc)
+  let loopAvoidanceScore = 0.7;
+  let dialogueQualityScore = 0.7;
+  let sentimentArcScore = 0.5;
+  try {
+    const loopResult = detectNarrativeLoop(text);
+    loopAvoidanceScore = loopResult.loopDetected ? Math.max(0, 1 - loopResult.overlapRatio * 2) : 1.0;
+
+    const dialogueInfoResult = measureDialogueInformation(text);
+    dialogueQualityScore = dialogueInfoResult.score;
+
+    const arcResult = analyzeSentimentArc(text);
+    // Optimal Hurst is 0.55-0.65 (anti-persistent but not random)
+    const hurst = arcResult.hurstScore ?? 0.5;
+    const optimalDist = Math.abs(hurst - 0.6);
+    sentimentArcScore = Math.max(0, 1 - optimalDist * 4);
+  } catch {
+    // Non-blocking: use defaults on failure
+  }
+
   const scores = {
     rhythm: rhythmResult.score,
     hookEnding: hookResult.score,
@@ -656,6 +686,9 @@ export function computeDeterministicScores(
     immersion: immersionResult.score,
     narrativeInformation: infoScores.overall,
     engagement: engagementResult.score,
+    loopAvoidance: loopAvoidanceScore,
+    dialogueQuality: dialogueQualityScore,
+    sentimentArc: sentimentArcScore,
   };
 
   const overall = Object.entries(WEIGHTS).reduce(

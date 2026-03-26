@@ -193,7 +193,9 @@ export function getDefaultConfig(name = "default"): HarnessConfig {
   // QualityLoop disabled — A/B test proved it HURTS quality (0.78 → 0.83 without it).
   // LLM surgeon overwrites deterministic fixes and breaks natural prose.
   // See: memory/feedback_qualityloop_harmful.md
+  pipeline[3].enabled = false; // ConsistencyChecker — full-text LLM rewrite undoes RuleGuard fixes
   pipeline[4].enabled = false; // QualityLoop
+  pipeline[5].enabled = false; // Polisher — overlaps with RuleGuard, LLM rewrites undo deterministic fixes
   return {
     name,
     models: DEFAULT_MODELS,

@@ -452,14 +452,9 @@ export function detectSpeechViolations(
 // 4. fixSpeechViolations
 // ---------------------------------------------------------------------------
 
-/**
- * Check if a Korean character has a final consonant (받침).
- */
-export function hasBatchim(char: string): boolean {
-  const code = char.charCodeAt(0);
-  if (code < 0xac00 || code > 0xd7a3) return false;
-  return (code - 0xac00) % 28 !== 0;
-}
+// hasBatchim is now imported from @/lib/utils/korean
+// Re-export for backward compatibility
+export { hasBatchim } from "@/lib/utils/korean";
 
 /**
  * Conservative replacement maps for speech level correction.

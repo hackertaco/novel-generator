@@ -4,6 +4,7 @@ import type { ChapterBlueprint } from "@/lib/schema/planning";
 import type { ChapterSummary } from "@/lib/schema/chapter";
 import type { ChapterContext, PipelineAgent, TrackingInjection } from "./pipeline";
 import { WriterAgent } from "./writer-agent";
+import { SceneVerifierAgent } from "./scene-verifier";
 import { RuleGuardAgent } from "./rule-guard";
 import { ConsistencyChecker } from "./consistency-checker";
 import { QualityLoop } from "./quality-loop";
@@ -55,6 +56,7 @@ export async function* runChapterLifecycle(
 
   const pipeline: PipelineAgent[] = [
     new WriterAgent(),
+    new SceneVerifierAgent(),
     new RuleGuardAgent(),
     new ConsistencyChecker(),
     new QualityLoop(),

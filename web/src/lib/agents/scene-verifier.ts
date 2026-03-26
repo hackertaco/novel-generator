@@ -14,6 +14,7 @@ import { getWriterSystemPrompt } from "@/lib/prompts/writer-system-prompt";
 import { selectModelTier, getModelForTier } from "@/lib/llm/tier";
 import { accumulateUsage } from "./pipeline";
 import { sanitize } from "./rule-guard";
+import { hasBatchim } from "@/lib/utils/korean";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,16 +31,6 @@ export interface SceneVerdict {
 // ---------------------------------------------------------------------------
 // Korean particle helper
 // ---------------------------------------------------------------------------
-
-/**
- * Detect whether a Korean character has a 받침 (final consonant).
- * Used to pick the correct particle (은/는, 이/가, 을/를, etc.).
- */
-function hasBatchim(char: string): boolean {
-  const code = char.charCodeAt(0);
-  if (code < 0xac00 || code > 0xd7a3) return false;
-  return (code - 0xac00) % 28 !== 0;
-}
 
 /**
  * Pick topic particle 은/는 based on the last character's 받침.
