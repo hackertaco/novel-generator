@@ -1,11 +1,9 @@
 // @vitest-environment node
 /**
- * AC 8: api/seed/route.ts 응답 형식이 변경되지 않는다
+ * Tests for api/seed/route.ts
  *
- * The evolution loop added `candidates` to the response and now produces the
- * final `seed` via crossover (best + second-best candidates).  The top-level
- * `seed` and `usage` fields must remain intact so that all existing consumers
- * continue to work without modification.
+ * The route now uses NovelHarness.stepSeed() which yields events.
+ * It returns { seed } on success.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -41,47 +39,22 @@ const makeMinimalSeed = (title = "테스트 시드") => ({
   },
 });
 
-const makeUsage = () => ({
-  prompt_tokens: 100,
-  completion_tokens: 200,
-  total_tokens: 300,
-  cost_usd: 0.01,
-});
-
-const makeSeedEvolutionResult = () => ({
-  candidates: [
-    { seed: makeMinimalSeed("후보 1"), temperature: 0.7, index: 0, usage: makeUsage() },
-    { seed: makeMinimalSeed("후보 2"), temperature: 0.9, index: 1, usage: makeUsage() },
-    { seed: makeMinimalSeed("후보 3"), temperature: 1.1, index: 2, usage: makeUsage() },
-  ],
-  usage: {
-    prompt_tokens: 300,
-    completion_tokens: 600,
-    total_tokens: 900,
-    cost_usd: 0.03,
-  },
-});
-
-/** The seed returned by the crossover stage */
-const CROSSOVER_SEED = makeMinimalSeed("교배 결과 시드");
-const CROSSOVER_USAGE = {
-  prompt_tokens: 500,
-  completion_tokens: 1000,
-  total_tokens: 1500,
-  cost_usd: 0.05,
-};
+const GENERATED_SEED = makeMinimalSeed("생성된 시드");
 
 // ---------------------------------------------------------------------------
-// Mock modules
+// Mock modules — mock @/lib/harness which the route imports
 // ---------------------------------------------------------------------------
-vi.mock("@/lib/planning/seed-evolver", () => ({
-  generateSeedCandidates: vi.fn(),
-}));
+const mockStepSeed = vi.fn();
 
-// Mock the crossover function (it makes an LLM call and must not hit the network)
-vi.mock("@/lib/evolution/seed-crossover", () => ({
-  crossoverSeeds: vi.fn(),
-}));
+vi.mock("@/lib/harness", () => {
+  class MockNovelHarness {
+    stepSeed = mockStepSeed;
+  }
+  return {
+    NovelHarness: MockNovelHarness,
+    getDefaultConfig: vi.fn().mockReturnValue({}),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Helpers to call the route handler directly
@@ -101,19 +74,14 @@ async function callRoute(body: unknown) {
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
-describe("GET /api/seed — response format contract (AC 8)", () => {
-  beforeEach(async () => {
-    vi.resetModules();
+describe("POST /api/seed — response format contract", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
 
-    const { generateSeedCandidates } = await import("@/lib/planning/seed-evolver");
-    (generateSeedCandidates as ReturnType<typeof vi.fn>).mockResolvedValue(
-      makeSeedEvolutionResult(),
-    );
-
-    const { crossoverSeeds } = await import("@/lib/evolution/seed-crossover");
-    (crossoverSeeds as ReturnType<typeof vi.fn>).mockResolvedValue({
-      seed: CROSSOVER_SEED,
-      usage: CROSSOVER_USAGE,
+    // Default: stepSeed yields a seed_generated event
+    mockStepSeed.mockImplementation(async function* () {
+      yield { type: "stage", stage: "seed" };
+      yield { type: "seed_generated", seed: GENERATED_SEED };
     });
   });
 
@@ -129,16 +97,16 @@ describe("GET /api/seed — response format contract (AC 8)", () => {
     },
   };
 
-  // ─── top-level `seed` field ──────────────────────────────────────────────
+  // --- top-level `seed` field ---
 
   it("response contains top-level `seed` field", async () => {
     const { json } = await callRoute(validBody);
     expect(json).toHaveProperty("seed");
   });
 
-  it("`seed` is the crossover result (final evolved seed)", async () => {
+  it("`seed` is the generated result", async () => {
     const { json } = await callRoute(validBody);
-    expect(json.seed.title).toBe("교배 결과 시드");
+    expect(json.seed.title).toBe("생성된 시드");
   });
 
   it("`seed` has required NovelSeed fields: title, logline, total_chapters", async () => {
@@ -169,44 +137,14 @@ describe("GET /api/seed — response format contract (AC 8)", () => {
     expect(json.seed).toHaveProperty("style");
   });
 
-  // ─── top-level `usage` field ─────────────────────────────────────────────
-
-  it("response contains top-level `usage` field", async () => {
-    const { json } = await callRoute(validBody);
-    expect(json).toHaveProperty("usage");
-  });
-
-  it("`usage` has prompt_tokens, completion_tokens, total_tokens, cost_usd", async () => {
-    const { json } = await callRoute(validBody);
-    expect(json.usage).toHaveProperty("prompt_tokens");
-    expect(json.usage).toHaveProperty("completion_tokens");
-    expect(json.usage).toHaveProperty("total_tokens");
-    expect(json.usage).toHaveProperty("cost_usd");
-  });
-
-  it("`usage` values are numbers", async () => {
-    const { json } = await callRoute(validBody);
-    expect(typeof json.usage.prompt_tokens).toBe("number");
-    expect(typeof json.usage.completion_tokens).toBe("number");
-    expect(typeof json.usage.total_tokens).toBe("number");
-    expect(typeof json.usage.cost_usd).toBe("number");
-  });
-
-  it("`usage` aggregates generation + crossover token counts", async () => {
-    const { json } = await callRoute(validBody);
-    // Generation: 300 + 600 + 900 = 1800 total_tokens
-    // Crossover: 1500 total_tokens
-    expect(json.usage.total_tokens).toBe(900 + 1500);
-  });
-
-  // ─── HTTP status ─────────────────────────────────────────────────────────
+  // --- HTTP status ---
 
   it("returns HTTP 200 on success", async () => {
     const { response } = await callRoute(validBody);
     expect(response.status).toBe(200);
   });
 
-  // ─── error format unchanged ──────────────────────────────────────────────
+  // --- error format ---
 
   it("returns HTTP 400 with `error` field when genre is missing", async () => {
     const { response, json } = await callRoute({ plot: validBody.plot });
@@ -223,10 +161,9 @@ describe("GET /api/seed — response format contract (AC 8)", () => {
   });
 
   it("returns HTTP 500 with `error` field on unexpected exception", async () => {
-    const { generateSeedCandidates } = await import("@/lib/planning/seed-evolver");
-    (generateSeedCandidates as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new Error("LLM 오류"),
-    );
+    mockStepSeed.mockImplementation(async function* () {
+      throw new Error("LLM 오류");
+    });
 
     const { response, json } = await callRoute(validBody);
     expect(response.status).toBe(500);
@@ -234,18 +171,38 @@ describe("GET /api/seed — response format contract (AC 8)", () => {
     expect(json.error).toBe("LLM 오류");
   });
 
-  // ─── additive `candidates` field (backward-compatible) ───────────────────
+  it("returns HTTP 500 when no seed_generated event is yielded", async () => {
+    mockStepSeed.mockImplementation(async function* () {
+      yield { type: "stage", stage: "seed" };
+      // No seed_generated event
+    });
 
-  it("response also contains `candidates` array (additive, not breaking)", async () => {
-    const { json } = await callRoute(validBody);
-    expect(Array.isArray(json.candidates)).toBe(true);
-    expect(json.candidates).toHaveLength(3);
+    const { response, json } = await callRoute(validBody);
+    expect(response.status).toBe(500);
+    expect(json).toHaveProperty("error");
   });
 
-  it("`candidates` contains the original 3 generated candidates", async () => {
+  // --- response only contains seed (no candidates/usage at top level) ---
+
+  it("response returns { seed } structure matching route implementation", async () => {
     const { json } = await callRoute(validBody);
-    expect(json.candidates[0].seed.title).toBe("후보 1");
-    expect(json.candidates[1].seed.title).toBe("후보 2");
-    expect(json.candidates[2].seed.title).toBe("후보 3");
+    expect(json).toHaveProperty("seed");
+    expect(json.seed.title).toBe("생성된 시드");
+  });
+
+  it("stepSeed is called with genre and plot from request body", async () => {
+    await callRoute(validBody);
+    expect(mockStepSeed).toHaveBeenCalledWith("판타지", validBody.plot);
+  });
+
+  it("handles error event from stepSeed gracefully via try-catch", async () => {
+    mockStepSeed.mockImplementation(async function* () {
+      yield { type: "error", chapter: 0, message: "시드 생성 실패: timeout" };
+    });
+
+    const { response, json } = await callRoute(validBody);
+    // No seed_generated event was yielded, so seed is undefined -> 500
+    expect(response.status).toBe(500);
+    expect(json).toHaveProperty("error");
   });
 });

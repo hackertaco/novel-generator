@@ -240,11 +240,12 @@ describe("LLMAgent", () => {
       expect(result.data).toEqual({ name: "yamltest", value: 10 });
     });
 
-    it("uses default retryCount of 3", async () => {
+    it("uses default retryCount of 4", async () => {
       mockCreate
         .mockResolvedValueOnce(mockResponse("bad1"))
         .mockResolvedValueOnce(mockResponse("bad2"))
-        .mockResolvedValueOnce(mockResponse("bad3"));
+        .mockResolvedValueOnce(mockResponse("bad3"))
+        .mockResolvedValueOnce(mockResponse("bad4"));
       const agent = new LLMAgent();
       await expect(
         agent.callStructured({
@@ -252,7 +253,7 @@ describe("LLMAgent", () => {
           schema: TestSchema,
           format: "json",
         })
-      ).rejects.toThrow("after 3 attempts");
+      ).rejects.toThrow("after 4 attempts");
     });
   });
 

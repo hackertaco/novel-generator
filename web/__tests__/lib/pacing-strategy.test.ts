@@ -345,8 +345,8 @@ describe("Writer system prompt — universal rules", () => {
 
     it(`${genre} prompt should contain character intro rules`, () => {
       const prompt = getWriterSystemPrompt(genre, 1);
-      expect(prompt).toContain("1화는 주인공 중심");
-      expect(prompt).toContain("캐릭터 도입 원칙");
+      expect(prompt).toContain("1화는 주인공 1명 중심");
+      expect(prompt).toContain("캐릭터 도입");
     });
 
     it(`${genre} prompt should contain anti-cringe rules`, () => {

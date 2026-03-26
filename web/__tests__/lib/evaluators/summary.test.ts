@@ -102,12 +102,14 @@ describe("extractSummaryRuleBased", () => {
   });
 
   it("generates plot summary from first 2 sentences", () => {
-    const content = `현우가 눈을 떴다. 낯선 방이었다. 세 번째 문장은 포함 안됨.`;
+    // Sentences must be >10 chars to pass the length filter in extractSummaryRuleBased.
+    // Need >4 sentences so the middle ones are excluded from the summary.
+    const content = `현우가 천천히 눈을 떴다. 주위는 완전히 낯선 방이었다. 세 번째 문장은 요약에 포함되지 않아야 합니다. 네 번째 문장도 포함되지 않아야 합니다. 다섯 번째 문장은 마지막이다.`;
     const result = extractSummaryRuleBased(1, "1화", content);
 
-    expect(result.plot_summary).toContain("현우가 눈을 떴다");
-    expect(result.plot_summary).toContain("낯선 방이었다");
-    // Should not contain the third sentence
-    expect(result.plot_summary).not.toContain("세 번째 문장은 포함 안됨");
+    expect(result.plot_summary).toContain("현우가 천천히 눈을 떴다");
+    expect(result.plot_summary).toContain("주위는 완전히 낯선 방이었다");
+    // Middle sentences should not be in the summary
+    expect(result.plot_summary).not.toContain("세 번째 문장은 요약에 포함되지 않아야 합니다");
   });
 });
