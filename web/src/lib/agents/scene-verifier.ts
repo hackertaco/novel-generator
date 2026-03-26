@@ -250,19 +250,10 @@ export class SceneVerifierAgent implements PipelineAgent {
       }
     }
 
-    // --- Handle injection (default mode only — injected text is meta, not prose) ---
-    if (!fastMode) {
-      for (const verdict of verdicts) {
-        if (verdict.action !== "inject" || verdict.missingFacts.length === 0) continue;
-
-        const scene = scenes[verdict.sceneIndex];
-        sceneTexts[verdict.sceneIndex] = injectFacts(
-          sceneTexts[verdict.sceneIndex] || "",
-          verdict.missingFacts,
-          scene,
-        );
-      }
-    }
+    // Note: deterministic fact injection (injectFacts) is disabled because
+    // injected text reads as meta-description, not natural prose.
+    // Missing facts are recorded as issues for the quality loop to handle
+    // via SurgeonAgent (which produces natural prose).
 
     // Reassemble ctx.text from updated sceneTexts
     ctx.sceneTexts = sceneTexts;
