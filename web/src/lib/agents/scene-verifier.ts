@@ -250,16 +250,18 @@ export class SceneVerifierAgent implements PipelineAgent {
       }
     }
 
-    // --- Handle injection (both modes) ---
-    for (const verdict of verdicts) {
-      if (verdict.action !== "inject" || verdict.missingFacts.length === 0) continue;
+    // --- Handle injection (default mode only — injected text is meta, not prose) ---
+    if (!fastMode) {
+      for (const verdict of verdicts) {
+        if (verdict.action !== "inject" || verdict.missingFacts.length === 0) continue;
 
-      const scene = scenes[verdict.sceneIndex];
-      sceneTexts[verdict.sceneIndex] = injectFacts(
-        sceneTexts[verdict.sceneIndex] || "",
-        verdict.missingFacts,
-        scene,
-      );
+        const scene = scenes[verdict.sceneIndex];
+        sceneTexts[verdict.sceneIndex] = injectFacts(
+          sceneTexts[verdict.sceneIndex] || "",
+          verdict.missingFacts,
+          scene,
+        );
+      }
     }
 
     // Reassemble ctx.text from updated sceneTexts
