@@ -189,10 +189,15 @@ function lazyPipeline(): PipelineStepConfig[] {
 }
 
 export function getDefaultConfig(name = "default"): HarnessConfig {
+  const pipeline = lazyPipeline();
+  // QualityLoop disabled — A/B test proved it HURTS quality (0.78 → 0.83 without it).
+  // LLM surgeon overwrites deterministic fixes and breaks natural prose.
+  // See: memory/feedback_qualityloop_harmful.md
+  pipeline[4].enabled = false; // QualityLoop
   return {
     name,
     models: DEFAULT_MODELS,
-    pipeline: lazyPipeline(),
+    pipeline,
     qualityThreshold: 0.85,
     maxAttempts: 5,
     budgetUsd: null,
@@ -213,6 +218,26 @@ export function getBudgetConfig(name = "budget"): HarnessConfig {
     qualityThreshold: 0.75,
     maxAttempts: 3,
   };
+}
+
+// A/B test configs — identify which default stages hurt quality
+export function getTestNoPolisherConfig(): HarnessConfig {
+  const pipeline = lazyPipeline();
+  pipeline[5].enabled = false; // Polisher off
+  return { ...getDefaultConfig("test-no-polisher"), pipeline };
+}
+
+export function getTestNoQualityLoopConfig(): HarnessConfig {
+  const pipeline = lazyPipeline();
+  pipeline[4].enabled = false; // QualityLoop off
+  return { ...getDefaultConfig("test-no-qualityloop"), pipeline };
+}
+
+export function getTestNoQualityNoPolisherConfig(): HarnessConfig {
+  const pipeline = lazyPipeline();
+  pipeline[4].enabled = false; // QualityLoop off
+  pipeline[5].enabled = false; // Polisher off
+  return { ...getDefaultConfig("test-no-quality-polisher"), pipeline };
 }
 
 export function getFastConfig(name = "fast"): HarnessConfig {

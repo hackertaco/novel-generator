@@ -36,7 +36,7 @@ import type { NovelSeed } from "../src/lib/schema/novel";
 import type { ChapterSummary } from "../src/lib/schema/chapter";
 
 // Direct harness (bypasses API timeout)
-import { NovelHarness, getDefaultConfig, getBudgetConfig, getFastConfig } from "../src/lib/harness";
+import { NovelHarness, getDefaultConfig, getBudgetConfig, getFastConfig, getTestNoPolisherConfig, getTestNoQualityLoopConfig, getTestNoQualityNoPolisherConfig } from "../src/lib/harness";
 import type { HarnessEvent } from "../src/lib/harness";
 
 // ---------------------------------------------------------------------------
@@ -248,6 +248,9 @@ async function generateNovel(config: E2EConfig) {
   // Step 3: Generate chapters using harness directly (no API timeout)
   const harnessConfig = preset === "fast" ? getFastConfig()
     : preset === "budget" ? getBudgetConfig()
+    : preset === "no-polisher" ? getTestNoPolisherConfig()
+    : preset === "no-qualityloop" ? getTestNoQualityLoopConfig()
+    : preset === "no-quality-polisher" ? getTestNoQualityNoPolisherConfig()
     : getDefaultConfig();
   const harness = new NovelHarness(harnessConfig);
 
