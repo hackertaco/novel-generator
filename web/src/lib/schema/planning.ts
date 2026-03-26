@@ -82,15 +82,15 @@ export type ChapterBlueprint = z.infer<typeof ChapterBlueprintSchema>;
 // --- Arc Plan (10-15 chapters) ---
 
 export const ArcPlanSchema = z.object({
-  id: z.string(),
-  name: z.string(),
+  id: z.string().default("arc_unknown"),
+  name: z.string().default(""),
   part_id: z.string().default(""),
-  start_chapter: z.number().int(),
-  end_chapter: z.number().int(),
-  summary: z.string(),
+  start_chapter: z.number().int().default(1),
+  end_chapter: z.number().int().default(10),
+  summary: z.string().default(""),
   theme: z.string().default(""),
   key_events: z.array(z.string()).default([]),
-  climax_chapter: z.number().int(),
+  climax_chapter: z.number().int().default(5),
   tension_curve: z.array(z.number()).default([]).describe("Tension per chapter in this arc"),
   chapter_blueprints: z.array(ChapterBlueprintSchema).default([]),
 });
@@ -99,14 +99,14 @@ export type ArcPlan = z.infer<typeof ArcPlanSchema>;
 // --- Part Plan (50-70 chapters) ---
 
 export const PartPlanSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  start_chapter: z.number().int(),
-  end_chapter: z.number().int(),
-  theme: z.string(),
-  core_conflict: z.string(),
+  id: z.string().default("part_unknown"),
+  name: z.string().default(""),
+  start_chapter: z.number().int().default(1),
+  end_chapter: z.number().int().default(60),
+  theme: z.string().default(""),
+  core_conflict: z.string().default(""),
   resolution_target: z.string().default(""),
-  estimated_chapter_count: z.number().int(),
+  estimated_chapter_count: z.number().int().default(60),
   arcs: z.array(ArcPlanSchema).default([]),
   transition_to_next: z.string().default("").describe("How this part hands off to the next"),
 });
@@ -135,9 +135,9 @@ export const GlobalForeshadowingSchema = z.object({
 
 export const MasterPlanSchema = z.object({
   estimated_total_chapters: z.object({
-    min: z.number().int(),
-    max: z.number().int(),
-  }),
+    min: z.number().int().default(60),
+    max: z.number().int().default(200),
+  }).default({ min: 60, max: 200 }),
   world_complexity: WorldComplexitySchema,
   parts: z.array(PartPlanSchema),
   global_foreshadowing_timeline: z.array(GlobalForeshadowingSchema).default([]),
