@@ -180,8 +180,8 @@ function lazyPipeline(): PipelineStepConfig[] {
 
   return [
     { create: () => new WriterAgent(), enabled: true },
-    { create: () => new RuleGuardAgent(), enabled: true },
     { create: () => new SceneVerifierAgent(), enabled: true },
+    { create: () => new RuleGuardAgent(), enabled: true },
     { create: () => new ConsistencyChecker(), enabled: true },
     { create: () => new QualityLoop(), enabled: true },
     { create: () => new PolisherAgent(), enabled: true },
