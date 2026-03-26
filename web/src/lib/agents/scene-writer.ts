@@ -658,6 +658,38 @@ export async function writeChapterParallel(
     totalUsage = addUsage(totalUsage, r.usage);
   }
 
+  // --- Phase 1.5: Cross-scene deduplication ---
+  // Remove paragraphs in later scenes that duplicate earlier scene content
+  if (sceneTexts.length >= 2) {
+    for (let si = 1; si < sceneTexts.length; si++) {
+      const prevNouns = new Set<string>();
+      // Collect all nouns from previous scenes
+      for (let pi = 0; pi < si; pi++) {
+        const matches = sceneTexts[pi].match(/[가-힣]{2,}/g) || [];
+        for (const m of matches) prevNouns.add(m);
+      }
+
+      // Check each paragraph of current scene for overlap with previous scenes
+      const paragraphs = sceneTexts[si].split("\n\n").filter((p) => p.trim().length > 0);
+      const kept: string[] = [];
+      for (const para of paragraphs) {
+        const paraNouns = new Set((para.match(/[가-힣]{2,}/g) || []).filter((n) => n.length >= 2));
+        if (paraNouns.size < 3) { kept.push(para); continue; } // too short to compare
+
+        // Check overlap: if 80%+ of this paragraph's nouns are in previous scenes, it's a duplicate
+        const overlap = [...paraNouns].filter((n) => prevNouns.has(n)).length / paraNouns.size;
+        if (overlap < 0.8) {
+          kept.push(para);
+        }
+        // else: skip this paragraph (duplicate content from earlier scene)
+      }
+
+      if (kept.length < paragraphs.length) {
+        sceneTexts[si] = kept.join("\n\n");
+      }
+    }
+  }
+
   // --- Phase 2: Bridge stitching ---
   // For each seam between scenes, take the last 2 sentences of scene N
   // and first 2 sentences of scene N+1, and ask LLM to smooth the transition.
