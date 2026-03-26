@@ -229,6 +229,6 @@ export function getFastConfig(name = "fast"): HarnessConfig {
     qualityThreshold: 0.70,
     maxAttempts: 1,
     fastMode: true,
-    parallelMode: true,
+    parallelMode: false, // sequential for coherence (parallel causes scene duplication)
   };
 }
