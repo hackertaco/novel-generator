@@ -22,7 +22,7 @@ export const DEFAULT_TOLERANCE = 0.2;
 
 export interface EnforceLengthResult {
   text: string;
-  action: "none" | "trimmed" | "needs_expansion";
+  action: "none" | "trimmed" | "scene_truncated" | "needs_expansion";
   removedParagraphs: number;
 }
 
@@ -63,7 +63,18 @@ export function enforceLength(
     return { text, action: "needs_expansion", removedParagraphs: 0 };
   }
 
-  // --- TOO LONG: trim low-density paragraphs ---
+  // --- TOO LONG ---
+
+  // First, try to cut at the last scene break (*** or ---) within maxChars
+  const lastStarBreak = text.lastIndexOf('\n***\n', maxChars);
+  const lastDashBreak = text.lastIndexOf('\n---\n', maxChars);
+  const lastBreak = Math.max(lastStarBreak, lastDashBreak);
+  if (lastBreak > minChars) {
+    // Scene-break truncation keeps complete scenes
+    return { text: text.slice(0, lastBreak).trim(), action: 'scene_truncated' as const, removedParagraphs: 0 };
+  }
+
+  // Fall through to paragraph-level trimming
 
   const paragraphs = text.split("\n\n").map((p) => p.trim()).filter((p) => p.length > 0);
 
