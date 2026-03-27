@@ -58,11 +58,13 @@ Sources: [Narrative Information Theory](https://arxiv.org/abs/2411.12907), [Fabu
 
 - **HierarchicalMemory** — short/mid/long-term chapter memory
 - **CharacterTracker** — emotion, relationships, location, secrets per chapter
-- **ThreadTracker** — open narrative threads with deadline reminders
-- **EventTimeline** — searchable event index by character/location/type
-- **ToneManager** — arc-level tone profiles and tension curves
-- **ProgressMonitor** — pacing feedback (too fast/slow)
-- **FeedbackAccumulator** — bottom-up correction planning
+- **ThreadTracker** — open narrative threads with deadline reminders (일부 기능 개발 중)
+- **EventTimeline** — searchable event index by character/location/type (일부 기능 개발 중)
+- **ToneManager** — arc-level tone profiles and tension curves (일부 기능 개발 중)
+- **ProgressMonitor** — pacing feedback (too fast/slow) (일부 기능 개발 중)
+- **FeedbackAccumulator** — bottom-up correction planning (일부 기능 개발 중)
+
+**Integration status:** Tracker classes are implemented, but post-processor integration (ThreadTracker, ToneManager, ProgressMonitor) uses stubs (일부 기능 개발 중). Full LLM-based integration is planned.
 
 **Known risk:** Trackers depend on LLM extraction, which can hallucinate. A single missed state change (e.g., "dropped the sword" not tracked) snowballs across subsequent chapters. Mitigations: sanity checks reject suspicious bulk changes, and users can manually correct tracker state between chapters.
 

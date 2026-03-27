@@ -251,10 +251,10 @@ summary: "이 챕터 요약 (다음 챕터 맥락용, 3문장)"
         filepath = chapters_dir / filename
         filepath.write_text(result.content, encoding="utf-8")
 
-        # Save summary
-        summary_dir = self.output_dir / "summaries"
+        # Save summary (must match StateStore's expected path)
+        summary_dir = self.output_dir / ".state" / "summaries"
         summary_dir.mkdir(parents=True, exist_ok=True)
-        summary_file = summary_dir / f"{chapter_num:03d}.yaml"
+        summary_file = summary_dir / f"chapter_{chapter_num:03d}.yaml"
 
         import yaml
         summary_data = {

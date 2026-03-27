@@ -1,23 +1,7 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Noto_Serif_KR } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const notoSerifKR = Noto_Serif_KR({
-  variable: "--font-serif-kr",
-  subsets: ["latin"],
-  weight: ["400", "700"],
-});
+import { geistSans, geistMono, notoSerifKR } from "./fonts";
 
 export const metadata: Metadata = {
   title: "웹소설 생성기",
