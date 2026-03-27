@@ -13,13 +13,6 @@ export const SceneTypeEnum = z.enum([
 ]);
 export type SceneType = z.infer<typeof SceneTypeEnum>;
 
-/**
- * Regex that checks for at least one Korean proper-noun-like pattern:
- * 2+ consecutive Hangul characters followed by a subject/object particle.
- * This catches names like "이수련이", "레온을", "서연에게" etc.
- */
-const KOREAN_NAME_PATTERN = /[가-힣]{2,}[이가은는을를에의과와]/;
-
 export const SceneSpecSchema = z.object({
   purpose: z.string()
     .min(20, "씬 purpose는 20자 이상이어야 합니다 (구체적으로 쓰세요)")

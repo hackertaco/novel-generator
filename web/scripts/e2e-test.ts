@@ -37,7 +37,6 @@ import type { ChapterSummary } from "../src/lib/schema/chapter";
 
 // Direct harness (bypasses API timeout)
 import { NovelHarness, getDefaultConfig, getBudgetConfig, getFastConfig, getTestNoPolisherConfig, getTestNoQualityLoopConfig, getTestNoQualityNoPolisherConfig } from "../src/lib/harness";
-import type { HarnessEvent } from "../src/lib/harness";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -118,104 +117,6 @@ async function fetchJson(url: string, body: unknown): Promise<unknown> {
 }
 
 // ---------------------------------------------------------------------------
-// SSE Stream Parser (mirrors useStreamingGeneration.ts)
-// ---------------------------------------------------------------------------
-
-async function parseSSEStream(
-  url: string,
-  body: unknown,
-  onEvent?: (type: string, data: Record<string, unknown>) => void,
-): Promise<ChapterResult> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(300_000),
-  });
-
-  if (!res.ok) {
-    const err = await res.text().catch(() => "unknown");
-    throw new Error(`HTTP ${res.status}: ${err}`);
-  }
-
-  const reader = res.body?.getReader();
-  if (!reader) throw new Error("No readable stream");
-
-  const decoder = new TextDecoder();
-  let fullText = "";
-  let summary: ChapterSummary | null = null;
-  let score = 0;
-  const usage = { prompt_tokens: 0, completion_tokens: 0, cost_usd: 0 };
-  const errors: string[] = [];
-  const start = Date.now();
-
-  let buffer = "";
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || ""; // keep incomplete line
-
-    for (const line of lines) {
-      if (!line.startsWith("data: ")) continue;
-      const data = line.slice(6);
-      if (data === "[DONE]") continue;
-
-      try {
-        const parsed = JSON.parse(data);
-        onEvent?.(parsed.type, parsed);
-
-        switch (parsed.type) {
-          case "chunk":
-            fullText += parsed.content;
-            break;
-          case "replace_text":
-            fullText = parsed.content;
-            break;
-          case "patch": {
-            const paragraphs = fullText.split("\n\n").map((p: string) => p.trim()).filter((p: string) => p.length > 0);
-            if (parsed.paragraphId >= 0 && parsed.paragraphId < paragraphs.length) {
-              paragraphs[parsed.paragraphId] = parsed.content;
-              fullText = paragraphs.join("\n\n");
-            }
-            break;
-          }
-          case "complete":
-            if (parsed.summary) summary = parsed.summary;
-            break;
-          case "evaluation":
-            score = parsed.overall_score || 0;
-            break;
-          case "usage":
-            usage.prompt_tokens += parsed.prompt_tokens || 0;
-            usage.completion_tokens += parsed.completion_tokens || 0;
-            usage.cost_usd += parsed.cost_usd || 0;
-            break;
-          case "error":
-            errors.push(parsed.message || "unknown error");
-            break;
-        }
-      } catch {
-        // ignore parse errors in SSE
-      }
-    }
-  }
-
-  return {
-    chapterNumber: 0,
-    fullText,
-    summary,
-    score,
-    usage,
-    errors,
-    durationMs: Date.now() - start,
-  };
-}
-
-// ---------------------------------------------------------------------------
 // Phase 1: Generate
 // ---------------------------------------------------------------------------
 
@@ -257,7 +158,6 @@ async function generateNovel(config: E2EConfig) {
   log(`하네스 직접 실행 (preset: ${preset}, API 타임아웃 우회)`);
 
   const chapterResults: ChapterResult[] = [];
-  const start = Date.now();
 
   for await (const event of harness.run(seed, 1, chapters)) {
     switch (event.type) {

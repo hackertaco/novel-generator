@@ -5,7 +5,6 @@ import {
   ChapterSummarySchema,
   CharacterChangeSchema,
   ForeshadowingTouchSchema,
-  EventType,
 } from "@/lib/schema/chapter";
 
 describe("ChapterEventSchema", () => {

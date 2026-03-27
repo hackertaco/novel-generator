@@ -5,7 +5,7 @@
  * and provides guidance for upcoming chapters.
  */
 
-import type { NovelSeed, PlotArc } from "../schema/novel";
+import type { NovelSeed } from "../schema/novel";
 import { getArcForChapter } from "../schema/novel";
 
 // ---------------------------------------------------------------------------

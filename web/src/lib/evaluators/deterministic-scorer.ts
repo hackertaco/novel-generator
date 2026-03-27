@@ -27,7 +27,7 @@ import { measureEmotionalImpact } from "./emotional-impact";
 import { measureOriginality } from "./originality";
 import { measurePageTurner } from "./page-turner";
 import { measureReadabilityPacing } from "./readability-pacing";
-import { evaluateConsistencyGate, type ConsistencyGateResult, type ConsistencyIssue } from "./consistency-gate";
+import { evaluateConsistencyGate, type ConsistencyIssue } from "./consistency-gate";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -392,7 +392,6 @@ const NEGATIVE_TENSION_WORDS = [
 function scoreNarrative(
   text: string,
   seed: NovelSeed,
-  chapterNumber: number,
 ): { score: number; details: Record<string, unknown> } {
   const paragraphs = text.split("\n\n").filter((p) => p.trim().length > 0);
   if (paragraphs.length < 3) return { score: 0.5, details: { reason: "문단 수 부족" } };
@@ -671,7 +670,7 @@ export function computeDeterministicScores(
   const repetitionResult = scoreAntiRepetition(text);
   const sensoryResult = scoreSensoryDiversity(text);
 
-  const narrativeResult = scoreNarrative(text, seed, chapterNumber);
+  const narrativeResult = scoreNarrative(text, seed);
   const immersionResult = scoreImmersion(text);
 
   // Information-theoretic analysis

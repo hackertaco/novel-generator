@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { LifecycleEvent, ChapterContext, PipelineAgent } from "@/lib/agents/pipeline";
+import type { LifecycleEvent, PipelineAgent } from "@/lib/agents/pipeline";
 import type { ChapterLifecycleOptions } from "@/lib/agents/chapter-lifecycle";
 import type { NovelSeed } from "@/lib/schema/novel";
 
@@ -36,7 +36,7 @@ describe("Pipeline integration", () => {
     // Create a minimal pipeline agent to verify the interface
     const agent: PipelineAgent = {
       name: "test-agent",
-      async *run(ctx: ChapterContext): AsyncGenerator<LifecycleEvent> {
+      async *run(): AsyncGenerator<LifecycleEvent> {
         yield { type: "stage_change", stage: "testing" };
         yield { type: "done" };
       },

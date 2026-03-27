@@ -2,30 +2,12 @@ import { describe, it, expect } from "vitest";
 import {
   enforceLength,
   computeSceneBudgets,
-  DEFAULT_TARGET_CHARS,
-  DEFAULT_TOLERANCE,
-  type EnforceLengthResult,
-  type SceneBudget,
 } from "@/lib/agents/length-enforcer";
 import type { ChapterBlueprint } from "@/lib/schema/planning";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Build a text of approximately `n` chars from paragraphs */
-function makeParagraphs(count: number, charsEach: number): string {
-  const filler = "가나다라마바사아자차카타파하";
-  const paragraphs: string[] = [];
-  for (let i = 0; i < count; i++) {
-    let para = `문단${i}: `;
-    while (para.length < charsEach) {
-      para += filler;
-    }
-    paragraphs.push(para.slice(0, charsEach));
-  }
-  return paragraphs.join("\n\n");
-}
 
 /** Build a minimal ChapterBlueprint with given scene estimated_chars */
 function makeBlueprint(sceneChars: number[]): ChapterBlueprint {

@@ -16,7 +16,6 @@ import { validateSentimentArc } from "@/lib/agents/sentiment-validator";
 import { writeChapterByScenes } from "@/lib/agents/scene-writer";
 import { getWriterSystemPrompt } from "@/lib/prompts/writer-system-prompt";
 import { generateChapterBlueprints } from "@/lib/planning/chapter-planner";
-import { runPlotPipeline } from "@/lib/agents/plot-pipeline";
 import {
   calculateScore,
   buildJudgePrompt,

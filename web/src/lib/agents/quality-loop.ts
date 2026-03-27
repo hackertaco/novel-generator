@@ -1,4 +1,4 @@
-import type { PipelineAgent, ChapterContext, CriticReport, LifecycleEvent } from "./pipeline";
+import type { PipelineAgent, ChapterContext, LifecycleEvent } from "./pipeline";
 import { CriticAgent } from "./critic-agent";
 import { SurgeonAgent } from "./surgeon-agent";
 import { sanitize } from "./rule-guard";

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
+import { vi, describe, it, expect, beforeEach } from "vitest";
 import { z } from "zod";
 
 // Mock OpenAI before any imports that use it

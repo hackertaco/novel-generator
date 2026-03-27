@@ -9,7 +9,6 @@
 import type { PipelineAgent, ChapterContext, LifecycleEvent } from "./pipeline";
 import type { SceneSpec } from "@/lib/schema/planning";
 import { writeChapterByScenes } from "./scene-writer";
-import { getAgent } from "./llm-agent";
 import { getWriterSystemPrompt } from "@/lib/prompts/writer-system-prompt";
 import { selectModelTier, getModelForTier } from "@/lib/llm/tier";
 import { accumulateUsage } from "./pipeline";

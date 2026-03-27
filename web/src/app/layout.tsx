@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import "./globals.css";
-import { geistSans, geistMono, notoSerifKR } from "./fonts";
 
 export const metadata: Metadata = {
   title: "웹소설 생성기",
@@ -15,9 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} ${notoSerifKR.variable} antialiased`}
-      >
+      <body className="antialiased">
         <div className="min-h-screen bg-[#0a0a0a]">
           <header className="border-b border-zinc-800 px-6 py-4">
             <div className="mx-auto flex max-w-4xl items-center justify-between">

@@ -175,7 +175,6 @@ export class NovelHarness {
     seed: NovelSeed,
     chapterNumber: number,
     text: string,
-    summary: ChapterSummary,
   ): Promise<void> {
     if (!this.memory) return;
 
@@ -445,7 +444,7 @@ export class NovelHarness {
     summary.style_score = ctx.bestScore;
 
     // Post-chapter tracking
-    await this.updateTracking(seed, chapterNumber, completedText, summary);
+    await this.updateTracking(seed, chapterNumber, completedText);
 
     // Validate character appearances against blueprint (informational — premature
     // introductions are now blocked at blueprint generation time in chapter-planner.ts)

@@ -1,6 +1,4 @@
 import { NextRequest } from "next/server";
-/** @deprecated Legacy Orchestrator — kept for backward compatibility, no longer used in this route */
-import { Orchestrator as _DeprecatedOrchestrator } from "@/lib/agents/orchestrator";
 import { NovelHarness, getDefaultConfig, getBudgetConfig, getFastConfig } from "@/lib/harness";
 import type { NovelSeed } from "@/lib/schema/novel";
 import type { MasterPlan } from "@/lib/schema/planning";

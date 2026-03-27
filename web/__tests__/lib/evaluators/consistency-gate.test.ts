@@ -2,8 +2,6 @@
 import { describe, it, expect } from "vitest";
 import {
   evaluateConsistencyGate,
-  type ConsistencyGateResult,
-  type ConsistencyIssue,
 } from "@/lib/evaluators/consistency-gate";
 
 // ---------------------------------------------------------------------------

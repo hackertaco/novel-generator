@@ -2,8 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   buildCausalGraph,
   validateCausalGraph,
-  type CausalGraph,
-  type CausalValidationResult,
 } from "@/lib/evaluators/causal-graph";
 import type { NovelSeed } from "@/lib/schema/novel";
 

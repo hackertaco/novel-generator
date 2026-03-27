@@ -5,7 +5,6 @@ import {
   getExpectedSpeechLevel,
   buildSpeechLevelMatrix,
   hasBatchim,
-  type SpeechLevel,
   type SocialRank,
 } from "@/lib/evaluators/speech-level-enforcer";
 import type { NovelSeed } from "@/lib/schema/novel";

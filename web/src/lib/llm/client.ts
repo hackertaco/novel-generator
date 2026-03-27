@@ -2,7 +2,7 @@
  * Thin wrapper around LLMAgent for simple call/stream usage.
  * All provider logic is delegated to LLMAgent to avoid duplication.
  */
-import { getAgent, LLMAgent } from "@/lib/agents/llm-agent";
+import { getAgent } from "@/lib/agents/llm-agent";
 
 export async function callLLM(options: {
   prompt: string;

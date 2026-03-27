@@ -6,7 +6,6 @@ import {
   getCharacter,
   getArcForChapter,
   getForeshadowingActions,
-  type NovelSeed,
 } from "@/lib/schema/novel";
 
 function createTestSeed() {

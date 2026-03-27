@@ -655,15 +655,6 @@ export async function writeChapterParallel(
 
   // --- Phase 1: Generate all scenes in parallel ---
   const scenePromises = blueprint.scenes.map((scene, i) => {
-    // For parallel mode, each scene gets the previous chapter ending (scene 0)
-    // or a brief hint from the blueprint about the previous scene's purpose
-    // Build context about ALL previous scenes so each scene knows what's already covered
-    const prevSceneHint = i > 0
-      ? blueprint.scenes.slice(0, i).map((prev, j) =>
-          `[씬 ${j + 1} "${prev.purpose}" — 감정톤: ${prev.emotional_tone}. 이 내용은 이미 독자가 읽었습니다. 절대 반복하지 마세요.]`
-        ).join("\n") + "\n자연스럽게 이어서 시작하세요. 위 씬에서 이미 묘사한 행동/장면/감정을 다시 쓰지 마세요."
-      : undefined;
-
     const scenePrompt = buildScenePrompt(
       seed, chapterNumber, blueprint, scene, i,
       [], // no previous scene texts in parallel mode

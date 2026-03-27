@@ -1,5 +1,5 @@
 import { getAgent } from "./llm-agent";
-import { getWriterSystemPrompt, getSelfReviewPrompt } from "@/lib/prompts/writer-system-prompt";
+import { getWriterSystemPrompt } from "@/lib/prompts/writer-system-prompt";
 import { buildChapterContext, buildBlueprintContext } from "@/lib/context/builder";
 import { selectModelTier, getModelForTier } from "@/lib/llm/tier";
 import { sanitize } from "./rule-guard";

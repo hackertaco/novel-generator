@@ -43,9 +43,6 @@ export type CenteringTransition =
 // Korean particle detection
 // ---------------------------------------------------------------------------
 
-const SUBJECT_PARTICLES = /은|는|이|가|께서/;
-const OBJECT_PARTICLES = /을|를|에게|한테/;
-
 /** Korean salience order by particle (lower = more salient) */
 const SALIENCE: Record<string, number> = {
   은: 1,

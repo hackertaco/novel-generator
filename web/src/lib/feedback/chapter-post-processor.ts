@@ -7,7 +7,6 @@
 // ---------------------------------------------------------------------------
 
 import type { NovelSeed } from "@/lib/schema/novel";
-import type { ChapterSummary } from "@/lib/schema/chapter";
 import type { ConsistencyResult } from "@/lib/evaluators/consistency";
 import type { PacingResult } from "@/lib/evaluators/pacing";
 
@@ -155,15 +154,6 @@ export async function postProcessChapter(
     accumulator,
     chapterSummary,
   );
-
-  // Collect all feedbacks that were added in this round
-  const allNewFeedbacks = [
-    ...consistencyFeedbacks,
-    ...threadFeedbacks,
-    ...toneFeedbacks,
-    ...pacingFeedbacks,
-    ...charFeedbacks,
-  ];
 
   // Convert Omit<Feedback, "id"> to Feedback-like entries (actual ids assigned by accumulator)
   const feedbacksWithIds = accumulator

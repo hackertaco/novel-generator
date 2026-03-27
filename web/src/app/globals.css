@@ -3,6 +3,9 @@
 :root {
   --background: #0a0a0a;
   --foreground: #ededed;
+  --font-geist-sans: "SF Pro Display", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  --font-geist-mono: "SFMono-Regular", "JetBrains Mono", "Fira Code", "Menlo", monospace;
+  --font-serif-kr: "Iowan Old Style", "Palatino Linotype", "AppleMyungjo", "Nanum Myeongjo", "Noto Serif KR", serif;
 }
 
 @theme inline {

@@ -134,9 +134,7 @@ describe("runPlotPipeline", () => {
         male_archetype: "", female_archetype: "",
       },
     ];
-    let callCount = 0;
     const mockCallStructured = vi.fn().mockImplementation(() => {
-      callCount++;
       return Promise.resolve({
         data: validPlots,
         usage: { prompt_tokens: 100, completion_tokens: 100, total_tokens: 200, cost_usd: 0.01 },

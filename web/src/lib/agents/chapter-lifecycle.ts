@@ -1,7 +1,6 @@
 import { extractSummaryRuleBased } from "@/lib/evaluators/summary";
 import type { NovelSeed } from "@/lib/schema/novel";
 import type { ChapterBlueprint } from "@/lib/schema/planning";
-import type { ChapterSummary } from "@/lib/schema/chapter";
 import type { ChapterContext, PipelineAgent, TrackingInjection } from "./pipeline";
 import { WriterAgent } from "./writer-agent";
 import { SceneVerifierAgent } from "./scene-verifier";

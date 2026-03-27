@@ -1,7 +1,7 @@
 import { getAgent } from "@/lib/agents/llm-agent";
 import { getMasterPlanPrompt } from "@/lib/prompts/planning-prompts";
 import { MasterPlanSchema, type MasterPlan, type ArcPlan } from "@/lib/schema/planning";
-import type { NovelSeed, PlotArc } from "@/lib/schema/novel";
+import type { NovelSeed } from "@/lib/schema/novel";
 import type { TokenUsage } from "@/lib/agents/types";
 
 /**

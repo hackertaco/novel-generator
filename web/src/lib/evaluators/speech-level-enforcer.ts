@@ -344,7 +344,6 @@ function getSceneCharacters(
   dialoguePosition: number,
   textLength: number,
   blueprint: ChapterBlueprint | undefined,
-  _characterNames: string[],
 ): string[] | undefined {
   if (!blueprint?.scenes || blueprint.scenes.length === 0) return undefined;
 
@@ -403,7 +402,6 @@ export function detectSpeechViolations(
       dlg.position,
       text.length,
       blueprint,
-      characterNames,
     );
 
     // Resolve scene character IDs to names for listener search

@@ -15,7 +15,6 @@ export function buildSurgeonPrompt(
   next: string | null,
   description: string,
   suggestedFix: string,
-  genre: string,
 ): string {
   const parts: string[] = [];
 
@@ -114,7 +113,6 @@ export class SurgeonAgent {
   async *fix(ctx: ChapterContext, issue: CriticIssue): AsyncGenerator<string, TokenUsage> {
     const segments = segmentText(ctx.text);
     const { startParagraph, endParagraph, description, suggestedFix } = issue;
-    const genre = ctx.seed.world.genre;
 
     // Extract target range text
     const clampedStart = Math.min(startParagraph, segments.length - 1);
@@ -134,7 +132,6 @@ export class SurgeonAgent {
       nextSegment,
       description,
       suggestedFix,
-      genre,
     );
 
     const agent = getAgent();

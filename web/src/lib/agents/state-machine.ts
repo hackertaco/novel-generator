@@ -71,6 +71,7 @@ export const REPAIR_INSTRUCTIONS: Record<string, string> = {
   sensoryDiversity: "다양한 감각(시각, 청각, 후각, 촉각, 미각)을 활용하세요.",
   narrativeInformation: "정보 밀도를 높이세요. 새로운 사실이나 단서를 추가하세요.",
   engagement: "고구마-사이다 밸런스를 조정하세요. 긴장과 해소의 리듬을 만드세요.",
+  rankConsistency: "캐릭터의 신분(공작/황제/시녀 등)이 seed 설정과 다릅니다. seed에 정의된 신분으로 수정하세요.",
 };
 
 export interface ValidationVerdict {

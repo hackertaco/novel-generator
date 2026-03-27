@@ -1,4 +1,4 @@
-import type { TokenUsage, AgentLog } from "./types";
+import type { AgentLog } from "./types";
 
 // Model pricing table (per 1M tokens)
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {

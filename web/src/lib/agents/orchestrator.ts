@@ -213,7 +213,6 @@ export class Orchestrator {
     seed: NovelSeed,
     chapterNumber: number,
     chapterText: string,
-    summary: ChapterSummary,
   ): AsyncGenerator<OrchestratorEvent> {
     if (!this.trackingEnabled) return;
 
@@ -487,7 +486,6 @@ export class Orchestrator {
         seed,
         chapterNumber,
         completedText,
-        completedSummary,
       );
     }
 

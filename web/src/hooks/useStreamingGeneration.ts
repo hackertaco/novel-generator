@@ -406,7 +406,7 @@ export function useStreamingGeneration() {
         abortRef.current = null;
       }
     },
-    [seed, summaries, currentChapter, setIsGenerating, setStreamingText, appendStreamingText, saveChapter, addSummary, setEvaluationResult, setError, recordUsage, setPipelineStage, incrementPipelineRetries, resetPipelineState, addPipelineLog, masterPlan, updateMasterPlan],
+    [seed, summaries, chapters, currentChapter, setIsGenerating, setStreamingText, appendStreamingText, saveChapter, addSummary, setEvaluationResult, setError, recordUsage, setPipelineStage, incrementPipelineRetries, resetPipelineState, addPipelineLog, masterPlan, updateMasterPlan],
   );
 
   const abort = useCallback(() => {

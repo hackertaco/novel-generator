@@ -308,7 +308,7 @@ describe("Chapter Pipeline Smoke Test", () => {
       "@/lib/agents/chapter-lifecycle"
     );
 
-    const events = await collectEvents(
+    await collectEvents(
       runChapterLifecycle({
         seed: makeSeed(),
         chapterNumber: 1,

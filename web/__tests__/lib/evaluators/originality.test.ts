@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { measureOriginality, type OriginalityResult } from "../../../src/lib/evaluators/originality";
+import { measureOriginality } from "../../../src/lib/evaluators/originality";
 
 // ---------------------------------------------------------------------------
 // Test fixtures

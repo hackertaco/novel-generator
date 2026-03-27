@@ -7,8 +7,6 @@
  */
 
 import type { NovelSeed } from "../schema/novel";
-import type { EventTimeline, StoryEvent } from "../tracking/event-timeline";
-import type { CharacterStateSnapshot } from "../tracking/character-tracker";
 
 // ---------------------------------------------------------------------------
 // Constraint violation types

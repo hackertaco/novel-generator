@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { measurePageTurner, type PageTurnerResult } from "../../../src/lib/evaluators/page-turner";
+import { measurePageTurner } from "../../../src/lib/evaluators/page-turner";
 
 // ---------------------------------------------------------------------------
 // Test fixtures

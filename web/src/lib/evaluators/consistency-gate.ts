@@ -28,7 +28,8 @@ export interface ConsistencyIssue {
     | "character_existence"
     | "timeline_contradiction"
     | "location_discontinuity"
-    | "low_comprehensibility";
+    | "low_comprehensibility"
+    | "rank_inconsistency";
   severity: "critical" | "major" | "minor";
   description: string;
   /** Paragraph index where the issue was detected */
@@ -316,6 +317,57 @@ function checkLocationDiscontinuity(paragraphs: string[]): ConsistencyIssue[] {
 }
 
 // ---------------------------------------------------------------------------
+// Character rank consistency
+// ---------------------------------------------------------------------------
+
+const RANK_TITLES: Record<string, string[]> = {
+  royal: ["황제", "황후", "황태자", "황녀", "왕", "왕비", "왕자", "공주"],
+  noble: ["공작", "후작", "백작", "자작", "남작", "귀족", "영주", "영애", "공녀"],
+  gentry: ["사대부", "기사", "기사단장", "향사"],
+  commoner: ["평민", "상인", "농부"],
+  servant: ["시녀", "하녀", "시종", "하인"],
+  slave: ["노예", "종"],
+  outcast: ["추방자", "유랑자"],
+};
+
+/** Invert RANK_TITLES so we can look up which rank group a title belongs to. */
+const TITLE_TO_RANK: Map<string, string> = new Map();
+for (const [rank, titles] of Object.entries(RANK_TITLES)) {
+  for (const title of titles) {
+    TITLE_TO_RANK.set(title, rank);
+  }
+}
+
+function checkRankConsistency(
+  text: string,
+  characters: Array<{ name: string; social_rank?: string; [key: string]: unknown }>,
+): ConsistencyIssue[] {
+  const issues: ConsistencyIssue[] = [];
+
+  for (const character of characters) {
+    const rank = character.social_rank;
+    if (!rank) continue;
+
+    // For each title word from OTHER rank groups, check if it appears right before the character name
+    for (const [title, titleRank] of TITLE_TO_RANK) {
+      if (titleRank === rank) continue; // same rank group — fine
+
+      // Match "title + optional space + character name"
+      const pattern = new RegExp(`${title}\\s*${character.name}`);
+      if (pattern.test(text)) {
+        issues.push({
+          type: "rank_inconsistency",
+          severity: "critical",
+          description: `캐릭터 "${character.name}"의 신분은 "${rank}"이지만 텍스트에서 "${title} ${character.name}"으로 표기됨 (${titleRank} 칭호 사용)`,
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
+// ---------------------------------------------------------------------------
 // Main evaluator
 // ---------------------------------------------------------------------------
 
@@ -338,6 +390,7 @@ export function evaluateConsistencyGate(
     ...checkCharacterExistence(text, characters),
     ...checkTimelineContradiction(paragraphs),
     ...checkLocationDiscontinuity(paragraphs),
+    ...checkRankConsistency(text, characters),
   ];
 
   // Comprehensibility check

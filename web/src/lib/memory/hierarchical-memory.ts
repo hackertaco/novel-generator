@@ -1,5 +1,4 @@
 import type { NovelSeed, PlotArc } from "@/lib/schema/novel";
-import type { Foreshadowing } from "@/lib/schema/foreshadowing";
 import { getArcForChapter, getForeshadowingActions } from "@/lib/schema/novel";
 
 // ---------------------------------------------------------------------------
