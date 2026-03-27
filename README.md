@@ -2,7 +2,46 @@
 
 AI novel generation harness with information-theoretic quality evaluation.
 
+> **메인 제품은 `web/` 디렉토리의 NovelHarness (TypeScript/Next.js)입니다.**
+> Python CLI는 초기 프로토타입으로, 현재는 web/ 디렉토리가 메인 제품입니다.
+
 A configurable pipeline that generates Korean web novels chapter-by-chapter, with deterministic quality scoring, parallel scene generation, and step-by-step orchestration.
+
+## Setup
+
+```bash
+cd web
+npm install
+cp .env.example .env.local  # Add your OpenAI API key
+npm run dev
+```
+
+## Usage
+
+```typescript
+import { NovelHarness, getFastConfig } from './lib/harness';
+
+const harness = new NovelHarness(getFastConfig());
+
+// Step-by-step (UI)
+for await (const event of harness.stepPlots("판타지")) { /* show plots */ }
+for await (const event of harness.stepSeed("판타지", selectedPlot)) { /* show seed */ }
+for await (const event of harness.stepPlan()) { /* show master plan */ }
+for await (const event of harness.stepChapters(1, 10)) { /* stream chapters */ }
+
+// Full auto (CLI)
+for await (const event of harness.runFullPipeline("판타지", { endChapter: 10 })) {
+  console.log(event.type);
+}
+```
+
+## Tech Stack
+
+- **Next.js** (App Router)
+- **TypeScript**
+- **OpenAI GPT-5.4 / GPT-4o** (via configurable model selection)
+- **Zod** (schema validation)
+- **Information Theory** (Shannon entropy, JSD, Pearson correlation)
 
 ## Architecture
 
@@ -20,7 +59,7 @@ Each step is managed by **NovelHarness** — a configurable runner that applies 
 ```
 WriterAgent        → Scene-by-scene or parallel generation
 RuleGuardAgent     → Code-based rules (ending repetition, cliché, length)
-ConstraintChecker  → Knowledge graph validation (dead characters, timeline paradox)
+ ConstraintChecker → Knowledge graph validation (dead characters, timeline paradox)
 QualityLoop        → Deterministic gate → LLM critic (only for borderline cases)
 PolisherAgent      → Final style pass
 ```
@@ -78,41 +117,19 @@ Sources: [Narrative Information Theory](https://arxiv.org/abs/2411.12907), [Fabu
 
 **Parallel mode trade-off (Fast only):** Scenes are generated simultaneously via `Promise.all` and stitched with bridge passes. This is 2-3x faster but sacrifices inter-scene causal coherence — a detail in Scene A won't influence Scene B. Use only when speed matters more than tight scene-to-scene continuity. Default and Budget presets use sequential generation.
 
-## Usage
+## Legacy: Python CLI
 
-```typescript
-import { NovelHarness, getFastConfig } from './lib/harness';
+> Python CLI는 초기 프로토타입으로, 현재는 web/ 디렉토리가 메인 제품입니다.
+> 이 코드는 참고용으로만 유지됩니다.
 
-const harness = new NovelHarness(getFastConfig());
-
-// Step-by-step (UI)
-for await (const event of harness.stepPlots("판타지")) { /* show plots */ }
-for await (const event of harness.stepSeed("판타지", selectedPlot)) { /* show seed */ }
-for await (const event of harness.stepPlan()) { /* show master plan */ }
-for await (const event of harness.stepChapters(1, 10)) { /* stream chapters */ }
-
-// Full auto (CLI)
-for await (const event of harness.runFullPipeline("판타지", { endChapter: 10 })) {
-  console.log(event.type);
-}
-```
-
-## Setup
+Python CLI 소스는 `src/novel_generator/` 에 있으며, `pyproject.toml`로 설치할 수 있습니다.
+실행 시 deprecation 경고가 표시됩니다.
 
 ```bash
-cd web
-npm install
-cp .env.example .env.local  # Add your OpenAI API key
-npm run dev
+pip install -e .
+novel init "아이디어"
+novel generate 프로젝트명
 ```
-
-## Tech Stack
-
-- **Next.js** (App Router)
-- **TypeScript**
-- **OpenAI GPT-5.4 / GPT-4o** (via configurable model selection)
-- **Zod** (schema validation)
-- **Information Theory** (Shannon entropy, JSD, Pearson correlation)
 
 ## License
 

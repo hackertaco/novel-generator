@@ -1,5 +1,13 @@
 """Main entry point for novel generator."""
 
+import warnings
+
+warnings.warn(
+    "Python CLI는 deprecated입니다. web/ 디렉토리의 NovelHarness를 사용하세요.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 import asyncio
 from pathlib import Path
 
