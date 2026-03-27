@@ -1,6 +1,7 @@
 import type { RuleIssue, ChapterContext, PipelineAgent, LifecycleEvent } from "./pipeline";
 import { enforceLength, DEFAULT_TARGET_CHARS, DEFAULT_TOLERANCE } from "./length-enforcer";
 import { enforceSpeechLevels } from "../evaluators/speech-level-enforcer";
+import { evaluateConsistencyGate } from "../evaluators/consistency-gate";
 
 // ---------------------------------------------------------------------------
 // Sanitize — remove LLM meta markers from generated text
@@ -459,6 +460,21 @@ export class RuleGuardAgent implements PipelineAgent {
     );
     ctx.text = lengthResult.text;
 
+    // POV consistency check
+    const consistencyGateResult = evaluateConsistencyGate(
+      ctx.text,
+      ctx.seed.characters,
+      ctx.blueprint?.pov,
+    );
+    const povIssues: RuleIssue[] = consistencyGateResult.issues
+      .filter((issue) => issue.type === "pov_inconsistency")
+      .map((issue) => ({
+        type: "pov_inconsistency" as const,
+        position: issue.position ?? 0,
+        detail: `[시점 불일치] ${issue.description}`,
+        severity: issue.severity === "critical" ? "critical" as const : "warning" as const,
+      }));
+
     ctx.ruleIssues = [
       ...detectEndingRepeat(ctx.text),
       ...detectSentenceStartRepeat(ctx.text),
@@ -470,6 +486,7 @@ export class RuleGuardAgent implements PipelineAgent {
         detail: `[화계 위반] ${v.speaker}->${v.listener}: "${v.dialogueText.slice(0, 30)}..." 감지=${v.detectedLevel}, 기대=${v.expectedLevel}`,
         severity: "warning" as const,
       })),
+      ...povIssues,
     ];
   }
 }

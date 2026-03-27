@@ -21,7 +21,7 @@ export interface TrackingInjection {
 // --- Issue types ---
 
 export interface RuleIssue {
-  type: "ending_repeat" | "sentence_start_repeat" | "banned_expression" | "consistency" | "short_dialogue_sequence" | "speech_level_violation";
+  type: "ending_repeat" | "sentence_start_repeat" | "banned_expression" | "consistency" | "short_dialogue_sequence" | "speech_level_violation" | "pov_inconsistency";
   severity?: "warning" | "error" | "critical";
   message?: string;
   position: number; // paragraph index (0-based)

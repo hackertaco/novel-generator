@@ -27,6 +27,7 @@ import { measureEmotionalImpact } from "./emotional-impact";
 import { measureOriginality } from "./originality";
 import { measurePageTurner } from "./page-turner";
 import { measureReadabilityPacing } from "./readability-pacing";
+import { evaluateConsistencyGate, type ConsistencyGateResult, type ConsistencyIssue } from "./consistency-gate";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -71,7 +72,11 @@ export interface DeterministicScores {
   pageTurner: number;
   /** 읽기 페이싱 (0~1) — 초점 안정성, 정보 간격, 인과 명시성 */
   readabilityPacing: number;
-  /** 종합 (가중 평균) */
+  /** 일관성 게이트 (0~1, 최종 점수 승수) */
+  consistencyGate: number;
+  /** 일관성 이슈 목록 */
+  consistencyIssues: ConsistencyIssue[];
+  /** 종합 (가중 평균 * consistencyGate) */
   overall: number;
   /** 상세 데이터 */
   details: Record<string, unknown>;
@@ -735,13 +740,23 @@ export function computeDeterministicScores(
     readabilityPacing: readabilityPacingScore,
   };
 
-  const overall = Object.entries(WEIGHTS).reduce(
+  const rawOverall = Object.entries(WEIGHTS).reduce(
     (sum, [key, weight]) => sum + (scores[key as keyof typeof scores] || 0) * weight,
     0,
   );
 
+  // Consistency gate: multiplies the raw score down if consistency is broken
+  const consistencyResult = evaluateConsistencyGate(
+    text,
+    seed.characters,
+    blueprint?.pov,
+  );
+  const overall = consistencyResult.score * rawOverall;
+
   return {
     ...scores,
+    consistencyGate: consistencyResult.score,
+    consistencyIssues: consistencyResult.issues,
     overall,
     details: {
       rhythm: rhythmResult.details,

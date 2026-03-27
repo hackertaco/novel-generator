@@ -77,6 +77,10 @@ export const ChapterBlueprintSchema = z
     emotional_peak_position: z.number().min(0).max(1).optional().describe("감정 피크 위치 (0-1, 기본 0.7)"),
     /** 챕터 끝 타입 */
     cliffhanger_type: CliffhangerTypeEnum.optional().describe("챕터 끝 타입: question, crisis, revelation, twist"),
+    /** 시점 (1인칭/3인칭) */
+    pov: z.enum(["first", "third"]).optional().describe("시점: first(1인칭) or third(3인칭). 기본값 third"),
+    /** 시점 인물 (1인칭일 때 화자, 3인칭일 때 초점 인물) */
+    pov_character: z.string().optional().describe("시점 인물 이름"),
   })
   .transform((data) => ({
     ...data,
