@@ -1,6 +1,6 @@
-import type { RuleIssue, ChapterContext, PipelineAgent, LifecycleEvent } from "@/lib/agents/pipeline";
-import { enforceLength, DEFAULT_TARGET_CHARS, DEFAULT_TOLERANCE } from "@/lib/agents/length-enforcer";
-import { enforceSpeechLevels } from "@/lib/evaluators/speech-level-enforcer";
+import type { RuleIssue, ChapterContext, PipelineAgent, LifecycleEvent } from "./pipeline";
+import { enforceLength, DEFAULT_TARGET_CHARS, DEFAULT_TOLERANCE } from "./length-enforcer";
+import { enforceSpeechLevels } from "../evaluators/speech-level-enforcer";
 
 // ---------------------------------------------------------------------------
 // Sanitize — remove LLM meta markers from generated text
