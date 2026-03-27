@@ -111,13 +111,19 @@ ${chapterNumber}화 — ${blueprint.one_liner}
   const chapterOutline = seed.chapter_outlines.find(
     (o) => o.chapter_number === chapterNumber,
   );
+  // Resolve tension level: prefer chapter outline, fall back to blueprint
+  const tensionLevel = chapterOutline?.tension_level ?? blueprint.tension_level ?? 5;
   if (chapterOutline) {
     const keyPtsStr = chapterOutline.key_points.length > 0
       ? `\n핵심 사건: ${chapterOutline.key_points.join(" / ")}`
       : "";
     parts.push(`# 이번 화 설계
 ${chapterOutline.one_liner}${keyPtsStr}
-긴장도: ${chapterOutline.tension_level}/10
+긴장도: ${tensionLevel}/10 — 이 챕터의 긴장도는 ${tensionLevel}/10입니다. 그에 맞는 페이스로 작성하세요.
+`);
+  } else if (blueprint.tension_level != null) {
+    parts.push(`# 이번 화 긴장도
+긴장도: ${blueprint.tension_level}/10 — 이 챕터의 긴장도는 ${blueprint.tension_level}/10입니다. 그에 맞는 페이스로 작성하세요.
 `);
   }
 

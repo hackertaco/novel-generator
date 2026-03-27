@@ -633,30 +633,27 @@ function scoreEngagement(
 // ---------------------------------------------------------------------------
 
 const WEIGHTS = {
-  // 구조/기법 (35%)
-  rhythm: 0.05,
-  hookEnding: 0.04,
-  characterVoice: 0.06,
-  dialogueRatio: 0.02,
-  lengthScore: 0.02,
-  antiRepetition: 0.04,
-  sensoryDiversity: 0.02,
-  narrative: 0.06,
-  immersion: 0.04,
-  // 정보이론 (18%)
-  narrativeInformation: 0.11,
-  engagement: 0.07,
-  // 수학적 검증 (11%)
-  loopAvoidance: 0.04,
-  dialogueQuality: 0.04,
-  sentimentArc: 0.03,
-  // 재미/감동/독창성/읽고싶은지 (28%)
-  curiosityGap: 0.07,
-  emotionalImpact: 0.07,
-  originality: 0.07,
-  pageTurner: 0.07,
-  // 읽기 페이싱 (8%)
-  readabilityPacing: 0.08,
+  // --- 7 core dimensions (sum = 1.0) ---
+  narrative: 0.15,           // 서사 진행
+  characterVoice: 0.15,      // 캐릭터 일관성
+  readabilityPacing: 0.15,   // 이해도/가독성
+  engagement: 0.15,          // 갈등 텐션, 고구마-사이다
+  dialogueQuality: 0.10,     // 대사
+  pageTurner: 0.15,          // 절단신공
+  originality: 0.15,         // 독창성
+  // --- zeroed (still computed, available in details) ---
+  rhythm: 0,
+  hookEnding: 0,
+  dialogueRatio: 0,
+  lengthScore: 0,
+  antiRepetition: 0,
+  sensoryDiversity: 0,
+  narrativeInformation: 0,
+  immersion: 0,
+  loopAvoidance: 0,
+  sentimentArc: 0,
+  curiosityGap: 0,
+  emotionalImpact: 0,
 };
 
 export function computeDeterministicScores(

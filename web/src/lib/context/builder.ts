@@ -475,6 +475,11 @@ ${currentArc.summary}
     funFields.push(`엔딩 방식: [${blueprint.cliffhanger_type}] ${cliffLabels[blueprint.cliffhanger_type] || blueprint.cliffhanger_type}`);
   }
 
+  // Tension level guidance
+  if (blueprint.tension_level != null) {
+    funFields.push(`긴장도: ${blueprint.tension_level}/10 — 이 챕터의 긴장도는 ${blueprint.tension_level}/10입니다. 그에 맞는 페이스로 작성하세요.`);
+  }
+
   parts.push(`# ${chapterNum}화 블루프린트
 제목: ${blueprint.title}
 핵심: ${blueprint.one_liner}

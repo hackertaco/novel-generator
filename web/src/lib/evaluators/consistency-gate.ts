@@ -8,6 +8,8 @@
  * Formula:  overall = consistencyGate * weighted_sum(dimensions)
  */
 
+import { measureComprehensibility } from "./comprehensibility";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -25,7 +27,8 @@ export interface ConsistencyIssue {
     | "unnamed_scene_start"
     | "character_existence"
     | "timeline_contradiction"
-    | "location_discontinuity";
+    | "location_discontinuity"
+    | "low_comprehensibility";
   severity: "critical" | "major" | "minor";
   description: string;
   /** Paragraph index where the issue was detected */
@@ -336,6 +339,16 @@ export function evaluateConsistencyGate(
     ...checkTimelineContradiction(paragraphs),
     ...checkLocationDiscontinuity(paragraphs),
   ];
+
+  // Comprehensibility check
+  const comprehensibility = measureComprehensibility(text, characters);
+  if (comprehensibility.score < 0.35) {
+    issues.push({
+      type: "low_comprehensibility",
+      severity: "major",
+      description: `독해 명확성 낮음 (점수: ${comprehensibility.score.toFixed(2)}): 주어 생략 ${comprehensibility.details.subjectOmissionStreaks}회, ROUGH_SHIFT ${comprehensibility.details.roughShiftCount}회, 불명확 대명사 ${comprehensibility.details.unresolvedPronouns + comprehensibility.details.ambiguousPronouns}개`,
+    });
+  }
 
   let gate = 1.0;
   for (const issue of issues) {

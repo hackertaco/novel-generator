@@ -300,6 +300,14 @@ ${targetChapter ?? arc.start_chapter}화의 블루프린트를 1개만 작성하
      - climax: 0.7 (클라이맥스 직전)
      - falling_action/resolution: 0.5 (중반)
    - **cliffhanger_type**: 챕터 끝 타입 — "question"(미스터리/추리), "crisis"(위기 상황), "revelation"(충격 폭로), "twist"(예상 뒤집기)
+10. **긴장도 커브 (tension_level 1-10, 필수)**:
+   각 챕터에 tension_level (1-10)을 지정하세요:
+   - 1화: 3-4 (소개, 일상에서 사건 암시)
+   - 초반부: 4-6 (갈등 시작, 점진적 상승)
+   - 중반부: 6-8 (위기, 반전, 갈등 심화)
+   - 클라이맥스: 9-10 (절정, 최대 위기)
+   - 결말: 5-7 (해결, 여운)
+   - 절대 금지: 같은 tension_level 3화 연속 (서사 루프)
 
 씬 타입: action, dialogue, introspection, exposition, hook, flashback, transition
 
