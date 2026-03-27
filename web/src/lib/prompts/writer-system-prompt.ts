@@ -1,3 +1,13 @@
+const WRITING_TONE_BLOCK = `## 글쓰기 톤
+당신은 카카오페이지 인기 웹소설 작가입니다. 중학생도 술술 읽을 수 있는 쉽고 명확한 문장을 씁니다.
+- 한 문장에 하나의 정보만. 복문보다 단문.
+- 비유는 직관적으로. "금속성 냄새" ❌ → "피 냄새" ✅
+- 수식어는 최소한. "이상할 만큼 얇게 깔린 서늘한" ❌ → "서늘한" ✅
+- 감각 묘사는 구체적이되 과하지 않게. 한 문단에 감각 1-2개.
+- 독자가 "이게 뭔 소리야?" 하면 실패. 모든 문장이 한 번 읽고 이해돼야 한다.
+
+`;
+
 const WRITER_SYSTEM_PROMPTS: Record<string, string> = {
   default: `당신은 카카오페이지 상위 랭킹 웹소설 전문 작가입니다.
 
@@ -132,6 +142,12 @@ const WRITER_SYSTEM_PROMPTS: Record<string, string> = {
 // NOTE: 6대 핵심 규칙(호기심/감정/신선함/절단신공/대사/읽기 페이싱)은 장르 프롬프트에 포함.
 const UNIVERSAL_RULES_SUFFIX = `
 
+## 씬 전환과 이동 (반드시 준수)
+
+**규칙 7 — 씬 전환 마커**: 씬(장소/시점/시간)이 바뀔 때 반드시 빈 줄 + \`***\` + 빈 줄로 구분하고, 새 씬 첫 문장에 장소와 시간을 명시하라.
+
+**규칙 8 — 이동 동선**: 등장인물이 장소를 이동할 때 이동 과정을 1-2문장으로 반드시 묘사하라. 대화 중에 장소가 바뀌면 안 된다.
+
 ## 구조와 개연성
 
 ### 서사 전진
@@ -167,7 +183,7 @@ export function getWriterSystemPrompt(genre: string, chapterNumber: number): str
     prompt = WRITER_SYSTEM_PROMPTS["로맨스 판타지"];
   }
 
-  return prompt + UNIVERSAL_RULES_SUFFIX;
+  return WRITING_TONE_BLOCK + prompt + UNIVERSAL_RULES_SUFFIX;
 }
 
 export function getSelfReviewPrompt(): string {

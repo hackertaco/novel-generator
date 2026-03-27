@@ -155,5 +155,90 @@ describe("measureReadabilityPacing overall", () => {
     expect(result.details).toHaveProperty("focusShiftsPerParagraph");
     expect(result.details).toHaveProperty("eventToReactionRatio");
     expect(result.details).toHaveProperty("causalToDescriptiveRatio");
+    expect(result.details).toHaveProperty("missingSceneBreaks");
+    expect(result.details).toHaveProperty("avgSentenceLength");
+    expect(result.details).toHaveProperty("longSentenceRatio");
+  });
+
+  it("result includes sceneBreakScore and sentenceComplexityScore", () => {
+    const text = "윤세라는 앞으로 걸었다.\n\n그녀는 문을 열었다.";
+    const result = measureReadabilityPacing(text);
+    expect(result).toHaveProperty("sceneBreakScore");
+    expect(result).toHaveProperty("sentenceComplexityScore");
+    expect(result.sceneBreakScore).toBeGreaterThanOrEqual(0);
+    expect(result.sceneBreakScore).toBeLessThanOrEqual(1);
+    expect(result.sentenceComplexityScore).toBeGreaterThanOrEqual(0);
+    expect(result.sentenceComplexityScore).toBeLessThanOrEqual(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scene Break Detection
+// ---------------------------------------------------------------------------
+
+describe("Scene Break Detection", () => {
+  it("scene with *** separator between location changes → high score", () => {
+    const text = [
+      "윤세라는 서재에서 문서를 읽었다. 뭔가 이상했다.",
+      "",
+      "***",
+      "",
+      "강민호는 광장에서 검을 뽑았다. 적이 다가왔다.",
+    ].join("\n");
+
+    const result = measureReadabilityPacing(text);
+    expect(result.sceneBreakScore).toBeGreaterThanOrEqual(0.9);
+  });
+
+  it("location+character change without separator → lower score", () => {
+    const text = [
+      "윤세라는 서재에서 문서를 읽었다. 뭔가 이상했다.",
+      "",
+      "강민호는 광장에서 검을 뽑았다. 적이 다가왔다.",
+    ].join("\n");
+
+    const result = measureReadabilityPacing(text);
+    expect(result.sceneBreakScore).toBeLessThan(1.0);
+    expect(result.details.missingSceneBreaks).toBeGreaterThanOrEqual(1);
+  });
+
+  it("same characters and location → no penalty even without separator", () => {
+    const text = [
+      "윤세라는 서재에서 문서를 읽었다.",
+      "",
+      "세라는 서재 창문을 열었다. 바람이 불었다.",
+    ].join("\n");
+
+    const result = measureReadabilityPacing(text);
+    expect(result.sceneBreakScore).toBe(1.0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sentence Complexity
+// ---------------------------------------------------------------------------
+
+describe("Sentence Complexity", () => {
+  it("short simple sentences → high score", () => {
+    const text = "검을 뽑았다. 적이 왔다. 바람이 불었다. 칼을 휘둘렀다. 피가 튀었다.";
+    const result = measureReadabilityPacing(text);
+    expect(result.sentenceComplexityScore).toBeGreaterThanOrEqual(0.7);
+  });
+
+  it("very long compound sentences → lower score", () => {
+    const text = [
+      "그는 오랜 시간 동안 생각에 잠겨 있었는데 그러는 동안에도 바깥에서는 끊임없이 소리가 들려왔고 그 소리는 점점 가까워지면서 마치 누군가가 다가오는 것처럼 느껴졌다.",
+      "그녀는 긴 복도를 걸어가면서 하지만 뒤에서 누군가 따라오는 기척을 느꼈고 그런데 돌아보았을 때 아무도 없었기 때문에 더욱 불안해졌다.",
+      "그는 문을 열었는데 안에서 차가운 바람이 불어왔고 그러면서도 이상하게 따뜻한 빛이 보였으며 그 빛은 점점 강해지면서 방 전체를 감싸기 시작했다.",
+    ].join("\n\n");
+    const result = measureReadabilityPacing(text);
+    expect(result.sentenceComplexityScore).toBeLessThan(0.7);
+  });
+
+  it("avg sentence length in details is a number", () => {
+    const text = "짧은 문장이다. 또 다른 문장이다.";
+    const result = measureReadabilityPacing(text);
+    expect(typeof result.details.avgSentenceLength).toBe("number");
+    expect(typeof result.details.longSentenceRatio).toBe("number");
   });
 });
