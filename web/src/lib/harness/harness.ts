@@ -359,22 +359,24 @@ export class NovelHarness {
             role_in_arc: chapterNumber <= arc.start_chapter + 2 ? "setup" : "rising_action",
             scenes: [
               {
-                purpose: outline?.key_points?.[0] || `${chapterNumber}화 전개`,
+                purpose: (() => { const kp = outline?.key_points?.[0]; return (typeof kp === "string" ? kp : kp?.what) || `${chapterNumber}화 전개`; })(),
                 type: "dialogue" as const,
                 characters: prevCharNames,
                 estimated_chars: 1500,
                 emotional_tone: outline?.tension_level && outline.tension_level > 6 ? "긴장" : "일상",
+                must_reveal: [],
               },
               {
-                purpose: outline?.key_points?.[1] || "후반 전개 + 후킹",
+                purpose: (() => { const kp = outline?.key_points?.[1]; return (typeof kp === "string" ? kp : kp?.what) || "후반 전개 + 후킹"; })(),
                 type: "hook" as const,
                 characters: prevCharNames,
                 estimated_chars: 1500,
                 emotional_tone: "긴장",
+                must_reveal: [],
               },
             ],
             emotional_arc: "",
-            key_points: outline?.key_points || [],
+            key_points: (outline?.key_points || []).map((kp) => typeof kp === "string" ? kp : kp.what),
             characters_involved: prevCharNames,
             tension_level: outline?.tension_level || 5,
             target_word_count: 3000,
@@ -507,7 +509,7 @@ export class NovelHarness {
     // Generate story threads if missing (separate lightweight call)
     if (!seed.story_threads || seed.story_threads.length === 0) {
       try {
-        const { generateStoryThreads } = require("../planning/thread-generator");
+        const { generateStoryThreads } = await import("../planning/thread-generator");
         const threadResult = await generateStoryThreads(seed);
         seed.story_threads = threadResult.threads;
         // advances_thread is applied to outlines inside generateStoryThreads

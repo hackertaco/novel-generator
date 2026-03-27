@@ -169,6 +169,7 @@ function mergeBlueprintsIntoSeed(
       title: bp.title,
       arc_id: bp.arc_id,
       one_liner: bp.one_liner,
+      advances_thread: [],
       key_points: bp.key_points,
       characters_involved: bp.characters_involved,
       tension_level: bp.tension_level,

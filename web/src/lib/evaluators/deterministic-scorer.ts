@@ -687,7 +687,7 @@ export function computeDeterministicScores(
   let sentimentArcScore = 0.5;
   try {
     const loopResult = detectNarrativeLoop(text);
-    loopAvoidanceScore = loopResult.loopDetected ? Math.max(0, 1 - loopResult.overlapRatio * 2) : 1.0;
+    loopAvoidanceScore = loopResult.score;
 
     const dialogueInfoResult = measureDialogueInformation(text);
     dialogueQualityScore = dialogueInfoResult.score;

@@ -118,7 +118,7 @@ export class QualityLoop implements PipelineAgent {
         endParagraph: Math.min(ri.position + (ri.type === "short_dialogue_sequence" ? 4 : 1), segmentText(ctx.text).length - 1),
         category: "rhythm" as const,
         description: ri.detail,
-        severity: (ri.severity !== "minor" ? "major" : "minor") as "major" | "minor",
+        severity: (ri.severity === "warning" ? "minor" : "major") as "major" | "minor",
         suggestedFix: ri.type === "short_dialogue_sequence"
           ? "짧은 대사 사이에 캐릭터의 행동, 표정, 감각 묘사를 추가하세요. 대사 자체는 유지하되, 대사 뒤나 사이에 1-2문장의 서술 비트를 넣어 리듬을 만드세요."
           : "동일한 어미가 3회 이상 반복됩니다. 어미를 다양하게 바꾸세요: ~였다/~었다 대신 ~ㄴ다/~했다/~더라/~인 채/체언 종결 등을 섞으세요. 의미는 유지하되 문장 끝만 바꾸세요.",

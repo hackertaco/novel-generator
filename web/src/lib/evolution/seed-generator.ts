@@ -344,6 +344,7 @@ JSON 배열 형식으로 출력하세요.`;
     arcs,
     chapter_outlines,
     foreshadowing,
+    story_threads: [],
     style: StyleGuideSchema.parse({}),
   };
 

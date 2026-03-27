@@ -460,7 +460,7 @@ export async function runAutoResearchLoop(
   const keptModifications: ModificationRecord[] = [];
   const activePatches: string[] = [];
   const recentTargets: string[] = []; // Track recent targets for diversification
-  let cachedBlueprint: ChapterBlueprint | undefined;
+  // cachedBlueprint assigned after baseline generation below
 
   const emit = (event: LoopProgressEvent) => {
     onProgress?.(event);
@@ -487,7 +487,7 @@ export async function runAutoResearchLoop(
   totalUsage = addUsage(totalUsage, baselineGen.usage);
 
   // Cache the blueprint for reuse in subsequent iterations
-  cachedBlueprint = baselineGen.blueprint;
+  const cachedBlueprint = baselineGen.blueprint;
 
   checkAborted(signal);
   emit({

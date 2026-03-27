@@ -146,9 +146,9 @@ export function findWeakestDimensions(
 ): WeakDimension[] {
   const entries = Object.entries(DIMENSION_WEIGHTS).map(([dim, weight]) => ({
     dimension: dim,
-    score: (scores as Record<string, number>)[dim] ?? 0.5,
+    score: (scores as unknown as Record<string, number>)[dim] ?? 0.5,
     weight,
-    weightedScore: ((scores as Record<string, number>)[dim] ?? 0.5) * weight,
+    weightedScore: ((scores as unknown as Record<string, number>)[dim] ?? 0.5) * weight,
     instruction: REPAIR_INSTRUCTIONS[dim] || "품질을 개선하세요.",
   }));
 
@@ -278,7 +278,7 @@ export function decideValidation(
       worstSeverity = "critical";
       break;
     }
-    if (issue.severity === "error" && worstSeverity !== "critical") {
+    if (issue.severity === "error" && worstSeverity !== "error") {
       worstSeverity = "error";
     }
     if (issue.severity === "warning" && worstSeverity === "none") {

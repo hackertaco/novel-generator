@@ -71,18 +71,19 @@ export default function GenerationProgress({
   pipelineStage,
   generationStartTime,
 }: GenerationProgressProps) {
-  const [elapsed, setElapsed] = useState(0);
+  const computeElapsed = () =>
+    isGenerating && generationStartTime
+      ? Math.floor((Date.now() - generationStartTime) / 1000)
+      : 0;
+
+  const [elapsed, setElapsed] = useState(computeElapsed);
 
   // Elapsed-time ticker
   useEffect(() => {
-    if (!isGenerating || !generationStartTime) {
-      setElapsed(0);
-      return;
-    }
-    setElapsed(Math.floor((Date.now() - generationStartTime) / 1000));
-    const timer = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - generationStartTime) / 1000));
-    }, 1000);
+    if (!isGenerating || !generationStartTime) return;
+    const update = () => setElapsed(Math.floor((Date.now() - generationStartTime) / 1000));
+    update();
+    const timer = setInterval(update, 1000);
     return () => clearInterval(timer);
   }, [isGenerating, generationStartTime]);
 

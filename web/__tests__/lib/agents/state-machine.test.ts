@@ -336,6 +336,7 @@ describe("decideValidation", () => {
 // ---------------------------------------------------------------------------
 
 describe("findWeakestDimensions", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function makeScores(overrides: Partial<Record<string, number>> = {}): any {
     const base: Record<string, number> = {
       rhythm: 0.8,

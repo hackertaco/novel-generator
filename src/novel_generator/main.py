@@ -4,7 +4,7 @@ import warnings
 
 warnings.warn(
     "Python CLI는 deprecated입니다. web/ 디렉토리의 NovelHarness를 사용하세요.",
-    DeprecationWarning,
+    FutureWarning,
     stacklevel=2,
 )
 

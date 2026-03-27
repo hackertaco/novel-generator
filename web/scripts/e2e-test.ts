@@ -57,7 +57,7 @@ interface E2EConfig {
   baseUrl: string;
   genre: string;
   chapters: number;
-  preset: "default" | "budget" | "fast";
+  preset: "default" | "budget" | "fast" | "no-polisher" | "no-qualityloop" | "no-quality-polisher";
   plotIndex: number;
   threshold: number;
   verbose: boolean;

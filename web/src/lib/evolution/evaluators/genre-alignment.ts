@@ -267,7 +267,7 @@ function extractSeedText(seed: NovelSeed): string {
 
   for (const ch of seed.chapter_outlines) {
     parts.push(ch.title, ch.one_liner);
-    parts.push(...ch.key_points);
+    parts.push(...ch.key_points.map((kp) => typeof kp === "string" ? kp : kp.what));
   }
 
   return parts.join(" ");
