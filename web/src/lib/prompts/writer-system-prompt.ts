@@ -159,6 +159,13 @@ const UNIVERSAL_RULES_SUFFIX = `
 
 **규칙 8 — 이동 동선**: 등장인물이 장소를 이동할 때 이동 과정을 1-2문장으로 반드시 묘사하라. 대화 중에 장소가 바뀌면 안 된다.
 
+## 공간 묘사 규칙
+- 넓은 장소(홀, 광장, 궁전)에서는 먼저 전체 규모를 보여주고, 점차 주인공 주변으로 줌인하세요.
+- 캐릭터가 장소 안에서 이동할 때도 걸어가는 묘사가 필요합니다.
+  ❌ "난간 아래의 남자가 테이블에 손을 올렸다" (텔레포트)
+  ✅ "난간 아래의 남자가 계단을 올라 단상으로 걸어왔다. 테이블 앞에 멈춰 섰다." (동선 있음)
+- 공간의 크기감을 유지하세요. "홀 건너편에서 웅성거림이 들렸다"처럼 거리감을 보여주세요.
+
 ## 구조와 개연성
 
 ### 서사 전진
@@ -194,7 +201,21 @@ export function getWriterSystemPrompt(genre: string, chapterNumber: number): str
     prompt = WRITER_SYSTEM_PROMPTS["로맨스 판타지"];
   }
 
-  return WRITING_TONE_BLOCK + prompt + UNIVERSAL_RULES_SUFFIX;
+  let result = WRITING_TONE_BLOCK + prompt + UNIVERSAL_RULES_SUFFIX;
+
+  if (chapterNumber === 1) {
+    result += `
+
+## 1화 작성 가이드
+- 첫 문단: 주인공의 감각/행동으로 시작 (세계관 설명으로 시작하지 마세요)
+- 첫 30%: 주인공이 누구인지, 어떤 상황인지 자연스럽게 보여주기
+- 중반: 하나의 사건이 터짐 (음모/흑막은 암시만, 정체는 밝히지 마세요)
+- 끝: "다음에 어떻게 되지?" 궁금증 하나로 마무리
+- 등장인물: 주인공 + 핵심 인물 1-2명. 나머지는 2화 이후에.
+- 절대 금지: 복잡한 정치 관계 설명, 3명 이상 동시 대화, 과거 회상 2번 이상`;
+  }
+
+  return result;
 }
 
 export function getSelfReviewPrompt(): string {
