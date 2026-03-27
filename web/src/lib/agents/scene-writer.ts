@@ -284,6 +284,35 @@ ${lastSummary.summary.slice(0, 300)}
 `);
   }
 
+  // Fun structure guidance from blueprint
+  const funGuidanceParts: string[] = [];
+  if (blueprint.curiosity_hook) {
+    funGuidanceParts.push(`호기심 질문: "${blueprint.curiosity_hook}" — 이 의문이 독자 머릿속에 남도록 장면을 구성하세요.`);
+  }
+  if (blueprint.emotional_peak_position != null) {
+    const totalScenes = blueprint.scenes.length;
+    const peakSceneIdx = Math.round(blueprint.emotional_peak_position * (totalScenes - 1));
+    if (sceneIndex === peakSceneIdx) {
+      funGuidanceParts.push("🔥 이 씬이 감정 피크입니다. 감정 강도를 최대로 끌어올리세요.");
+    } else if (sceneIndex === peakSceneIdx - 1) {
+      funGuidanceParts.push("이 씬은 감정 피크 직전입니다. 긴장감을 차곡차곡 쌓아올리세요.");
+    } else if (sceneIndex > peakSceneIdx) {
+      funGuidanceParts.push("감정 피크 이후입니다. 여운을 남기되 새로운 궁금증을 심으세요.");
+    }
+  }
+  if (blueprint.cliffhanger_type && sceneIndex === blueprint.scenes.length - 1) {
+    const cliffInstructions: Record<string, string> = {
+      question: "마지막 문장은 독자에게 풀리지 않은 질문을 던지세요. '왜?', '누가?', '어떻게?'를 유발하세요.",
+      crisis: "주인공이 최악의 상황에 처한 순간에서 끊으세요. 탈출구가 보이지 않아야 합니다.",
+      revelation: "충격적인 사실이 드러나는 바로 그 순간에서 끊으세요. 반응은 다음 화에서.",
+      twist: "독자가 예상한 것과 정반대의 결과를 마지막 1~2문장에서 보여주세요.",
+    };
+    funGuidanceParts.push(`🎯 엔딩 지시: ${cliffInstructions[blueprint.cliffhanger_type] || ""}`);
+  }
+  const funGuidanceSection = funGuidanceParts.length > 0
+    ? `\n## 재미 구조 가이드\n${funGuidanceParts.join("\n")}\n`
+    : "";
+
   // Scene instruction
   const sceneLabel = `씬 ${sceneIndex + 1}/${blueprint.scenes.length}`;
 
@@ -327,7 +356,7 @@ ${mustRevealSection}${correctionRule}
 10. 대사 뒤에 "~라고 말했다"를 반복하지 마세요. 행동 비트로 화자를 보여주세요:
     - ❌ "가자." 그가 말했다. → ✅ "가자." 그가 검집을 채웠다.
 ${sceneIndex === blueprint.scenes.length - 1 ? "11. 마지막 씬이므로 다음 화가 궁금해지는 문장으로 끝내세요. 반전이나 새로운 위기를 던지세요." : ""}
-${threadReminderSection}
+${threadReminderSection}${funGuidanceSection}
 출력: 씬 본문만 (메타 정보 없이)`);
 
   return parts.join("\n");

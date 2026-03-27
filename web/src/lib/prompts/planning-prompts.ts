@@ -279,6 +279,14 @@ ${targetChapter ?? arc.start_chapter}화의 블루프린트를 1개만 작성하
 7. **캐릭터 도입 페이싱**:
    - 아크 첫 화: 주인공 + 최대 1~2명만
    - 새 캐릭터는 한 화에 1명씩만. characters_involved에 3명 이하로 제한
+8. **재미 요소 (선택, 가능하면 채우세요)**:
+   - **curiosity_hook**: 이 챕터에서 독자가 궁금해할 핵심 질문 1개 (예: "왜 죽은 형의 목소리가 던전에서 들리는가?")
+   - **emotional_peak_position**: 감정이 가장 고조되는 위치 (0~1). role_in_arc에 따라:
+     - setup/transition: 0.5 (중반)
+     - rising_action/escalation: 0.8 (후반)
+     - climax: 0.7 (클라이맥스 직전)
+     - falling_action/resolution: 0.5 (중반)
+   - **cliffhanger_type**: 챕터 끝 타입 — "question"(미스터리/추리), "crisis"(위기 상황), "revelation"(충격 폭로), "twist"(예상 뒤집기)
 
 씬 타입: action, dialogue, introspection, exposition, hook, flashback, transition
 
@@ -327,7 +335,10 @@ ${targetChapter ?? arc.start_chapter}화의 블루프린트를 1개만 작성하
       ],
       "characters_involved": ["mc", "companion_1"],
       "tension_level": 5,
-      "foreshadowing_actions": [{"id": "fs_1", "action": "plant"}]
+      "foreshadowing_actions": [{"id": "fs_1", "action": "plant"}],
+      "curiosity_hook": "왜 죽은 형의 목소리가 던전에서 들리는가?",
+      "emotional_peak_position": 0.8,
+      "cliffhanger_type": "revelation"
     }
   ]
 }

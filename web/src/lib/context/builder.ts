@@ -457,13 +457,31 @@ ${currentArc.summary}
   }
 
   // Blueprint details
+  const funFields: string[] = [];
+  if (blueprint.curiosity_hook) {
+    funFields.push(`호기심 질문: ${blueprint.curiosity_hook} — 이 질문을 독자 머릿속에 심으세요.`);
+  }
+  if (blueprint.emotional_peak_position != null) {
+    const pct = Math.round(blueprint.emotional_peak_position * 100);
+    funFields.push(`감정 피크: 전체 분량의 약 ${pct}% 지점에서 감정이 최고조에 달하도록 페이싱하세요.`);
+  }
+  if (blueprint.cliffhanger_type) {
+    const cliffLabels: Record<string, string> = {
+      question: "독자에게 풀리지 않은 질문을 던지며 끝내세요",
+      crisis: "주인공이 위기에 빠진 순간에서 끊으세요",
+      revelation: "충격적인 사실이 드러나는 순간에서 끊으세요",
+      twist: "독자의 예상을 뒤집는 반전으로 끝내세요",
+    };
+    funFields.push(`엔딩 방식: [${blueprint.cliffhanger_type}] ${cliffLabels[blueprint.cliffhanger_type] || blueprint.cliffhanger_type}`);
+  }
+
   parts.push(`# ${chapterNum}화 블루프린트
 제목: ${blueprint.title}
 핵심: ${blueprint.one_liner}
 아크 내 역할: ${blueprint.role_in_arc}
 감정선: ${blueprint.emotional_arc}
 목표 분량: ${blueprint.target_word_count}자
-`);
+${funFields.length > 0 ? "\n## 재미 가이드\n" + funFields.join("\n") + "\n" : ""}`);
 
   // Scene plan
   if (blueprint.scenes.length > 0) {

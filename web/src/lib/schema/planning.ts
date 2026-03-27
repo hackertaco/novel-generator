@@ -50,6 +50,9 @@ export const ArcRoleEnum = z.string().transform((val) => {
 }) as unknown as z.ZodType<"setup" | "rising_action" | "midpoint" | "escalation" | "climax" | "falling_action" | "resolution" | "transition">;
 export type ArcRole = z.infer<typeof ArcRoleEnum>;
 
+export const CliffhangerTypeEnum = z.enum(["question", "crisis", "revelation", "twist"]);
+export type CliffhangerType = z.infer<typeof CliffhangerTypeEnum>;
+
 export const ChapterBlueprintSchema = z
   .object({
     chapter_number: z.number().int(),
@@ -68,6 +71,12 @@ export const ChapterBlueprintSchema = z
     characters_involved: z.array(z.string()).default([]),
     tension_level: z.number().int().min(1).max(10).default(5),
     foreshadowing_actions: z.array(ForeshadowingActionRefSchema).default([]),
+    /** 이 챕터에서 열 호기심 질문 */
+    curiosity_hook: z.string().optional().describe("이 챕터에서 독자가 궁금해할 핵심 질문 1개"),
+    /** 감정 피크 위치 (0-1, 기본 0.7) */
+    emotional_peak_position: z.number().min(0).max(1).optional().describe("감정 피크 위치 (0-1, 기본 0.7)"),
+    /** 챕터 끝 타입 */
+    cliffhanger_type: CliffhangerTypeEnum.optional().describe("챕터 끝 타입: question, crisis, revelation, twist"),
   })
   .transform((data) => ({
     ...data,

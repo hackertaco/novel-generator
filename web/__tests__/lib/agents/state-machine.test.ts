@@ -2,11 +2,14 @@ import { describe, it, expect } from "vitest";
 import {
   resolveTransition,
   decideValidation,
+  findWeakestDimensions,
+  REPAIR_INSTRUCTIONS,
   DEFAULT_LIMITS,
   type StateMachineContext,
   type ChapterState,
   type ValidationVerdict,
   type TransitionLimits,
+  type WeakDimension,
 } from "@/lib/agents/state-machine";
 import type { ChapterContext, RuleIssue } from "@/lib/agents/pipeline";
 import type { NovelSeed } from "@/lib/schema/novel";
@@ -325,5 +328,136 @@ describe("decideValidation", () => {
     const v = decideValidation(0.90, 5, 1, false, 10, limits, issues);
     expect(v.decision).toBe("regenerate");
     expect(v.regenerateReason).toContain("critical consistency");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findWeakestDimensions tests
+// ---------------------------------------------------------------------------
+
+describe("findWeakestDimensions", () => {
+  function makeScores(overrides: Partial<Record<string, number>> = {}): any {
+    const base: Record<string, number> = {
+      rhythm: 0.8,
+      hookEnding: 0.8,
+      characterVoice: 0.8,
+      dialogueRatio: 0.8,
+      lengthScore: 0.8,
+      antiRepetition: 0.8,
+      sensoryDiversity: 0.8,
+      narrative: 0.8,
+      immersion: 0.8,
+      narrativeInformation: 0.8,
+      engagement: 0.8,
+      loopAvoidance: 0.8,
+      dialogueQuality: 0.8,
+      sentimentArc: 0.8,
+      curiosityGap: 0.8,
+      emotionalImpact: 0.8,
+      originality: 0.8,
+      pageTurner: 0.8,
+      overall: 0.8,
+      details: {},
+    };
+    return { ...base, ...overrides };
+  }
+
+  it("returns exactly N weakest dimensions", () => {
+    const scores = makeScores({ rhythm: 0.1, hookEnding: 0.2, narrative: 0.3 });
+    const weak = findWeakestDimensions(scores, 3);
+    expect(weak).toHaveLength(3);
+  });
+
+  it("returns dimensions sorted by weighted score (ascending)", () => {
+    // narrative weight=0.08, rhythm weight=0.05
+    // narrative: 0.1 * 0.08 = 0.008; rhythm: 0.1 * 0.05 = 0.005
+    const scores = makeScores({ rhythm: 0.1, narrative: 0.1 });
+    const weak = findWeakestDimensions(scores, 2);
+    // rhythm has lower weighted score so it should come first
+    expect(weak[0].dimension).toBe("rhythm");
+    expect(weak[1].dimension).toBe("narrative");
+  });
+
+  it("high-weight dimensions rank lower when their score is bad", () => {
+    // narrativeInformation has weight 0.12 — even a moderate low score dominates
+    const scores = makeScores({ narrativeInformation: 0.05, sensoryDiversity: 0.05 });
+    const weak = findWeakestDimensions(scores, 2);
+    // sensoryDiversity: 0.05*0.02=0.001, narrativeInformation: 0.05*0.12=0.006
+    expect(weak[0].dimension).toBe("sensoryDiversity");
+    expect(weak[1].dimension).toBe("narrativeInformation");
+  });
+
+  it("each weak dimension has a repair instruction", () => {
+    const scores = makeScores({ rhythm: 0.1, hookEnding: 0.1, originality: 0.1 });
+    const weak = findWeakestDimensions(scores, 3);
+    for (const wd of weak) {
+      expect(wd.instruction).toBeTruthy();
+      expect(wd.instruction.length).toBeGreaterThan(5);
+    }
+  });
+
+  it("includes score and weight in each entry", () => {
+    const scores = makeScores({ rhythm: 0.3 });
+    const weak = findWeakestDimensions(scores, 1);
+    expect(weak[0].score).toBe(0.3);
+    expect(weak[0].weight).toBe(0.05);
+  });
+
+  it("defaults to 3 when n is not specified", () => {
+    const scores = makeScores();
+    const weak = findWeakestDimensions(scores);
+    expect(weak).toHaveLength(3);
+  });
+
+  it("all uniform scores returns valid results", () => {
+    const scores = makeScores(); // all 0.8
+    const weak = findWeakestDimensions(scores, 3);
+    expect(weak).toHaveLength(3);
+    // Lowest weighted scores come from lowest-weight dimensions
+    const dims = weak.map((w) => w.dimension);
+    // dialogueRatio(0.02), lengthScore(0.02), sensoryDiversity(0.02) should be in the result
+    expect(dims).toContain("dialogueRatio");
+    expect(dims).toContain("lengthScore");
+    expect(dims).toContain("sensoryDiversity");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// REPAIR_INSTRUCTIONS coverage
+// ---------------------------------------------------------------------------
+
+describe("REPAIR_INSTRUCTIONS", () => {
+  it("has instructions for all 18 dimensions", () => {
+    const expectedDimensions = [
+      "rhythm", "hookEnding", "characterVoice", "dialogueRatio", "lengthScore",
+      "antiRepetition", "sensoryDiversity", "narrative", "immersion",
+      "narrativeInformation", "engagement", "loopAvoidance", "dialogueQuality",
+      "sentimentArc", "curiosityGap", "emotionalImpact", "originality", "pageTurner",
+    ];
+    for (const dim of expectedDimensions) {
+      expect(REPAIR_INSTRUCTIONS[dim]).toBeDefined();
+      expect(REPAIR_INSTRUCTIONS[dim].length).toBeGreaterThan(0);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// StateMachineContext.weakDimensions field
+// ---------------------------------------------------------------------------
+
+describe("StateMachineContext weakDimensions field", () => {
+  it("weakDimensions is optional and defaults to undefined", () => {
+    const smCtx = makeSMCtx("VALIDATE");
+    expect(smCtx.weakDimensions).toBeUndefined();
+  });
+
+  it("can store WeakDimension array", () => {
+    const weakDims: WeakDimension[] = [
+      { dimension: "rhythm", score: 0.3, weight: 0.05, instruction: "test" },
+      { dimension: "narrative", score: 0.4, weight: 0.08, instruction: "test2" },
+    ];
+    const smCtx = makeSMCtx("REPAIR", { weakDimensions: weakDims });
+    expect(smCtx.weakDimensions).toHaveLength(2);
+    expect(smCtx.weakDimensions![0].dimension).toBe("rhythm");
   });
 });

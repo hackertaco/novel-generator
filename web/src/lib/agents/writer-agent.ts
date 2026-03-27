@@ -118,10 +118,28 @@ ${context}`;
       }
     }
 
+    const funInstructions: string[] = [];
+    if (blueprint?.curiosity_hook) {
+      funInstructions.push(`호기심 질문: "${blueprint.curiosity_hook}" — 이 의문을 독자 머릿속에 심으세요.`);
+    }
+    if (blueprint?.emotional_peak_position != null) {
+      const pct = Math.round(blueprint.emotional_peak_position * 100);
+      funInstructions.push(`감정 피크: 전체 분량의 약 ${pct}% 지점에서 감정이 최고조에 달하도록 페이싱하세요.`);
+    }
+    if (blueprint?.cliffhanger_type) {
+      const cliffLabels: Record<string, string> = {
+        question: "독자에게 풀리지 않은 질문을 던지며 끝내세요",
+        crisis: "주인공이 위기에 빠진 순간에서 끊으세요",
+        revelation: "충격적인 사실이 드러나는 순간에서 끊으세요",
+        twist: "독자의 예상을 뒤집는 반전으로 끝내세요",
+      };
+      funInstructions.push(`엔딩 방식: [${blueprint.cliffhanger_type}] ${cliffLabels[blueprint.cliffhanger_type] || blueprint.cliffhanger_type}`);
+    }
+
     const blueprintInstructions = blueprint
       ? `\n목표 분량: ${blueprint.target_word_count}자
 씬 구성은 참고만 하세요. 모든 씬을 이번 화에 넣을 필요 없습니다.
-자연스러운 전개가 씬 개수보다 중요합니다. 넘치는 씬은 다음 화로 미루세요.`
+자연스러운 전개가 씬 개수보다 중요합니다. 넘치는 씬은 다음 화로 미루세요.${funInstructions.length > 0 ? "\n\n## 재미 가이드\n" + funInstructions.join("\n") : ""}`
       : "";
 
     const chapterRequirements = chapterNumber === 1

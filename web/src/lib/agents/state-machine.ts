@@ -20,7 +20,7 @@ import { PolisherAgent } from "./polisher-agent";
 import { SurgeonAgent } from "./surgeon-agent";
 import { sanitize } from "./rule-guard";
 import { segmentText } from "./segmenter";
-import { computeDeterministicScores } from "../evaluators/deterministic-scorer";
+import { computeDeterministicScores, type DeterministicScores } from "../evaluators/deterministic-scorer";
 import { validateConflictGate, type ConflictGateResult } from "./conflict-gate";
 
 // ---------------------------------------------------------------------------
@@ -39,6 +39,39 @@ export type ChapterState =
   | "FAILED";
 
 export type ValidationDecision = "pass" | "repair" | "regenerate";
+
+/** A dimension identified as weak during validation, with its score and repair instruction. */
+export interface WeakDimension {
+  dimension: string;
+  score: number;
+  weight: number;
+  instruction: string;
+}
+
+// ---------------------------------------------------------------------------
+// Dimension-to-instruction mapping for targeted repair
+// ---------------------------------------------------------------------------
+
+export const REPAIR_INSTRUCTIONS: Record<string, string> = {
+  curiosityGap: "열린 질문이나 미스터리를 추가하세요. 독자가 궁금해할 포인트를 만드세요.",
+  emotionalImpact: "감정 강도를 높이세요. 내면 묘사, 신체 반응을 추가하세요.",
+  originality: "클리셰 표현을 신선한 표현으로 바꾸세요. 문단 시작을 다양하게 하세요.",
+  pageTurner: "챕터 끝을 미해결 상태로 바꾸세요. 질문이나 위기로 끝내세요.",
+  dialogueQuality: "빈 대사를 의미 있는 대사로 바꾸세요. 정보나 감정을 담으세요.",
+  rhythm: "문장 길이를 다양하게 하세요. 같은 어미 반복을 피하세요.",
+  hookEnding: "마지막 문단에 긴장감이나 궁금증을 추가하세요.",
+  characterVoice: "캐릭터마다 말투를 구분하세요. 존댓말/반말 일관성을 유지하세요.",
+  loopAvoidance: "반복되는 묘사나 내용을 새로운 정보로 대체하세요.",
+  sentimentArc: "감정 변화를 더 넣으세요. 긍정→부정 또는 부정→긍정 전환을 추가하세요.",
+  narrative: "원인-결과 관계를 명확히 하세요. '그래서', '때문에' 같은 연결어를 사용하세요.",
+  immersion: "구체적인 감각 묘사를 추가하세요. 시각, 청각, 촉각 중 2가지 이상.",
+  dialogueRatio: "대사와 서술의 비율을 조정하세요. 대사가 너무 적으면 추가하세요.",
+  lengthScore: "분량을 조정하세요. 너무 짧으면 장면 묘사를 추가하세요.",
+  antiRepetition: "반복되는 어휘나 표현을 다양한 동의어로 바꾸세요.",
+  sensoryDiversity: "다양한 감각(시각, 청각, 후각, 촉각, 미각)을 활용하세요.",
+  narrativeInformation: "정보 밀도를 높이세요. 새로운 사실이나 단서를 추가하세요.",
+  engagement: "고구마-사이다 밸런스를 조정하세요. 긴장과 해소의 리듬을 만드세요.",
+};
 
 export interface ValidationVerdict {
   decision: ValidationDecision;
@@ -69,8 +102,64 @@ export interface StateMachineContext {
   regenerationCount: number;
   repairCount: number;
   lastVerdict?: ValidationVerdict;
+  /** The 3 weakest scoring dimensions from the last VALIDATE pass. */
+  weakDimensions?: WeakDimension[];
   limits: TransitionLimits;
   transitionLog: Array<{ from: ChapterState; to: ChapterState; reason: string }>;
+}
+
+// ---------------------------------------------------------------------------
+// Weights for weighted-score ranking (mirrors deterministic-scorer WEIGHTS)
+// ---------------------------------------------------------------------------
+
+const DIMENSION_WEIGHTS: Record<string, number> = {
+  rhythm: 0.05,
+  hookEnding: 0.04,
+  characterVoice: 0.07,
+  dialogueRatio: 0.02,
+  lengthScore: 0.02,
+  antiRepetition: 0.04,
+  sensoryDiversity: 0.02,
+  narrative: 0.08,
+  immersion: 0.06,
+  narrativeInformation: 0.12,
+  engagement: 0.08,
+  loopAvoidance: 0.04,
+  dialogueQuality: 0.04,
+  sentimentArc: 0.04,
+  curiosityGap: 0.07,
+  emotionalImpact: 0.07,
+  originality: 0.07,
+  pageTurner: 0.07,
+};
+
+/**
+ * Find the N weakest dimensions from deterministic scores.
+ *
+ * Ranking uses `score * weight` so that high-weight dimensions are prioritised
+ * when scores are similar. This ensures repair effort targets dimensions that
+ * most affect the overall score.
+ */
+export function findWeakestDimensions(
+  scores: DeterministicScores,
+  n = 3,
+): WeakDimension[] {
+  const entries = Object.entries(DIMENSION_WEIGHTS).map(([dim, weight]) => ({
+    dimension: dim,
+    score: (scores as Record<string, number>)[dim] ?? 0.5,
+    weight,
+    weightedScore: ((scores as Record<string, number>)[dim] ?? 0.5) * weight,
+    instruction: REPAIR_INSTRUCTIONS[dim] || "품질을 개선하세요.",
+  }));
+
+  entries.sort((a, b) => a.weightedScore - b.weightedScore);
+
+  return entries.slice(0, n).map(({ dimension, score, weight, instruction }) => ({
+    dimension,
+    score,
+    weight,
+    instruction,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -391,6 +480,9 @@ export class ChapterStateMachine {
 
     yield { type: "deterministic_scores", scores: detScores } as LifecycleEvent;
 
+    // 2b. Identify 3 weakest dimensions for targeted repair
+    this.smCtx.weakDimensions = findWeakestDimensions(detScores, 3);
+
     // 3. Conflict gate
     const totalChapters = ctx.seed.chapter_outlines?.length || 10;
     const roleInArc = ctx.blueprint?.role_in_arc || "rising_action";
@@ -490,17 +582,32 @@ export class ChapterStateMachine {
       .filter((ri) => ri.severity === "error" || ri.severity === "critical")
       .slice(0, 5);
 
+    // Build targeted repair instructions from the 3 weakest dimensions
+    const weakDims = this.smCtx.weakDimensions || [];
+    const weakDimInstructions = weakDims
+      .map(
+        (wd) =>
+          `[${wd.dimension} — 점수 ${(wd.score * 100).toFixed(0)}점] ${wd.instruction}`,
+      )
+      .join("\n");
+
     if (actionableIssues.length > 0) {
       // Convert RuleIssues to CriticIssue format for the surgeon
       for (const issue of actionableIssues) {
         const paragraphs = segmentText(ctx.text);
         if (issue.position >= paragraphs.length) continue;
 
+        // Combine the original issue detail with weak-dimension instructions
+        const baseDescription = issue.detail || issue.message || "";
+        const enhancedDescription = weakDimInstructions
+          ? `${baseDescription}\n\n[약점 개선 지시]\n${weakDimInstructions}`
+          : baseDescription;
+
         const criticIssue = {
           startParagraph: issue.position,
           endParagraph: Math.min(issue.position + 1, paragraphs.length - 1),
           category: "rhythm" as const,
-          description: issue.detail || issue.message || "",
+          description: enhancedDescription,
           severity: "major" as const,
           suggestedFix: issue.detail,
         };
@@ -516,6 +623,32 @@ export class ChapterStateMachine {
 
       ctx.text = sanitize(ctx.text);
       yield { type: "replace_text", content: ctx.text };
+    } else if (weakDims.length > 0) {
+      // No rule issues but weak dimensions exist — do a whole-text repair pass
+      // targeting the weakest dimensions by creating a synthetic issue
+      // covering the full text
+      const paragraphs = segmentText(ctx.text);
+      if (paragraphs.length > 0) {
+        const criticIssue = {
+          startParagraph: 0,
+          endParagraph: paragraphs.length - 1,
+          category: "rhythm" as const,
+          description: `[약점 기반 수술]\n${weakDimInstructions}`,
+          severity: "major" as const,
+          suggestedFix: weakDims.map((wd) => wd.instruction).join(" "),
+        };
+
+        const gen = this.surgeonAgent.fix(ctx, criticIssue);
+        let result = await gen.next();
+        while (!result.done) {
+          result = await gen.next();
+        }
+        const usage = result.value;
+        ctx.totalUsage = accumulateUsage(ctx.totalUsage, usage);
+
+        ctx.text = sanitize(ctx.text);
+        yield { type: "replace_text", content: ctx.text };
+      }
     }
 
     // Clear rule issues for re-validation
