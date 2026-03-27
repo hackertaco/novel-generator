@@ -26,6 +26,7 @@ import { measureCuriosityGap } from "./curiosity-gap";
 import { measureEmotionalImpact } from "./emotional-impact";
 import { measureOriginality } from "./originality";
 import { measurePageTurner } from "./page-turner";
+import { measureReadabilityPacing } from "./readability-pacing";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -68,6 +69,8 @@ export interface DeterministicScores {
   originality: number;
   /** 페이지터너 (0~1) — 절단신공, 미해결 스레드, 정보 속도 */
   pageTurner: number;
+  /** 읽기 페이싱 (0~1) — 초점 안정성, 정보 간격, 인과 명시성 */
+  readabilityPacing: number;
   /** 종합 (가중 평균) */
   overall: number;
   /** 상세 데이터 */
@@ -625,28 +628,30 @@ function scoreEngagement(
 // ---------------------------------------------------------------------------
 
 const WEIGHTS = {
-  // 구조/기법 (40%)
+  // 구조/기법 (35%)
   rhythm: 0.05,
   hookEnding: 0.04,
-  characterVoice: 0.07,
+  characterVoice: 0.06,
   dialogueRatio: 0.02,
   lengthScore: 0.02,
   antiRepetition: 0.04,
   sensoryDiversity: 0.02,
-  narrative: 0.08,
-  immersion: 0.06,
-  // 정보이론 (20%)
-  narrativeInformation: 0.12,
-  engagement: 0.08,
-  // 수학적 검증 (12%)
+  narrative: 0.06,
+  immersion: 0.04,
+  // 정보이론 (18%)
+  narrativeInformation: 0.11,
+  engagement: 0.07,
+  // 수학적 검증 (11%)
   loopAvoidance: 0.04,
   dialogueQuality: 0.04,
-  sentimentArc: 0.04,
-  // 재미/감동/독창성/읽고싶은지 (28%) — NEW
+  sentimentArc: 0.03,
+  // 재미/감동/독창성/읽고싶은지 (28%)
   curiosityGap: 0.07,
   emotionalImpact: 0.07,
   originality: 0.07,
   pageTurner: 0.07,
+  // 읽기 페이싱 (8%)
+  readabilityPacing: 0.08,
 };
 
 export function computeDeterministicScores(
@@ -697,11 +702,13 @@ export function computeDeterministicScores(
   let emotionalImpactScore = 0.5;
   let originalityScore = 0.5;
   let pageTurnerScore = 0.5;
+  let readabilityPacingScore = 0.5;
   try {
     curiosityGapScore = measureCuriosityGap(text).score;
     emotionalImpactScore = measureEmotionalImpact(text).score;
     originalityScore = measureOriginality(text).score;
     pageTurnerScore = measurePageTurner(text).score;
+    readabilityPacingScore = measureReadabilityPacing(text).score;
   } catch {
     // Non-blocking: use defaults on failure
   }
@@ -725,6 +732,7 @@ export function computeDeterministicScores(
     emotionalImpact: emotionalImpactScore,
     originality: originalityScore,
     pageTurner: pageTurnerScore,
+    readabilityPacing: readabilityPacingScore,
   };
 
   const overall = Object.entries(WEIGHTS).reduce(

@@ -349,12 +349,13 @@ describe("Writer system prompt — universal rules", () => {
       expect(prompt).toContain("신분에 맞게 행동");
     });
 
-    it(`${genre} prompt should contain core 5 rules`, () => {
+    it(`${genre} prompt should contain core 6 rules`, () => {
       const prompt = getWriterSystemPrompt(genre, 1);
-      expect(prompt).toContain("핵심 5대 규칙");
+      expect(prompt).toContain("핵심 6대 규칙");
       expect(prompt).toContain("심장이 두근거렸다");
       expect(prompt).toContain("호기심");
       expect(prompt).toContain("절단신공");
+      expect(prompt).toContain("읽기 페이싱");
     });
   }
 });
