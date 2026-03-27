@@ -1,0 +1,5 @@
+{
+  "last_turn_at": "2026-03-27T08:54:18.300Z",
+  "turn_count": 2,
+  "last_agent_output": "제 기준에선 이렇게 가는 게 맞습니다.\n\n**권장 방향**\n`web/`를 주 제품으로 정하고, Python CLI는 일단 `legacy`로 내리거나 분리하세요. 지금 제일 큰 비용"
+}

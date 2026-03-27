@@ -311,6 +311,27 @@ ${targetChapter ?? arc.start_chapter}화의 블루프린트를 1개만 작성하
 
 씬 타입: action, dialogue, introspection, exposition, hook, flashback, transition
 
+## 챕터 구조 다양성 (필수)
+
+1. 주인공 능동성: 매 챕터에서 주인공은 반드시 하나의 "능동적 선택"을 합니다.
+   - ❌ "리아는 위험에 처한다" (수동 — 일이 일어남)
+   - ✅ "리아는 혼약서를 찢고 비밀문으로 도망친다" (능동 — 직접 행동)
+   - 씬의 핵심에 "주인공이 ~한다"를 반드시 넣으세요.
+
+2. 장소 변화: 연속된 2개 챕터가 같은 장소에서 진행되면 안 됩니다.
+   - Ch1이 "유모실"이면, Ch2는 반드시 다른 장소 (복도, 정원, 외부 등)
+   - 장소가 바뀌면 이동 과정도 하나의 소(小)사건이 됩니다.
+
+3. 씬 타입 순환: 연속 챕터는 다른 타입의 씬이어야 합니다.
+   씬 타입 목록: 대치(confrontation), 추격(chase), 발견(discovery),
+   협상(negotiation), 도주(escape), 잠입(infiltration), 폭로(revelation)
+   - Ch1이 "대치"면 Ch2는 "도주"나 "발견" 등 다른 타입
+   - 같은 타입 2연속 금지
+
+4. 텐션 변조: 챕터마다 긴장의 종류가 달라야 합니다.
+   - "외부 위협" → "내면 갈등" → "추격전" → "관계 변화" 식으로 순환
+   - 같은 종류의 긴장 2연속 금지
+
 ## 출력 형식 (JSON)
 
 \`\`\`json
@@ -361,7 +382,9 @@ ${targetChapter ?? arc.start_chapter}화의 블루프린트를 1개만 작성하
       "emotional_peak_position": 0.8,
       "cliffhanger_type": "revelation",
       "pov": "third",
-      "pov_character": "이준혁"
+      "pov_character": "이준혁",
+      "scene_type": "discovery",
+      "protagonist_action": "준혁이 마나 감지기 이상을 직접 확인하기 위해 던전에 진입한다"
     }
   ]
 }

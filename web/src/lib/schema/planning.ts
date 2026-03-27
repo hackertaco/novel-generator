@@ -53,6 +53,12 @@ export type ArcRole = z.infer<typeof ArcRoleEnum>;
 export const CliffhangerTypeEnum = z.enum(["question", "crisis", "revelation", "twist"]);
 export type CliffhangerType = z.infer<typeof CliffhangerTypeEnum>;
 
+export const ChapterSceneTypeEnum = z.enum([
+  "confrontation", "chase", "discovery", "negotiation",
+  "escape", "infiltration", "revelation",
+]);
+export type ChapterSceneType = z.infer<typeof ChapterSceneTypeEnum>;
+
 export const ChapterBlueprintSchema = z
   .object({
     chapter_number: z.number().int(),
@@ -81,6 +87,10 @@ export const ChapterBlueprintSchema = z
     pov: z.enum(["first", "third"]).optional().describe("시점: first(1인칭) or third(3인칭). 기본값 third"),
     /** 시점 인물 (1인칭일 때 화자, 3인칭일 때 초점 인물) */
     pov_character: z.string().optional().describe("시점 인물 이름"),
+    /** 챕터 씬 타입 (구조 다양성 확보용) */
+    scene_type: ChapterSceneTypeEnum.optional().describe("챕터 핵심 씬 타입: confrontation, chase, discovery, negotiation, escape, infiltration, revelation"),
+    /** 주인공 능동적 행동 (수동 금지) */
+    protagonist_action: z.string().optional().describe("주인공이 ~한다 형태의 능동적 행동 (예: '리아가 비밀문을 통해 에단을 안고 도주한다')"),
   })
   .transform((data) => ({
     ...data,
