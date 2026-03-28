@@ -27,6 +27,7 @@ export interface ReadabilityPacingResult {
     missingSceneBreaks: number;
     avgSentenceLength: number;
     longSentenceRatio: number;
+    doorThreatCount?: number;
   };
 }
 
@@ -468,6 +469,27 @@ function measureSentenceComplexity(text: string): { score: number; avgLength: nu
 }
 
 // ---------------------------------------------------------------------------
+// 6. Door Threat Repetition (문 뒤 위협 반복 감지) — penalty sub-metric
+// ---------------------------------------------------------------------------
+
+/** Keywords that co-occur with "문" to form the "door threat" cliche */
+const DOOR_THREAT_KEYWORDS = /발소리|기척|그림자|노크|열쇠|문고리/;
+
+function measureDoorThreatRepetition(paragraphs: string[]): { score: number; count: number } {
+  let count = 0;
+  for (const para of paragraphs) {
+    if (/문/.test(para) && DOOR_THREAT_KEYWORDS.test(para)) {
+      count++;
+    }
+  }
+  // 0-1 instances = no penalty (score 1.0), 2+ = penalty
+  if (count <= 1) return { score: 1.0, count };
+  // Each additional instance beyond 1 reduces score by 0.2
+  const penalty = (count - 1) * 0.2;
+  return { score: Math.max(0, 1.0 - penalty), count };
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -479,17 +501,23 @@ export function measureReadabilityPacing(text: string): ReadabilityPacingResult 
   const causalResult = measureCausalExplicitness(paragraphs);
   const sceneBreakResult = measureSceneBreaks(text);
   const complexityResult = measureSentenceComplexity(text);
+  const doorThreatResult = measureDoorThreatRepetition(paragraphs);
 
   // Weights: focus 30%, spacing 25%, causal 20%, scene breaks 10%, complexity 15%
-  const overall =
+  let overall =
     focusResult.score * 0.30 +
     spacingResult.score * 0.25 +
     causalResult.score * 0.20 +
     sceneBreakResult.score * 0.10 +
     complexityResult.score * 0.15;
 
+  // Apply door threat penalty (up to -0.1 on overall)
+  if (doorThreatResult.count >= 2) {
+    overall -= (doorThreatResult.count - 1) * 0.05;
+  }
+
   return {
-    score: Math.round(overall * 100) / 100,
+    score: Math.max(0, Math.min(1, Math.round(overall * 100) / 100)),
     focusStability: Math.round(focusResult.score * 100) / 100,
     informationSpacing: Math.round(spacingResult.score * 100) / 100,
     causalExplicitness: Math.round(causalResult.score * 100) / 100,
@@ -502,6 +530,7 @@ export function measureReadabilityPacing(text: string): ReadabilityPacingResult 
       missingSceneBreaks: sceneBreakResult.missingBreaks,
       avgSentenceLength: complexityResult.avgLength,
       longSentenceRatio: complexityResult.longRatio,
+      doorThreatCount: doorThreatResult.count,
     },
   };
 }

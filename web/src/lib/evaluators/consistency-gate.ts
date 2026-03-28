@@ -29,7 +29,8 @@ export interface ConsistencyIssue {
     | "timeline_contradiction"
     | "location_discontinuity"
     | "low_comprehensibility"
-    | "rank_inconsistency";
+    | "rank_inconsistency"
+    | "name_inconsistency";
   severity: "critical" | "major" | "minor";
   description: string;
   /** Paragraph index where the issue was detected */
@@ -368,6 +369,62 @@ function checkRankConsistency(
 }
 
 // ---------------------------------------------------------------------------
+// Name/surname consistency check
+// ---------------------------------------------------------------------------
+
+/** Common Korean particles/postpositions that follow names — NOT surnames */
+const COMMON_PARTICLES = /^(은|는|이|가|을|를|에게|의|과|와|도|만|까지|부터|에|서|로|께|한테)$/;
+
+function checkNameConsistency(
+  text: string,
+  characters: Array<{ name: string; [key: string]: unknown }>,
+): ConsistencyIssue[] {
+  const issues: ConsistencyIssue[] = [];
+
+  for (const character of characters) {
+    const fullName = character.name;
+    const nameParts = fullName.split(/\s+/);
+    if (nameParts.length < 2) continue; // Skip single-name characters
+
+    const firstName = nameParts[0];
+    const knownSurname = nameParts.slice(1).join(" ");
+
+    // Find all instances of firstName + space + word in text
+    const pattern = new RegExp(`${firstName}\\s+([가-힣]{2,4})`, "g");
+    let match;
+    const wrongSurnames = new Set<string>();
+
+    while ((match = pattern.exec(text)) !== null) {
+      const followingWord = match[1];
+
+      // Skip if it matches the known surname
+      if (knownSurname.includes(followingWord)) continue;
+
+      // Skip common particles/postpositions
+      if (COMMON_PARTICLES.test(followingWord)) continue;
+
+      // Skip common non-surname words (verbs, common nouns)
+      if (/[었했했된된는]$/.test(followingWord)) continue;
+
+      // Check if it looks like a surname (2-4 syllable Korean word)
+      if (followingWord.length >= 2 && followingWord.length <= 4) {
+        wrongSurnames.add(followingWord);
+      }
+    }
+
+    for (const wrongSurname of wrongSurnames) {
+      issues.push({
+        type: "name_inconsistency" as ConsistencyIssue["type"],
+        severity: "major",
+        description: `캐릭터 "${fullName}"의 이름 뒤에 다른 성씨 "${wrongSurname}" 발견 ("${firstName} ${wrongSurname}"). seed에 정의된 풀네임은 "${fullName}"입니다.`,
+      });
+    }
+  }
+
+  return issues;
+}
+
+// ---------------------------------------------------------------------------
 // Main evaluator
 // ---------------------------------------------------------------------------
 
@@ -391,6 +448,7 @@ export function evaluateConsistencyGate(
     ...checkTimelineContradiction(paragraphs),
     ...checkLocationDiscontinuity(paragraphs),
     ...checkRankConsistency(text, characters),
+    ...checkNameConsistency(text, characters),
   ];
 
   // Comprehensibility check

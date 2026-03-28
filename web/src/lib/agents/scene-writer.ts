@@ -132,6 +132,15 @@ ${chapterOutline.one_liner}${keyPtsStr}
     .map((id) => seed.characters.find((c) => c.id === id))
     .filter(Boolean);
 
+  // Character full name list for name consistency
+  if (seed.characters.length > 0) {
+    const fullNames = seed.characters.map((c) => c.name).join(", ");
+    parts.push(`# 등장 캐릭터 풀네임 (반드시 이 이름만 사용하세요!)
+${fullNames}
+⚠️ 위 풀네임 외에 다른 성씨나 이름을 만들어내지 마세요.
+`);
+  }
+
   if (sceneChars.length > 0) {
     parts.push("# 이 씬의 캐릭터 (말투를 반드시 구분하세요!)");
     for (const char of sceneChars) {

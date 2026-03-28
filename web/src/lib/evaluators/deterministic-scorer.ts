@@ -636,14 +636,14 @@ const WEIGHTS = {
   narrative: 0.15,           // 서사 진행
   characterVoice: 0.15,      // 캐릭터 일관성
   readabilityPacing: 0.15,   // 이해도/가독성
-  engagement: 0.15,          // 갈등 텐션, 고구마-사이다
+  engagement: 0.10,          // 갈등 텐션, 고구마-사이다
   dialogueQuality: 0.10,     // 대사
   pageTurner: 0.15,          // 절단신공
   originality: 0.15,         // 독창성
   // --- zeroed (still computed, available in details) ---
   rhythm: 0,
   hookEnding: 0,
-  dialogueRatio: 0,
+  dialogueRatio: 0.05,
   lengthScore: 0,
   antiRepetition: 0,
   sensoryDiversity: 0,

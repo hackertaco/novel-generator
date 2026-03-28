@@ -309,6 +309,12 @@ ${targetChapter ?? arc.start_chapter}화의 블루프린트를 1개만 작성하
    - 결말: 5-7 (해결, 여운)
    - 절대 금지: 같은 tension_level 3화 연속 (서사 루프)
 
+11. **긴장 장치 (tension_device)**: 매 챕터에 tension_device를 지정하세요. 연속 2챕터에 같은 장치를 쓰지 마세요.
+   - 선택지: door_threat, document, deadline, witness, betrayal, discovery, confrontation
+12. **물리적 행동 (action_beat)**: action_beat에 이 챕터의 핵심 물리적 행동을 적으세요.
+   - 예: "리세가 시종 통로로 도주한다", "준혁이 던전 2층으로 내려간다"
+   - 매 챕터에 물리적 행동이 최소 1번 포함되어야 합니다.
+
 씬 타입: action, dialogue, introspection, exposition, hook, flashback, transition
 
 ## 챕터 구조 다양성 (필수)
@@ -384,7 +390,9 @@ ${targetChapter ?? arc.start_chapter}화의 블루프린트를 1개만 작성하
       "pov": "third",
       "pov_character": "이준혁",
       "scene_type": "discovery",
-      "protagonist_action": "준혁이 마나 감지기 이상을 직접 확인하기 위해 던전에 진입한다"
+      "protagonist_action": "준혁이 마나 감지기 이상을 직접 확인하기 위해 던전에 진입한다",
+      "tension_device": "discovery",
+      "action_beat": "준혁이 던전 입구를 통과하여 내부로 진입한다"
     }
   ]
 }

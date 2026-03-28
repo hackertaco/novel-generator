@@ -84,6 +84,10 @@ export const ChapterBlueprintSchema = z
     scene_type: ChapterSceneTypeEnum.optional().describe("챕터 핵심 씬 타입: confrontation, chase, discovery, negotiation, escape, infiltration, revelation"),
     /** 주인공 능동적 행동 (수동 금지) */
     protagonist_action: z.string().optional().describe("주인공이 ~한다 형태의 능동적 행동 (예: '리아가 비밀문을 통해 에단을 안고 도주한다')"),
+    /** 긴장 장치 (연속 2챕터 같은 장치 금지) */
+    tension_device: z.enum(["door_threat", "document", "deadline", "witness", "betrayal", "discovery", "confrontation"]).optional().describe("이 챕터의 핵심 긴장 장치. 연속 2챕터에 같은 장치를 쓰지 마세요."),
+    /** 핵심 물리적 행동 */
+    action_beat: z.string().optional().describe("이 챕터의 핵심 물리적 행동 (예: '리세가 시종 통로로 도주한다')"),
   })
   .transform((data) => ({
     ...data,
