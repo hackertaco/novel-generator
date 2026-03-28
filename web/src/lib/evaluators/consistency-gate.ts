@@ -9,6 +9,7 @@
  */
 
 import { measureComprehensibility } from "./comprehensibility";
+import { NARRATIVE_RULES } from "../policy/narrative-rules";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -428,10 +429,11 @@ function checkNameConsistency(
 // Main evaluator
 // ---------------------------------------------------------------------------
 
+// Severity penalties sourced from NARRATIVE_RULES where available
 const SEVERITY_PENALTIES: Record<ConsistencyIssue["severity"], number> = {
-  critical: 0.3,
-  major: 0.15,
-  minor: 0.05,
+  critical: NARRATIVE_RULES.rankConsistency.penalty,   // 0.3
+  major: NARRATIVE_RULES.nameConsistency.penalty,      // 0.15
+  minor: NARRATIVE_RULES.dialogueRatioLimit.penalty,   // 0.05
 };
 
 export function evaluateConsistencyGate(

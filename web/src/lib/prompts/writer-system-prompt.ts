@@ -1,5 +1,10 @@
+import { NARRATIVE_RULES, generatePromptRules } from "../policy/narrative-rules";
+
+// Re-export for downstream consumers that may want the centralized rules
+export { NARRATIVE_RULES, generatePromptRules };
+
 const WRITING_TONE_BLOCK = `## 분량 제한 (절대 규칙)
-- 최대 4000자. 이 분량이 되면 즉시 멈추세요.
+- 최대 ${NARRATIVE_RULES.chapterLengthLimit.targetChars + Math.round(NARRATIVE_RULES.chapterLengthLimit.targetChars * NARRATIVE_RULES.chapterLengthLimit.tolerance)}자. 이 분량이 되면 즉시 멈추세요.
 - 블루프린트에 씬이 3개 이상이어도, 2개까지만 쓰고 나머지는 버리세요.
 - 글이 길어지면 독자가 지칩니다. 짧고 강렬하게.
 - 4000자 안에 끝나지 않는 씬은 중간에서 절단신공으로 끊으세요.

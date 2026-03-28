@@ -10,6 +10,19 @@ import { evaluateConsistencyGate } from "../evaluators/consistency-gate";
 export function sanitize(text: string): string {
   let result = text;
 
+  // --- Meta-text patterns: LLM meta-instructions that leak into novel text ---
+  const META_PATTERNS = [
+    /수정할\s*장면.*?보내주시면[^.]*\./gs,
+    /원문\s*씬을.*?드리겠습니다[^.]*\./gs,
+    /대사\s*비율.*?반영한[^.]*\./gs,
+    /분량\s*보강[^.]*\./gs,
+    /어미\s*반복\s*완화[^.]*\./gs,
+    /^\s*[-•]\s*(대사|분량|어미|수정|보정|원문).*$/gm,
+  ];
+  for (const pattern of META_PATTERNS) {
+    result = result.replace(pattern, "");
+  }
+
   // Remove lines like "--- 수정 대상 ---", "--- 수정 지시 ---", "--- 문맥 ---", etc.
   result = result.replace(/^-{2,}\s*(수정|편집|문맥|수정\s*대상|수정\s*지시).*-{2,}$/gm, "");
 

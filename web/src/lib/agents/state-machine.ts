@@ -21,6 +21,7 @@ import { SurgeonAgent } from "./surgeon-agent";
 import { sanitize } from "./rule-guard";
 import { segmentText } from "./segmenter";
 import { computeDeterministicScores, type DeterministicScores } from "../evaluators/deterministic-scorer";
+import { measureReadabilityPacing } from "../evaluators/readability-pacing";
 import { validateConflictGate, type ConflictGateResult } from "./conflict-gate";
 
 // ---------------------------------------------------------------------------
@@ -72,6 +73,7 @@ export const REPAIR_INSTRUCTIONS: Record<string, string> = {
   narrativeInformation: "정보 밀도를 높이세요. 새로운 사실이나 단서를 추가하세요.",
   engagement: "고구마-사이다 밸런스를 조정하세요. 긴장과 해소의 리듬을 만드세요.",
   rankConsistency: "캐릭터의 신분(공작/황제/시녀 등)이 seed 설정과 다릅니다. seed에 정의된 신분으로 수정하세요.",
+  doorThreat: "문/복도/발소리/문고리로 긴장을 만드는 패턴이 반복됩니다. 다른 긴장 장치(문서 발견, 시간 제한, 대화 속 거짓말 등)로 교체하세요.",
 };
 
 export interface ValidationVerdict {
@@ -483,6 +485,24 @@ export class ChapterStateMachine {
 
     // 2b. Identify 3 weakest dimensions for targeted repair
     this.smCtx.weakDimensions = findWeakestDimensions(detScores, 3);
+
+    // 2c. Door-threat enforcement: if doorThreatCount >= 2, inject into weakDimensions
+    try {
+      const readabilityResult = measureReadabilityPacing(ctx.text);
+      if (readabilityResult.details.doorThreatCount && readabilityResult.details.doorThreatCount >= 2) {
+        const alreadyHasDoor = this.smCtx.weakDimensions?.some(wd => wd.dimension === "doorThreat");
+        if (!alreadyHasDoor && this.smCtx.weakDimensions) {
+          this.smCtx.weakDimensions.push({
+            dimension: "doorThreat",
+            score: 0.3,
+            weight: 0.05,
+            instruction: REPAIR_INSTRUCTIONS.doorThreat,
+          });
+        }
+      }
+    } catch {
+      // non-critical — skip door threat check on failure
+    }
 
     // 3. Conflict gate
     const totalChapters = ctx.seed.chapter_outlines?.length || 10;
