@@ -8,6 +8,8 @@ import { RuleGuardAgent } from "./rule-guard";
 import { ConsistencyChecker } from "./consistency-checker";
 import { QualityLoop } from "./quality-loop";
 import { PolisherAgent } from "./polisher-agent";
+import { enforceLength } from "./length-enforcer";
+import { getChapterLengthConfig } from "../policy/narrative-rules";
 
 // Re-export LifecycleEvent from pipeline.ts for backward compatibility
 export type { LifecycleEvent } from "./pipeline";
@@ -64,6 +66,18 @@ export async function* runChapterLifecycle(
 
   for (const agent of pipeline) {
     yield* agent.run(ctx);
+  }
+
+  // Final length enforcement — catches any expansion by Polisher/QualityLoop
+  const lengthCfg = getChapterLengthConfig();
+  const lengthResult = enforceLength(
+    ctx.text,
+    lengthCfg.targetChars,
+    lengthCfg.tolerance,
+  );
+  if (lengthResult.action !== "none" && lengthResult.action !== "needs_expansion") {
+    ctx.text = lengthResult.text;
+    yield { type: "replace_text", content: ctx.text };
   }
 
   // Extract summary

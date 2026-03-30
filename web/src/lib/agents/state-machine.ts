@@ -19,11 +19,12 @@ import { ConsistencyChecker } from "./consistency-checker";
 import { PolisherAgent } from "./polisher-agent";
 import { SurgeonAgent } from "./surgeon-agent";
 import { sanitize } from "./rule-guard";
+import { enforceLength } from "./length-enforcer";
 import { segmentText } from "./segmenter";
 import { computeDeterministicScores, type DeterministicScores } from "../evaluators/deterministic-scorer";
 import { measureReadabilityPacing } from "../evaluators/readability-pacing";
 import { validateConflictGate, type ConflictGateResult } from "./conflict-gate";
-import { getRepairInstructions } from "../policy/narrative-rules";
+import { getRepairInstructions, getChapterLengthConfig } from "../policy/narrative-rules";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -673,6 +674,18 @@ export class ChapterStateMachine {
       }
     }
 
+    // Enforce length after repair — surgeon may have expanded text beyond limit
+    const repairLengthCfg = getChapterLengthConfig();
+    const repairLengthResult = enforceLength(
+      ctx.text,
+      repairLengthCfg.targetChars,
+      repairLengthCfg.tolerance,
+    );
+    if (repairLengthResult.action !== "none" && repairLengthResult.action !== "needs_expansion") {
+      ctx.text = repairLengthResult.text;
+      yield { type: "replace_text", content: ctx.text };
+    }
+
     // Clear rule issues for re-validation
     ctx.ruleIssues = [];
 
@@ -726,6 +739,19 @@ export class ChapterStateMachine {
     yield { type: "stage_change", stage: "polishing" };
 
     yield* this.polisherAgent.run(this.smCtx.chapter);
+
+    // Enforce length after polish — LLM polisher may have expanded text beyond limit
+    const ctx = this.smCtx.chapter;
+    const polishLengthCfg = getChapterLengthConfig();
+    const polishLengthResult = enforceLength(
+      ctx.text,
+      polishLengthCfg.targetChars,
+      polishLengthCfg.tolerance,
+    );
+    if (polishLengthResult.action !== "none" && polishLengthResult.action !== "needs_expansion") {
+      ctx.text = polishLengthResult.text;
+      yield { type: "replace_text", content: ctx.text };
+    }
 
     // Transition: POLISH → DONE
     const { nextState, reason } = resolveTransition(this.smCtx);
