@@ -21,6 +21,8 @@ import { extractSummaryRuleBased } from "../evaluators/summary";
 import { checkPlausibility, fixPlausibilityIssues } from "../evaluators/plausibility";
 import { validateCausalGraph } from "../evaluators/causal-graph";
 import { ConstraintChecker } from "../evaluators/constraint-checker";
+import { enforceLength } from "../agents/length-enforcer";
+import { getChapterLengthConfig } from "../policy/narrative-rules";
 
 // Full pipeline imports
 import { runPlotPipeline } from "../agents/plot-pipeline";
@@ -284,6 +286,18 @@ export class NovelHarness {
     const agents = this.buildPipeline();
     for (const agent of agents) {
       yield* agent.run(ctx);
+    }
+
+    // Final length enforcement — catches any expansion by pipeline agents
+    const lengthCfg = getChapterLengthConfig();
+    const lengthResult = enforceLength(
+      ctx.text,
+      lengthCfg.targetChars,
+      lengthCfg.tolerance,
+    );
+    if (lengthResult.action !== "none" && lengthResult.action !== "needs_expansion") {
+      ctx.text = lengthResult.text;
+      yield { type: "replace_text", content: ctx.text };
     }
   }
 
