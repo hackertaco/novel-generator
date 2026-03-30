@@ -442,7 +442,7 @@ const ISSUE_TYPE_PENALTY: Record<ConsistencyIssue["type"], number> = {
   character_existence: getRulePenalty("nameConsistency"),      // 0.15
   timeline_contradiction: 0.1,                                 // no direct rule
   location_discontinuity: 0.05,                                // minor
-  low_comprehensibility: getRulePenalty("dialogueRatioLimit"), // 0.05
+  low_comprehensibility: getRulePenalty("comprehensibility"),   // 0.1
 };
 
 export function evaluateConsistencyGate(

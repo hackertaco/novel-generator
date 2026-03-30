@@ -12,6 +12,122 @@
  */
 
 // ---------------------------------------------------------------------------
+// Cliche dictionary — single source of truth for originality evaluation
+// ---------------------------------------------------------------------------
+
+/**
+ * Comprehensive Korean web novel cliche list.
+ * - `bannedExpressions` (subset) → goes into writer prompt as absolute ban
+ * - Full list → used by originality evaluator for scoring
+ *
+ * Add new cliches here. Do NOT maintain a separate list elsewhere.
+ */
+export const KOREAN_CLICHES: readonly string[] = [
+  // Romance (로판) — physical reactions
+  "심장이 두근거렸다",
+  "심장이 두근거리기 시작했다",
+  "심장이 빠르게 뛰었다",
+  "눈이 마주쳤다",
+  "눈이 마주치는 순간",
+  "볼이 붉어졌다",
+  "얼굴이 붉어졌다",
+  "시간이 멈춘 것 같았다",
+  "시간이 멈춘 듯했다",
+  "그의 눈동자가 흔들렸다",
+  "눈동자가 흔들렸다",
+  "숨이 멎을 것 같았다",
+  "숨이 멈추는 것 같았다",
+  "온몸이 얼어붙었다",
+  "몸이 얼어붙었다",
+  "그 자리에 얼어붙었다",
+
+  // Romance — descriptive cliches
+  "차가운 눈빛",
+  "차가운 시선",
+  "따뜻한 미소",
+  "부드러운 미소",
+  "묘한 감정",
+  "알 수 없는 끌림",
+  "알 수 없는 감정",
+  "설명할 수 없는 감정",
+  "처음 느끼는 감정",
+  "낯선 감정",
+
+  // Romance — actions
+  "결심을 굳혔다",
+  "주먹을 꽉 쥐었다",
+  "주먹을 불끈 쥐었다",
+  "입술을 깨물었다",
+  "입술을 꽉 깨물었다",
+  "고개를 돌렸다",
+  "시선을 피했다",
+  "눈을 감았다",
+
+  // Action/Fantasy
+  "강력한 기운이 느껴졌다",
+  "엄청난 기운이 느껴졌다",
+  "놀라운 실력",
+  "대단한 실력",
+  "감히",
+  "어림없다",
+  "이를 악물었다",
+  "이를 꽉 악물었다",
+  "살기가 느껴졌다",
+  "살기를 뿜어냈다",
+  "기가 폭발했다",
+  "오라가 폭발했다",
+  "검기가 폭발했다",
+  "기운이 폭발했다",
+  "압도적인 힘",
+  "압도적인 기운",
+  "상상도 못할",
+  "믿을 수 없는 속도",
+
+  // Generic narration
+  "생각보다",
+  "예상대로",
+  "예상과 달리",
+  "역시",
+  "그런데 말이야",
+  "할 수 없었다",
+  "어쩔 수 없었다",
+  "그럴 수밖에 없었다",
+  "방법이 없었다",
+  "선택의 여지가 없었다",
+
+  // Generic body language
+  "고개를 끄덕였다",
+  "고개를 저었다",
+  "한숨을 내쉬었다",
+  "깊은 한숨을 내쉬었다",
+  "미간을 찌푸렸다",
+  "미간이 찌푸려졌다",
+  "눈을 크게 떴다",
+  "눈이 커졌다",
+  "입이 떡 벌어졌다",
+
+  // Filler / weak narration
+  "그러자",
+  "그런데",
+  "그때였다",
+  "바로 그때",
+  "순간",
+  "그 순간",
+  "다름 아닌",
+  "두말할 것도 없이",
+  "말할 것도 없이",
+
+  // Overused emotional descriptions
+  "가슴이 먹먹해졌다",
+  "가슴이 답답했다",
+  "마음이 무거워졌다",
+  "마음이 아팠다",
+  "눈시울이 붉어졌다",
+  "눈물이 흘렀다",
+  "눈물이 핑 돌았다",
+];
+
+// ---------------------------------------------------------------------------
 // Rule definitions
 // ---------------------------------------------------------------------------
 
@@ -97,7 +213,9 @@ export const NARRATIVE_RULES = {
   comprehensibility: {
     id: "comprehensibility",
     description: "이해 가능성",
-    promptText: "모든 사건에는 캐릭터의 해석이 따라와야 합니다.",
+    promptText: "모든 사건��는 캐릭터의 해석이 따라와야 합니다.",
+    evaluatorKey: "comprehensibility",
+    penalty: 0.1,
     repairInstruction: "독해 명확성을 높이세요. 주어 생략을 줄이고, 대명사를 구체적 이름으로 바꾸세요.",
   },
   curiosityGap: {
@@ -126,6 +244,7 @@ export const NARRATIVE_RULES = {
     evaluatorKey: "originality",
     penalty: 0.07,
     repairInstruction: "클리셰 표현을 신선한 표현으로 바꾸세요. 문단 시작을 다양하게 하세요.",
+    /** Top-20 worst offenders — goes into the writer prompt as absolute ban */
     bannedExpressions: [
       "심장이 두근거렸다", "눈이 마주쳤다", "시간이 멈춘 것 같았다",
       "차가운 눈빛", "알 수 없는 감정", "주먹을 꽉 쥐었다",

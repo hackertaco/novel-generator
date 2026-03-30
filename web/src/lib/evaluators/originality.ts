@@ -3,118 +3,16 @@
  *
  * No LLM calls — pure computation. Returns a score 0~1 combining:
  * - Cliche density (Korean web novel cliches)
+ * - Banned expression penalty (top-20 worst offenders from prompt)
  * - Type-Token Ratio (lexical diversity)
  * - Opening entropy (paragraph start diversity)
+ *
+ * Cliche list is imported from narrative-rules.ts (single source of truth).
  */
 
-// ---------------------------------------------------------------------------
-// Korean web novel cliches dictionary
-// ---------------------------------------------------------------------------
+import { KOREAN_CLICHES, NARRATIVE_RULES } from "../policy/narrative-rules";
 
-const KOREAN_CLICHES: string[] = [
-  // Romance (로판) — physical reactions
-  "심장이 두근거렸다",
-  "심장이 두근거리기 시작했다",
-  "심장이 빠르게 뛰었다",
-  "눈이 마주쳤다",
-  "눈이 마주치는 순간",
-  "볼이 붉어졌다",
-  "얼굴이 붉어졌다",
-  "시간이 멈춘 것 같았다",
-  "시간이 멈춘 듯했다",
-  "그의 눈동자가 흔들렸다",
-  "눈동자가 흔들렸다",
-  "숨이 멎을 것 같았다",
-  "숨이 멈추는 것 같았다",
-  "온몸이 얼어붙었다",
-  "몸이 얼어붙었다",
-  "그 자리에 얼어붙었다",
-
-  // Romance — descriptive cliches
-  "차가운 눈빛",
-  "차가운 시선",
-  "따뜻한 미소",
-  "부드러운 미소",
-  "묘한 감정",
-  "알 수 없는 끌림",
-  "알 수 없는 감정",
-  "설명할 수 없는 감정",
-  "처음 느끼는 감정",
-  "낯선 감정",
-
-  // Romance — actions
-  "결심을 굳혔다",
-  "주먹을 꽉 쥐었다",
-  "주먹을 불끈 쥐었다",
-  "입술을 깨물었다",
-  "입술을 꽉 깨물었다",
-  "고개를 돌렸다",
-  "시선을 피했다",
-  "눈을 감았다",
-
-  // Action/Fantasy
-  "강력한 기운이 느껴졌다",
-  "엄청난 기운이 느껴졌다",
-  "놀라운 실력",
-  "대단한 실력",
-  "감히",
-  "어림없다",
-  "이를 악물었다",
-  "이를 꽉 악물었다",
-  "살기가 느껴졌다",
-  "살기를 뿜어냈다",
-  "기가 폭발했다",
-  "오라가 폭발했다",
-  "검기가 폭발했다",
-  "기운이 폭발했다",
-  "압도적인 힘",
-  "압도적인 기운",
-  "상상도 못할",
-  "믿을 수 없는 속도",
-
-  // Generic narration
-  "생각보다",
-  "예상대로",
-  "예상과 달리",
-  "역시",
-  "그런데 말이야",
-  "할 수 없었다",
-  "어쩔 수 없었다",
-  "그럴 수밖에 없었다",
-  "방법이 없었다",
-  "선택의 여지가 없었다",
-
-  // Generic body language
-  "고개를 끄덕였다",
-  "고개를 저었다",
-  "한숨을 내쉬었다",
-  "깊은 한숨을 내쉬었다",
-  "미간을 찌푸렸다",
-  "미간이 찌푸려졌다",
-  "눈을 크게 떴다",
-  "눈이 커졌다",
-  "입이 떡 벌어졌다",
-
-  // Filler / weak narration
-  "그러자",
-  "그런데",
-  "그때였다",
-  "바로 그때",
-  "순간",
-  "그 순간",
-  "다름 아닌",
-  "두말할 것도 없이",
-  "말할 것도 없이",
-
-  // Overused emotional descriptions
-  "가슴이 먹먹해졌다",
-  "가슴이 답답했다",
-  "마음이 무거워졌다",
-  "마음이 아팠다",
-  "눈시울이 붉어졌다",
-  "눈물이 흘렀다",
-  "눈물이 핑 돌았다",
-];
+const BANNED_EXPRESSIONS: readonly string[] = NARRATIVE_RULES.originality.bannedExpressions;
 
 // ---------------------------------------------------------------------------
 // Interface
@@ -125,6 +23,8 @@ export interface OriginalityResult {
   score: number;
   /** Number of cliche instances found */
   clicheCount: number;
+  /** Number of banned expression hits (top-20 worst, from prompt) */
+  bannedCount: number;
   /** Cliches per 1000 characters */
   clicheDensity: number;
   /** Lexical diversity: unique tokens / total tokens */
@@ -133,6 +33,8 @@ export interface OriginalityResult {
   openingEntropy: number;
   /** List of cliches actually found in the text */
   clichesFound: string[];
+  /** Subset of clichesFound that are banned expressions (prompt-level ban) */
+  bannedFound: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -196,16 +98,22 @@ export function measureOriginality(text: string): OriginalityResult {
     return {
       score: 0,
       clicheCount: 0,
+      bannedCount: 0,
       clicheDensity: 0,
       typeTokenRatio: 0,
       openingEntropy: 0,
       clichesFound: [],
+      bannedFound: [],
     };
   }
 
   // --- 1. Cliche detection ---
   const clichesFound: string[] = [];
+  const bannedFound: string[] = [];
   let clicheCount = 0;
+  let bannedCount = 0;
+
+  const bannedSet = new Set(BANNED_EXPRESSIONS);
 
   for (const cliche of KOREAN_CLICHES) {
     const regex = new RegExp(cliche.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
@@ -213,6 +121,10 @@ export function measureOriginality(text: string): OriginalityResult {
     if (matches) {
       clicheCount += matches.length;
       clichesFound.push(cliche);
+      if (bannedSet.has(cliche)) {
+        bannedCount += matches.length;
+        bannedFound.push(cliche);
+      }
     }
   }
 
@@ -250,17 +162,23 @@ export function measureOriginality(text: string): OriginalityResult {
   // When cliche density is extreme, apply additional penalty multiplier
   const clichePenaltyMultiplier = clicheDensity > 10 ? Math.max(0.3, 1.0 - (clicheDensity - 10) / 100) : 1.0;
 
+  // Extra penalty for banned expressions (top-20 worst offenders)
+  // Each banned hit costs 0.03 — these are explicitly forbidden in the prompt
+  const bannedPenalty = Math.min(0.3, bannedCount * 0.03);
+
   const score =
     (clicheAvoidance * 0.4 +
     ttrNormalized * 0.35 +
-    entropyNormalized * 0.25) * clichePenaltyMultiplier;
+    entropyNormalized * 0.25) * clichePenaltyMultiplier - bannedPenalty;
 
   return {
     score: Math.round(Math.max(0, Math.min(1, score)) * 1000) / 1000,
     clicheCount,
+    bannedCount,
     clicheDensity: Math.round(clicheDensity * 1000) / 1000,
     typeTokenRatio: Math.round(typeTokenRatio * 1000) / 1000,
     openingEntropy: Math.round(openingEntropy * 1000) / 1000,
     clichesFound,
+    bannedFound,
   };
 }
