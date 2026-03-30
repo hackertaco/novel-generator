@@ -34,6 +34,8 @@ export interface ConsistencyIssue {
     | "name_inconsistency";
   severity: "critical" | "major" | "minor";
   description: string;
+  /** Short machine-readable detail string for downstream consumers (critic, state-machine) */
+  detail: string;
   /** Paragraph index where the issue was detected */
   position?: number;
 }
@@ -42,7 +44,12 @@ export interface ConsistencyIssue {
 // POV detection patterns
 // ---------------------------------------------------------------------------
 
-const FIRST_PERSON_MARKERS = /나는|내가|나의|내\s|나를|나에게/;
+/**
+ * First-person markers must be standalone — not part of a longer Korean word.
+ * We use a negative lookbehind for Hangul so that e.g. "세레나는" does NOT match
+ * (나는 is preceded by 레, a Hangul char) but "나는" at the start of a clause does.
+ */
+const FIRST_PERSON_MARKERS = /(?<![가-힣])(?:나는|내가|나의|내\s|나를|나에게)/;
 const THIRD_PERSON_PARTICLES = /[은는이가]/;
 
 /**
@@ -93,6 +100,7 @@ function checkPOVConsistency(
           type: "pov_inconsistency",
           severity: "critical",
           description: `3인칭 시점에서 1인칭 서술 발견 (문단 ${i + 1}): "${para.slice(0, 40)}..."`,
+          detail: `3인칭 텍스트에 1인칭 마커가 대사 밖에서 사용됨 (문단 ${i + 1})`,
           position: i,
         });
       }
@@ -113,6 +121,7 @@ function checkPOVConsistency(
             type: "pov_inconsistency",
             severity: "critical",
             description: `1인칭 시점에서 주인공을 3인칭으로 서술 (문단 ${i + 1}): "${para.slice(0, 40)}..."`,
+            detail: `1인칭 서술인데 주인공 "${mcName}"을 3인칭으로 지칭 (문단 ${i + 1})`,
             position: i,
           });
         }
@@ -128,6 +137,7 @@ function checkPOVConsistency(
         type: "pov_inconsistency",
         severity: "critical",
         description: `블루프린트 시점(${declaredPOV})과 실제 텍스트 시점(${detectedFromText}) 불일치`,
+        detail: `선언된 시점 "${declaredPOV}" vs 감지된 시점 "${detectedFromText}"`,
         position: 0,
       });
     }
@@ -160,6 +170,7 @@ function checkUnnamedSceneStart(
             type: "unnamed_scene_start",
             severity: "major",
             description: `씬 전환 후(문단 ${nextIdx + 1}) 등장인물 이름 없음: "${nextPara.slice(0, 40)}..."`,
+            detail: `씬 전환 직후 문단에 등장인물 이름이 언급되지 않음 (문단 ${nextIdx + 1})`,
             position: nextIdx,
           });
         }
@@ -208,6 +219,7 @@ function checkCharacterExistence(
       type: "character_existence",
       severity: "minor",
       description: `시드에 없는 인물이 대사: "${speaker}"`,
+      detail: `"${speaker}"이(가) 시드 캐릭터 목록에 없음`,
     });
   }
 
@@ -258,6 +270,7 @@ function checkTimelineContradiction(paragraphs: string[]): ConsistencyIssue[] {
             type: "timeline_contradiction",
             severity: "major",
             description: `시간 역행 (문단 ${i + 1}): "${lastTimeLabel}" → "${marker.label}" (씬 전환 없이)`,
+            detail: `시간이 "${lastTimeLabel}"에서 "${marker.label}"로 역행 (문단 ${i + 1})`,
             position: i,
           });
         }
@@ -306,6 +319,7 @@ function checkLocationDiscontinuity(paragraphs: string[]): ConsistencyIssue[] {
             type: "location_discontinuity",
             severity: "minor",
             description: `장소 불연속 (문단 ${i + 1}): "${lastLocation}" → "${currentLocation}" (이동 묘사 없음)`,
+            detail: `"${lastLocation}"에서 "${currentLocation}"로 이동 묘사 없이 장소 변경 (문단 ${i + 1})`,
             position: i,
           });
         }
@@ -361,6 +375,7 @@ function checkRankConsistency(
           type: "rank_inconsistency",
           severity: "critical",
           description: `캐릭터 "${character.name}"의 신분은 "${rank}"이지만 텍스트에서 "${title} ${character.name}"으로 표기됨 (${titleRank} 칭호 사용)`,
+          detail: `"${character.name}" 신분 "${rank}" ≠ 사용된 칭호 "${title}" (${titleRank})`,
         });
       }
     }
@@ -418,6 +433,7 @@ function checkNameConsistency(
         type: "name_inconsistency" as ConsistencyIssue["type"],
         severity: "major",
         description: `캐릭터 "${fullName}"의 이름 뒤에 다른 성씨 "${wrongSurname}" 발견 ("${firstName} ${wrongSurname}"). seed에 정의된 풀네임은 "${fullName}"입니다.`,
+        detail: `"${firstName} ${wrongSurname}" 발견 — 시드 정의 이름은 "${fullName}"`,
       });
     }
   }
@@ -469,6 +485,7 @@ export function evaluateConsistencyGate(
       type: "low_comprehensibility",
       severity: "major",
       description: `독해 명확성 낮음 (점수: ${comprehensibility.score.toFixed(2)}): 주어 생략 ${comprehensibility.details.subjectOmissionStreaks}회, ROUGH_SHIFT ${comprehensibility.details.roughShiftCount}회, 불명확 대명사 ${comprehensibility.details.unresolvedPronouns + comprehensibility.details.ambiguousPronouns}개`,
+      detail: `독해 점수 ${comprehensibility.score.toFixed(2)} (임계값 0.35 미만)`,
     });
   }
 
