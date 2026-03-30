@@ -4,8 +4,11 @@
  * Every rule that appears in prompts, evaluators, or repair instructions should
  * be defined here. Consumers import helpers instead of hardcoding values.
  *
- * Migration is incremental: new consumers use this file; existing ones will be
- * migrated over time.
+ * Consumers:
+ *   1. Writer prompt   — writer-system-prompt.ts  (generateCoreRulesBlock)
+ *   2. Evaluator        — consistency-gate.ts      (getRulePenalty)
+ *   3. Repair            — state-machine.ts         (getRepairInstructions)
+ *   4. Blueprint         — planning-prompts.ts      (reference comment)
  */
 
 // ---------------------------------------------------------------------------
@@ -16,12 +19,20 @@ export interface NarrativeRule {
   id: string;
   description: string;
   promptText?: string;
+  /** Extended prompt text with examples — used in the writer system prompt */
+  promptBlock?: string;
   evaluatorKey?: string;
   penalty?: number;
   maxPerChapter?: number;
+  minRatio?: number;
   maxRatio?: number;
+  minChars?: number;
   targetChars?: number;
   tolerance?: number;
+  /** Instruction given to the repair/surgeon agent when this rule is violated */
+  repairInstruction?: string;
+  /** Banned expressions list (for originality rule) */
+  bannedExpressions?: readonly string[];
 }
 
 export const NARRATIVE_RULES = {
@@ -32,14 +43,17 @@ export const NARRATIVE_RULES = {
     evaluatorKey: "doorThreatCount",
     maxPerChapter: 1,
     penalty: 0.1,
+    repairInstruction: "문/복도/발소리/문고리로 긴장을 만드는 패턴이 반복됩니다. 다른 긴장 장치(문서 발견, 시간 제한, 대화 속 거짓말 등)로 교체하세요.",
   },
   dialogueRatioLimit: {
     id: "dialogue_ratio_limit",
-    description: "대사 비율 60% 이하",
-    promptText: "한 챕터에서 대사 비율이 60%를 넘으면 안 됩니다.",
+    description: "대사 비율 30~50%",
+    promptText: "대사 비율 30~50%를 유지하세요. 너무 적어도 안 됩니다.",
     evaluatorKey: "dialogueRatio",
-    maxRatio: 0.6,
+    minRatio: 0.3,
+    maxRatio: 0.5,
     penalty: 0.05,
+    repairInstruction: "대사와 서술의 비율을 조정하세요. 대사가 너무 적으면 추가하세요.",
   },
   nameConsistency: {
     id: "name_consistency",
@@ -47,6 +61,7 @@ export const NARRATIVE_RULES = {
     promptText: "캐릭터 이름은 seed에 정의된 풀네임만 사용하세요.",
     evaluatorKey: "nameConsistency",
     penalty: 0.15,
+    repairInstruction: "캐릭터 이름이 seed에 정의된 풀네임과 다릅니다. seed에 정의된 풀네임으로 수정하세요.",
   },
   rankConsistency: {
     id: "rank_consistency",
@@ -54,6 +69,7 @@ export const NARRATIVE_RULES = {
     promptText: "seed에 정의된 신분을 절대 변경하지 마세요.",
     evaluatorKey: "rankConsistency",
     penalty: 0.3,
+    repairInstruction: "캐릭터의 신분(공작/황제/시녀 등)이 seed 설정과 다릅니다. seed에 정의된 신분으로 수정하세요.",
   },
   povConsistency: {
     id: "pov_consistency",
@@ -61,65 +77,91 @@ export const NARRATIVE_RULES = {
     promptText: "3인칭으로 시작했으면 끝까지 3인칭.",
     evaluatorKey: "povConsistency",
     penalty: 0.3,
+    repairInstruction: "시점(1인칭/3인칭)이 도중에 바뀌었습니다. 처음 설정한 시점으로 통일하세요.",
   },
   chapterLengthLimit: {
     id: "chapter_length",
-    description: "챕터 분량 2800-4200자",
-    promptText: "최대 4000자. 이 분량이 되면 즉시 멈추세요.",
+    description: "챕터 분량 2800-4000자",
+    promptText: "최소 2800자, 최대 4000자. 2800자 미만이면 씬을 더 풍성하게 쓰세요.",
+    minChars: 2800,
     targetChars: 3500,
     tolerance: 0.2,
+    repairInstruction: "분량을 조정하세요. 너무 짧으면 장면 묘사를 추가하세요.",
   },
   cameraScanPattern: {
     id: "camera_scan",
     description: "장소 진입 시 공간->인물->사물->행동 순서",
     promptText: "새로운 장소에 들어갈 때: 1.전체 모습 2.누가 어디에 3.눈에 띄는 사물 4.행동",
+    repairInstruction: "장소 진입 시 공간->인물->사물->행동 순서로 묘사하세요.",
   },
   comprehensibility: {
     id: "comprehensibility",
     description: "이해 가능성",
     promptText: "모든 사건에는 캐릭터의 해석이 따라와야 합니다.",
+    repairInstruction: "독해 명확성을 높이세요. 주어 생략을 줄이고, 대명사를 구체적 이름으로 바꾸세요.",
   },
   curiosityGap: {
     id: "curiosity_gap",
     description: "호기심 유발",
     promptText: "매 씬에 하나 이상의 열린 질문이나 미스터리를 만드세요.",
+    promptBlock: "매 씬에 하나 이상의 열린 질문이나 미스터리를 만들어라. 챕터 전체에서 2-4개의 미해소 궁금증을 유지하라.",
     evaluatorKey: "curiosityGap",
     penalty: 0.07,
+    repairInstruction: "열린 질문이나 미스터리를 추가하세요. 독자가 궁금해할 포인트를 만드세요.",
   },
   emotionalImpact: {
     id: "emotional_impact",
     description: "감정 강도",
     promptText: "클라이맥스 직전 감정 강도를 점진적으로 높이세요.",
+    promptBlock: "클라이맥스 직전 3문단은 감정 강도를 점진적으로 높여라. 공감 마커(신체 반응, 내면 묘사)를 포함하라. 클라이맥스 후 긴장을 풀어라.",
     evaluatorKey: "emotionalImpact",
     penalty: 0.07,
+    repairInstruction: "감정 강도를 높이세요. 내면 묘사, 신체 반응을 추가하세요.",
   },
   originality: {
     id: "originality",
     description: "신선함",
     promptText: "클리셰 표현을 신선한 표현으로 바꾸세요.",
+    promptBlock: `다음 표현은 절대 사용 금지: "심장이 두근거렸다", "눈이 마주쳤다", "시간이 멈춘 것 같았다", "차가운 눈빛", "알 수 없는 감정", "주먹을 꽉 쥐었다", "입술을 깨물었다", "바로 그때", "그 순간", "온몸이 얼어붙었다", "눈동자가 흔들렸다", "한숨을 내쉬었다", "결심을 굳혔다", "이를 악물었다", "압도적인 기운", "가슴이 먹먹해졌다", "눈시울이 붉어졌다", "볼이 붉어졌다", "살기가 느껴졌다", "믿을 수 없는 속도". 문단 첫 어절을 다양하게. '그는/그녀는'으로 3번 이상 시작하지 마라.`,
     evaluatorKey: "originality",
     penalty: 0.07,
+    repairInstruction: "클리셰 표현을 신선한 표현으로 바꾸세요. 문단 시작을 다양하게 하세요.",
+    bannedExpressions: [
+      "심장이 두근거렸다", "눈이 마주쳤다", "시간이 멈춘 것 같았다",
+      "차가운 눈빛", "알 수 없는 감정", "주먹을 꽉 쥐었다",
+      "입술을 깨물었다", "바로 그때", "그 순간", "온몸이 얼어붙었다",
+      "눈동자가 흔들렸다", "한숨을 내쉬었다", "결심을 굳혔다",
+      "이를 악물었다", "압도적인 기운", "가슴이 먹먹해졌다",
+      "눈시울이 붉어졌다", "볼이 붉어졌다", "살기가 느껴졌다",
+      "믿을 수 없는 속도",
+    ] as const,
   },
   hookEnding: {
     id: "hook_ending",
     description: "절단신공",
     promptText: "챕터 마지막 문장은 반드시 미해결 상태로 끝내세요.",
+    promptBlock: "챕터 마지막 문장은 반드시 미해결 상태로 끝내라(질문/위기/반전). 절대 해결이나 평화로 끝내지 마라.",
     evaluatorKey: "hookEnding",
     penalty: 0.04,
+    repairInstruction: "마지막 문단에 긴장감이나 궁금증을 추가하세요.",
   },
   dialogueQuality: {
     id: "dialogue_quality",
     description: "대사 품질",
     promptText: "모든 대사는 정보 전달 또는 감정 표현 중 하나를 해야 합니다.",
+    promptBlock: "모든 대사는 정보 전달 또는 감정 표현 중 하나를 해야 한다. '네', '그래', '아' 같은 빈 대사 금지. 명언 배틀 금지 — 한 대화에서 은유는 최대 1개.",
     evaluatorKey: "dialogueQuality",
     penalty: 0.04,
+    repairInstruction: "빈 대사를 의미 있는 대사로 바꾸세요. 정보나 감정을 담으세요.",
   },
   readingPacing: {
     id: "reading_pacing",
     description: "읽기 페이싱",
     promptText: "모든 사건 뒤에는 반드시 등장인물의 반응이나 여백 문단을 넣으세요.",
+    promptBlock: "모든 사건 뒤에는 반드시 등장인물의 반응이나 독자가 소화할 수 있는 여백 문단을 넣어라. 연속 3문단 이상 새 사건을 터뜨리지 마라. 현상만 나열하지 말고 주인공이 왜 그렇게 느꼈는지 반드시 설명하라.",
     evaluatorKey: "rhythm",
     penalty: 0.05,
+    repairInstruction: "문장 길이를 다양하게 하세요. 같은 어미 반복을 피하세요.",
   },
 } as const;
 
@@ -141,6 +183,29 @@ export function generatePromptRules(): string {
 }
 
 /**
+ * Generate the "6 core rules" block for the writer system prompt.
+ * Uses `promptBlock` when available for richer text, falling back to `promptText`.
+ */
+export function generateCoreRulesBlock(): string {
+  const coreRuleKeys: NarrativeRuleKey[] = [
+    "curiosityGap",
+    "emotionalImpact",
+    "originality",
+    "hookEnding",
+    "dialogueQuality",
+    "readingPacing",
+  ];
+
+  return coreRuleKeys
+    .map((key, i) => {
+      const rule = NARRATIVE_RULES[key];
+      const text = ("promptBlock" in rule && rule.promptBlock) ? rule.promptBlock : rule.promptText;
+      return `**규칙 ${i + 1} — ${rule.description}**: ${text}`;
+    })
+    .join("\n\n");
+}
+
+/**
  * Get all evaluator penalties as a map of evaluatorKey -> penalty.
  */
 export function getEvaluatorPenalties(): Record<string, number> {
@@ -154,10 +219,39 @@ export function getEvaluatorPenalties(): Record<string, number> {
 }
 
 /**
+ * Get the penalty for a specific rule by its NarrativeRuleKey.
+ * Returns 0.05 (minor default) if the rule has no penalty defined.
+ */
+export function getRulePenalty(ruleKey: NarrativeRuleKey): number {
+  const rule = NARRATIVE_RULES[ruleKey];
+  return ("penalty" in rule && rule.penalty) ? rule.penalty : 0.05;
+}
+
+/**
+ * Get repair instructions as a map of evaluatorKey/dimension -> instruction.
+ * Derived entirely from NARRATIVE_RULES repairInstruction fields.
+ */
+export function getRepairInstructions(): Record<string, string> {
+  const instructions: Record<string, string> = {};
+  for (const [key, rule] of Object.entries(NARRATIVE_RULES)) {
+    if ("repairInstruction" in rule && rule.repairInstruction) {
+      // Index by rule key (camelCase)
+      instructions[key] = rule.repairInstruction;
+      // Also index by evaluatorKey if present, for dimension-based lookup
+      if ("evaluatorKey" in rule && rule.evaluatorKey) {
+        instructions[rule.evaluatorKey] = rule.repairInstruction;
+      }
+    }
+  }
+  return instructions;
+}
+
+/**
  * Get the chapter length configuration.
  */
-export function getChapterLengthConfig(): { targetChars: number; tolerance: number } {
+export function getChapterLengthConfig(): { minChars: number; targetChars: number; tolerance: number } {
   return {
+    minChars: NARRATIVE_RULES.chapterLengthLimit.minChars,
     targetChars: NARRATIVE_RULES.chapterLengthLimit.targetChars,
     tolerance: NARRATIVE_RULES.chapterLengthLimit.tolerance,
   };
@@ -166,6 +260,9 @@ export function getChapterLengthConfig(): { targetChars: number; tolerance: numb
 /**
  * Get the dialogue ratio limit.
  */
-export function getDialogueRatioLimit(): number {
-  return NARRATIVE_RULES.dialogueRatioLimit.maxRatio;
+export function getDialogueRatioLimit(): { minRatio: number; maxRatio: number } {
+  return {
+    minRatio: NARRATIVE_RULES.dialogueRatioLimit.minRatio,
+    maxRatio: NARRATIVE_RULES.dialogueRatioLimit.maxRatio,
+  };
 }

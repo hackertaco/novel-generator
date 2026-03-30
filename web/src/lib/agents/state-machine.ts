@@ -23,6 +23,7 @@ import { segmentText } from "./segmenter";
 import { computeDeterministicScores, type DeterministicScores } from "../evaluators/deterministic-scorer";
 import { measureReadabilityPacing } from "../evaluators/readability-pacing";
 import { validateConflictGate, type ConflictGateResult } from "./conflict-gate";
+import { getRepairInstructions } from "../policy/narrative-rules";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,27 +54,27 @@ export interface WeakDimension {
 // Dimension-to-instruction mapping for targeted repair
 // ---------------------------------------------------------------------------
 
+// Repair instructions derived from NARRATIVE_RULES (single source of truth).
+// Additional dimension-specific instructions that don't have a direct rule are
+// merged in below.
+const _policyInstructions = getRepairInstructions();
+
 export const REPAIR_INSTRUCTIONS: Record<string, string> = {
-  curiosityGap: "열린 질문이나 미스터리를 추가하세요. 독자가 궁금해할 포인트를 만드세요.",
-  emotionalImpact: "감정 강도를 높이세요. 내면 묘사, 신체 반응을 추가하세요.",
-  originality: "클리셰 표현을 신선한 표현으로 바꾸세요. 문단 시작을 다양하게 하세요.",
-  pageTurner: "챕터 끝을 미해결 상태로 바꾸세요. 질문이나 위기로 끝내세요.",
-  dialogueQuality: "빈 대사를 의미 있는 대사로 바꾸세요. 정보나 감정을 담으세요.",
-  rhythm: "문장 길이를 다양하게 하세요. 같은 어미 반복을 피하세요.",
-  hookEnding: "마지막 문단에 긴장감이나 궁금증을 추가하세요.",
+  ..._policyInstructions,
+  // Dimensions not (yet) modeled as NarrativeRules — keep as overrides
+  pageTurner: _policyInstructions.hookEnding || "챕터 끝을 미해결 상태로 바꾸세요. 질문이나 위기로 끝내세요.",
   characterVoice: "캐릭터마다 말투를 구분하세요. 존댓말/반말 일관성을 유지하세요.",
   loopAvoidance: "반복되는 묘사나 내용을 새로운 정보로 대체하세요.",
   sentimentArc: "감정 변화를 더 넣으세요. 긍정→부정 또는 부정→긍정 전환을 추가하세요.",
   narrative: "원인-결과 관계를 명확히 하세요. '그래서', '때문에' 같은 연결어를 사용하세요.",
   immersion: "구체적인 감각 묘사를 추가하세요. 시각, 청각, 촉각 중 2가지 이상.",
-  dialogueRatio: "대사와 서술의 비율을 조정하세요. 대사가 너무 적으면 추가하세요.",
-  lengthScore: "분량을 조정하세요. 너무 짧으면 장면 묘사를 추가하세요.",
+  lengthScore: _policyInstructions.chapterLengthLimit || "분량을 조정하세요. 너무 짧으면 장면 묘사를 추가하세요.",
   antiRepetition: "반복되는 어휘나 표현을 다양한 동의어로 바꾸세요.",
   sensoryDiversity: "다양한 감각(시각, 청각, 후각, 촉각, 미각)을 활용하세요.",
   narrativeInformation: "정보 밀도를 높이세요. 새로운 사실이나 단서를 추가하세요.",
   engagement: "고구마-사이다 밸런스를 조정하세요. 긴장과 해소의 리듬을 만드세요.",
-  rankConsistency: "캐릭터의 신분(공작/황제/시녀 등)이 seed 설정과 다릅니다. seed에 정의된 신분으로 수정하세요.",
-  doorThreat: "문/복도/발소리/문고리로 긴장을 만드는 패턴이 반복됩니다. 다른 긴장 장치(문서 발견, 시간 제한, 대화 속 거짓말 등)로 교체하세요.",
+  // doorThreat aliases (getRepairInstructions already includes doorThreatLimit)
+  doorThreat: _policyInstructions.doorThreatLimit || "문/복도/발소리/문고리로 긴장을 만드는 패턴이 반복됩니다. 다른 긴장 장치(문서 발견, 시간 제한, 대화 속 거짓말 등)로 교체하세요.",
 };
 
 export interface ValidationVerdict {

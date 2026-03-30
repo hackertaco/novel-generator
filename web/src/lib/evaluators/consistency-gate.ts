@@ -9,7 +9,7 @@
  */
 
 import { measureComprehensibility } from "./comprehensibility";
-import { NARRATIVE_RULES } from "../policy/narrative-rules";
+import { NARRATIVE_RULES, getRulePenalty } from "../policy/narrative-rules";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -429,11 +429,20 @@ function checkNameConsistency(
 // Main evaluator
 // ---------------------------------------------------------------------------
 
-// Severity penalties sourced from NARRATIVE_RULES where available
-const SEVERITY_PENALTIES: Record<ConsistencyIssue["severity"], number> = {
-  critical: NARRATIVE_RULES.rankConsistency.penalty,   // 0.3
-  major: NARRATIVE_RULES.nameConsistency.penalty,      // 0.15
-  minor: NARRATIVE_RULES.dialogueRatioLimit.penalty,   // 0.05
+// ---------------------------------------------------------------------------
+// Per-check penalty mapping: each check type maps to its own rule's penalty
+// from NARRATIVE_RULES, instead of coupling severity levels to arbitrary rules.
+// ---------------------------------------------------------------------------
+
+const ISSUE_TYPE_PENALTY: Record<ConsistencyIssue["type"], number> = {
+  pov_inconsistency: getRulePenalty("povConsistency"),         // 0.3
+  rank_inconsistency: getRulePenalty("rankConsistency"),       // 0.3
+  name_inconsistency: getRulePenalty("nameConsistency"),       // 0.15
+  unnamed_scene_start: getRulePenalty("cameraScanPattern"),    // 0.05 (default)
+  character_existence: getRulePenalty("nameConsistency"),      // 0.15
+  timeline_contradiction: 0.1,                                 // no direct rule
+  location_discontinuity: 0.05,                                // minor
+  low_comprehensibility: getRulePenalty("dialogueRatioLimit"), // 0.05
 };
 
 export function evaluateConsistencyGate(
@@ -463,9 +472,10 @@ export function evaluateConsistencyGate(
     });
   }
 
+  // Each issue contributes its own rule-specific penalty (not severity-based)
   let gate = 1.0;
   for (const issue of issues) {
-    gate -= SEVERITY_PENALTIES[issue.severity];
+    gate -= ISSUE_TYPE_PENALTY[issue.type];
   }
   // Floor at 0.3 so score is never zero
   gate = Math.max(0.3, gate);
