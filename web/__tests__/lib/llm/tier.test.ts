@@ -18,6 +18,7 @@ const testSeed: NovelSeed = {
     rules: [],
   },
   characters: [],
+  story_threads: [],
   arcs: [
     {
       id: "arc_1",
@@ -35,6 +36,7 @@ const testSeed: NovelSeed = {
       title: "고조",
       arc_id: "arc_1",
       one_liner: "긴장 고조",
+      advances_thread: [],
       key_points: [],
       characters_involved: [],
       tension_level: 9,
@@ -44,6 +46,7 @@ const testSeed: NovelSeed = {
       title: "평범한 화",
       arc_id: "arc_1",
       one_liner: "일상",
+      advances_thread: [],
       key_points: [],
       characters_involved: [],
       tension_level: 4,

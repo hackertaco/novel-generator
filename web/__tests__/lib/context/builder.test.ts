@@ -22,6 +22,7 @@ const testSeed: NovelSeed = {
       id: "mc",
       name: "강현우",
       role: "주인공",
+      social_rank: "commoner",
       introduction_chapter: 1,
       voice: {
         tone: "냉소적",
@@ -58,11 +59,13 @@ const testSeed: NovelSeed = {
       title: "검은 반지",
       arc_id: "arc_1",
       one_liner: "현우가 검은 반지를 발견한다",
+      advances_thread: [],
       key_points: ["반지 발견", "이상한 기운"],
       characters_involved: ["mc"],
       tension_level: 6,
     },
   ],
+  story_threads: [],
   foreshadowing: [
     {
       id: "fs_ring",

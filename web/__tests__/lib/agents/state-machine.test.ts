@@ -358,7 +358,7 @@ describe("findWeakestDimensions", () => {
       originality: 0.8,
       pageTurner: 0.8,
       overall: 0.8,
-      details: {},
+      details: 0,
     };
     return { ...base, ...overrides };
   }

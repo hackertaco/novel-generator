@@ -25,6 +25,7 @@ const makeMinimalSeed = (): NovelSeed => ({
     rules: [],
   },
   characters: [],
+  story_threads: [],
   arcs: [],
   chapter_outlines: [],
   foreshadowing: [],
@@ -131,6 +132,7 @@ describe("evaluateCandidate", () => {
         title: "1화",
         arc_id: "arc_1",
         one_liner: "시작",
+        advances_thread: [],
         key_points: ["포인트1", "포인트2", "포인트3"],
         characters_involved: [],
         tension_level: 3,
@@ -148,6 +150,7 @@ describe("evaluateCandidate", () => {
         title: "1화",
         arc_id: "arc_1",
         one_liner: "시작",
+        advances_thread: [],
         key_points: [],
         characters_involved: [],
         tension_level: 8, // above EARLY_CHAPTER_MAX_TENSION=4
@@ -194,6 +197,7 @@ describe("evaluateCandidate", () => {
         title: "1화",
         arc_id: "arc_1",
         one_liner: "시작",
+        advances_thread: [],
         key_points: ["A", "B", "C", "D", "E"], // many violations
         characters_involved: [],
         tension_level: 9, // high tension violation

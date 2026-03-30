@@ -5,7 +5,7 @@ describe("buildSurgeonPrompt", () => {
   it("includes target text and surrounding context", () => {
     const prompt = buildSurgeonPrompt(
       "대상 문단 텍스트", "이전 문단", "다음 문단",
-      "캐릭터 말투 불일치", "반말로 수정해주세요", "현대 판타지"
+      "캐릭터 말투 불일치", "반말로 수정해주세요"
     );
     expect(prompt).toContain("대상 문단 텍스트");
     expect(prompt).toContain("이전 문단");
@@ -15,19 +15,19 @@ describe("buildSurgeonPrompt", () => {
   });
 
   it("does not contain --- marker syntax", () => {
-    const prompt = buildSurgeonPrompt("대상", "이전", "다음", "이유", "방향", "로맨스");
+    const prompt = buildSurgeonPrompt("대상", "이전", "다음", "이유", "방향");
     expect(prompt).not.toMatch(/^---/m);
   });
 
   it("handles null prev/next context", () => {
-    const prompt = buildSurgeonPrompt("대상 텍스트", null, null, "이유", "방향", "무협");
+    const prompt = buildSurgeonPrompt("대상 텍스트", null, null, "이유", "방향");
     expect(prompt).toContain("대상 텍스트");
     expect(prompt).not.toContain("null");
     expect(prompt).toContain("이유");
   });
 
   it("handles only prev null", () => {
-    const prompt = buildSurgeonPrompt("대상", null, "다음", "이유", "방향", "회귀");
+    const prompt = buildSurgeonPrompt("대상", null, "다음", "이유", "방향");
     expect(prompt).not.toContain("null");
     expect(prompt).toContain("다음");
   });

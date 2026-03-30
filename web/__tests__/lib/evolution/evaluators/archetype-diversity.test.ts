@@ -23,6 +23,7 @@ function makeSeed(overrides: Partial<{ characters: unknown[] }> = {}): NovelSeed
         backstory: "", arc_summary: "", state: { level: 1, location: null, status: "normal", relationships: {}, inventory: [], secrets_known: [] },
       },
     ],
+    story_threads: [],
     arcs: [],
     chapter_outlines: [],
     foreshadowing: [],

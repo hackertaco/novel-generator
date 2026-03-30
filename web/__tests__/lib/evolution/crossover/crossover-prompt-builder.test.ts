@@ -42,6 +42,7 @@ function makeBaseSeed(overrides: Partial<NovelSeed> = {}): NovelSeed {
         id: "mc",
         name: "주인공",
         role: "주인공",
+        social_rank: "commoner",
         introduction_chapter: 1,
         voice: {
           tone: "차분한",
@@ -64,6 +65,7 @@ function makeBaseSeed(overrides: Partial<NovelSeed> = {}): NovelSeed {
         id: "heroine",
         name: "히로인",
         role: "히로인",
+        social_rank: "noble",
         introduction_chapter: 2,
         voice: {
           tone: "우아한",
@@ -83,6 +85,7 @@ function makeBaseSeed(overrides: Partial<NovelSeed> = {}): NovelSeed {
         },
       },
     ],
+    story_threads: [],
     arcs: [
       {
         id: "arc_1",
@@ -100,6 +103,7 @@ function makeBaseSeed(overrides: Partial<NovelSeed> = {}): NovelSeed {
         title: "1화",
         arc_id: "arc_1",
         one_liner: "주인공의 일상",
+        advances_thread: [],
         key_points: ["평화로운 하루"],
         characters_involved: ["mc"],
         tension_level: 2,
@@ -109,6 +113,7 @@ function makeBaseSeed(overrides: Partial<NovelSeed> = {}): NovelSeed {
         title: "2화",
         arc_id: "arc_1",
         one_liner: "낌새",
+        advances_thread: [],
         key_points: ["이상한 분위기"],
         characters_involved: ["mc", "heroine"],
         tension_level: 3,
@@ -118,6 +123,7 @@ function makeBaseSeed(overrides: Partial<NovelSeed> = {}): NovelSeed {
         title: "3화",
         arc_id: "arc_1",
         one_liner: "갈등의 씨앗",
+        advances_thread: [],
         key_points: ["첫 갈등"],
         characters_involved: ["mc"],
         tension_level: 4,

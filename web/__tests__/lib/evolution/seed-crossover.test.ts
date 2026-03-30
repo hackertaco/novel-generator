@@ -28,6 +28,7 @@ const makeMinimalSeed = (title: string) => ({
     rules: [],
   },
   characters: [],
+  story_threads: [],
   arcs: [],
   chapter_outlines: [],
   foreshadowing: [],
@@ -44,7 +45,7 @@ const makeMinimalSeed = (title: string) => ({
 
 const makeSeedCandidate = (
   title: string,
-  temperature: 0.7 | 0.9 | 1.1,
+  temperature: 0.8,
   index: number,
 ): SeedCandidate => ({
   seed: makeMinimalSeed(title),
@@ -68,8 +69,8 @@ const makeCandidateScore = (overall: number, issues: string[] = []): CandidateSc
   issues,
 });
 
-const bestCandidate = makeSeedCandidate("최우수 후보", 0.7, 0);
-const secondBestCandidate = makeSeedCandidate("차선 후보", 0.9, 1);
+const bestCandidate = makeSeedCandidate("최우수 후보", 0.8, 0);
+const secondBestCandidate = makeSeedCandidate("차선 후보", 0.8, 1);
 const bestScore = makeCandidateScore(0.9, ["1화 key_points 3개 (최대 1개 권장)"]);
 const secondScore = makeCandidateScore(0.75);
 

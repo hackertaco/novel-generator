@@ -73,6 +73,7 @@ function makeSeed(
       rules: [],
     },
     characters: [],
+    story_threads: [],
     arcs,
     chapter_outlines: [],
     foreshadowing,

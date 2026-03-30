@@ -47,6 +47,7 @@ function makeMinimalSeed(
       id: `char_${i + 1}`,
       name: `캐릭터 ${i + 1}`,
       role: i === 0 ? "주인공" : "조연",
+      social_rank: "commoner" as const,
       introduction_chapter: 1,
       voice: {
         tone: "일반",
@@ -82,6 +83,7 @@ function makeMinimalSeed(
       rules: [],
     },
     characters,
+    story_threads: [],
     arcs: [],
     chapter_outlines: [],
     foreshadowing: [],

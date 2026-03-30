@@ -14,7 +14,7 @@ function makeSeed(
   outlines: Array<{
     chapter_number: number;
     one_liner: string;
-    key_points: Array<string | { what: string; why?: string; reveal?: string; prerequisite?: string }>;
+    key_points: Array<string | { what: string; why?: string; reveal?: "immediate" | "delayed" | "implicit"; prerequisite?: string }>;
     advances_thread?: string[];
   }>,
   storyThreads?: Array<{ id: string; name: string; type: "main" | "sub" }>,
@@ -46,8 +46,12 @@ function makeSeed(
       arc_id: "arc_1",
       one_liner: o.one_liner,
       advances_thread: o.advances_thread ?? [],
-      key_points: o.key_points,
-      characters_involved: [],
+      key_points: o.key_points.map((kp) =>
+        typeof kp === "string"
+          ? kp
+          : { what: kp.what, why: kp.why ?? "", reveal: kp.reveal ?? ("immediate" as const), ...(kp.prerequisite ? { prerequisite: kp.prerequisite } : {}) },
+      ),
+      characters_involved: [] as string[],
       tension_level: 5,
     })),
     foreshadowing: [],

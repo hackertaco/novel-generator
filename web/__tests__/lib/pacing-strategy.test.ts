@@ -30,6 +30,7 @@ const MOCK_SEED: NovelSeed = {
       id: "mc",
       name: "이준혁",
       role: "주인공",
+      social_rank: "commoner",
       introduction_chapter: 1,
       voice: {
         tone: "무심한 듯 날카로운",
@@ -52,6 +53,7 @@ const MOCK_SEED: NovelSeed = {
       id: "heroine",
       name: "강서연",
       role: "히로인",
+      social_rank: "commoner",
       introduction_chapter: 3,
       voice: {
         tone: "밝고 직설적인",
@@ -74,6 +76,7 @@ const MOCK_SEED: NovelSeed = {
       id: "rival",
       name: "박도윤",
       role: "라이벌",
+      social_rank: "commoner",
       introduction_chapter: 5,
       voice: {
         tone: "자신만만하고 도발적인",
@@ -96,6 +99,7 @@ const MOCK_SEED: NovelSeed = {
       id: "mentor",
       name: "최태산",
       role: "멘토",
+      social_rank: "commoner",
       introduction_chapter: 8,
       voice: {
         tone: "과묵하고 무뚝뚝한",
@@ -115,6 +119,7 @@ const MOCK_SEED: NovelSeed = {
       },
     },
   ],
+  story_threads: [],
   arcs: [
     {
       id: "arc_1",
@@ -132,6 +137,7 @@ const MOCK_SEED: NovelSeed = {
       title: "평범한 하루의 끝",
       arc_id: "arc_1",
       one_liner: "고3 이준혁의 지루한 일상, 그리고 하늘에 생긴 이상한 균열",
+      advances_thread: [],
       key_points: [
         "이준혁의 일상 — 학교, 편의점 알바",
         "하늘에 미세한 균열이 보이지만 아무도 신경 쓰지 않음",
@@ -145,6 +151,7 @@ const MOCK_SEED: NovelSeed = {
       title: "균열",
       arc_id: "arc_1",
       one_liner: "균열이 커지고, 이상한 현상들이 시작된다",
+      advances_thread: [],
       key_points: ["균열 확대", "동물들의 이상 행동"],
       characters_involved: ["mc"],
       tension_level: 4,
@@ -181,9 +188,9 @@ const MOCK_BLUEPRINT: ChapterBlueprint = {
   one_liner: "고3 이준혁의 지루한 일상, 그리고 하늘에 생긴 이상한 균열",
   role_in_arc: "setup",
   scenes: [
-    { purpose: "이준혁이 학교에서 친구들과 평범한 점심을 먹으며 일상을 보낸다", type: "dialogue", characters: ["mc"], estimated_chars: 2000, emotional_tone: "평범" },
-    { purpose: "이준혁이 편의점 알바를 하며 손님과 짧은 대화를 나눈다", type: "dialogue", characters: ["mc"], estimated_chars: 1500, emotional_tone: "무료함" },
-    { purpose: "이준혁이 편의점 창문 너머로 하늘에 균열이 생기는 것을 목격한다", type: "hook", characters: ["mc"], estimated_chars: 500, emotional_tone: "위화감" },
+    { purpose: "이준혁이 학교에서 친구들과 평범한 점심을 먹으며 일상을 보낸다", type: "dialogue", characters: ["mc"], estimated_chars: 2000, emotional_tone: "평범", must_reveal: [] },
+    { purpose: "이준혁이 편의점 알바를 하며 손님과 짧은 대화를 나눈다", type: "dialogue", characters: ["mc"], estimated_chars: 1500, emotional_tone: "무료함", must_reveal: [] },
+    { purpose: "이준혁이 편의점 창문 너머로 하늘에 균열이 생기는 것을 목격한다", type: "hook", characters: ["mc"], estimated_chars: 500, emotional_tone: "위화감", must_reveal: [] },
   ],
   dependencies: [],
   target_word_count: 4000,

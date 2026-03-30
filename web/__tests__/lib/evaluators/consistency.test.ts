@@ -23,6 +23,7 @@ const testSeed: NovelSeed = {
       id: "mc",
       name: "강현우",
       role: "주인공",
+      social_rank: "commoner" as const,
       introduction_chapter: 1,
       voice: {
         tone: "냉소적",
@@ -42,6 +43,7 @@ const testSeed: NovelSeed = {
       },
     },
   ],
+  story_threads: [],
   arcs: [
     {
       id: "arc_1",

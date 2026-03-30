@@ -18,12 +18,13 @@ describe("/api/evaluate smoke test", () => {
     total_chapters: 100,
     world: { name: "세계", genre: "현대 판타지", sub_genre: "회귀", time_period: "현대", magic_system: null, key_locations: {}, factions: {}, rules: [] },
     characters: [{
-      id: "mc", name: "현우", role: "주인공", introduction_chapter: 1,
+      id: "mc", name: "현우", role: "주인공", social_rank: "commoner" as const, introduction_chapter: 1,
       voice: { tone: "냉소적", speech_patterns: ["~하지", "알아서 해"], sample_dialogues: ["대사"], personality_core: "냉소적" },
       backstory: "배경", arc_summary: "성장", state: { level: 1, location: null, status: "normal", relationships: {}, inventory: [], secrets_known: [] },
     }],
     arcs: [{ id: "arc_1", name: "1부", start_chapter: 1, end_chapter: 50, summary: "요약", key_events: [], climax_chapter: 48 }],
     chapter_outlines: [],
+    story_threads: [],
     foreshadowing: [],
     style: { max_paragraph_length: 3, dialogue_ratio: 0.6, sentence_style: "short", hook_ending: true, pov: "1인칭", tense: "과거형", formatting_rules: [] },
   };
