@@ -102,9 +102,9 @@ async function main() {
   for (const r of results) {
     const orig = measureOriginality(r.text);
     const consistency = evaluateConsistencyGate(r.text, seed!.characters);
-    let det: { overall: number; curiosityGap: number; emotionalImpact: number; originality: number; hookEnding: number; dialogueQuality: number; rhythm: number } | null = null;
+    let det: Record<string, number> | null = null;
     try {
-      det = computeDeterministicScores(r.text, seed!, r.ch);
+      det = computeDeterministicScores(r.text, seed!, r.ch) as unknown as Record<string, number>;
     } catch { /* may fail */ }
 
     console.log(`\n  ${r.ch}화 (${r.text.length}자, 점수 ${r.score.toFixed(2)})`);
@@ -112,7 +112,7 @@ async function main() {
     if (orig.bannedFound.length > 0) {
       console.log(`    금지표현: ${orig.bannedFound.join(", ")}`);
     }
-    console.log(`    일관성 게이트: ${consistency.gate.toFixed(2)} (이슈 ${consistency.issues.length}개)`);
+    console.log(`    일관성 게이트: ${consistency.score.toFixed(2)} (이슈 ${consistency.issues.length}개)`);
     for (const issue of consistency.issues) {
       console.log(`      [${issue.severity}] ${issue.type}: ${issue.detail}`);
     }
