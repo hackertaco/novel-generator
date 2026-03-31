@@ -38,6 +38,7 @@ function makeSeed(
       ...t,
       description: "",
       relations: [],
+      reveal_timeline: [],
     })),
     arcs: [],
     chapter_outlines: outlines.map((o) => ({

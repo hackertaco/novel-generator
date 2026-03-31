@@ -32,12 +32,32 @@ export const ThreadRelationSchema = z.object({
   description: z.string().default("").describe("구체적 연결 (예: '음모 증거가 누명의 핵심 반증이 됨')"),
 });
 
+export const RevealTimelineEntrySchema = z.object({
+  chapter_range: z.string().describe("챕터 범위 (예: '1-10', '15', '40-60')"),
+  to: z.enum(["reader", "protagonist", "love_interest", "public", "specific"]).describe(
+    "누구에게 공개되는지 — reader: 독자만, protagonist: 주인공, love_interest: 상대역, public: 모든 인물, specific: 특정 캐릭터"
+  ),
+  to_name: z.string().optional().describe("to가 'specific'일 때, 어떤 캐릭터에게 공개되는지"),
+  level: z.enum(["hidden", "hinted", "partial", "revealed"]).describe(
+    "hidden: 완전히 숨김, hinted: 간접적 암시, partial: 부분 공개, revealed: 완전 공개"
+  ),
+  method: z.string().describe("공개 방법 (예: '독백', '문서 발견', '대화 중 실수', '목격')"),
+});
+
+export type RevealTimelineEntry = z.infer<typeof RevealTimelineEntrySchema>;
+
 export const StoryThreadSchema = z.object({
   id: z.string().describe("Thread ID (e.g., 'main', 'romance', 'conspiracy')"),
   name: z.string().describe("Thread name (e.g., '암살 누명 벗기', '라시드와의 관계')"),
-  type: z.enum(["main", "sub"]).default("sub").describe("Main thread or sub thread"),
+  type: z.enum(["main", "sub", "secret", "emotion", "plot_twist", "relationship"]).default("sub").describe(
+    "main/sub: 메인/서브 줄거리. secret: 비밀. emotion: 감정선. plot_twist: 반전. relationship: 관계 변화"
+  ),
+  owner: z.string().optional().describe("이 스레드를 소유한 캐릭터 이름 (비밀/감정 스레드인 경우)"),
   description: z.string().default("").describe("What this thread is about"),
   relations: z.array(ThreadRelationSchema).default([]).describe("이 스레드가 다른 스레드와 어떻게 연결되는지"),
+  reveal_timeline: z.array(RevealTimelineEntrySchema).default([]).describe(
+    "공개 타임라인 — 이 스레드의 정보가 언제, 누구에게, 어떻게 공개되는지"
+  ),
 });
 export type StoryThread = z.infer<typeof StoryThreadSchema>;
 
@@ -233,4 +253,92 @@ export function getForeshadowingActions(
     }
   }
   return results;
+}
+
+// --- Reveal Timeline Helpers ---
+
+/**
+ * Parse a chapter_range string (e.g., "1-10", "15", "40-60") and check
+ * whether a given chapter number falls within it.
+ */
+function chapterInRange(chapterRange: string, chapter: number): boolean {
+  const trimmed = chapterRange.trim();
+  if (trimmed.includes("-")) {
+    const [startStr, endStr] = trimmed.split("-");
+    const start = parseInt(startStr, 10);
+    const end = parseInt(endStr, 10);
+    if (isNaN(start) || isNaN(end)) return false;
+    return chapter >= start && chapter <= end;
+  }
+  const single = parseInt(trimmed, 10);
+  return !isNaN(single) && chapter === single;
+}
+
+export interface ActiveThreadReveal {
+  thread: StoryThread;
+  /** The reveal level for this chapter (the last matching entry wins) */
+  level: "hidden" | "hinted" | "partial" | "revealed";
+  /** Who the reveal targets */
+  to: string;
+  to_name?: string;
+  /** How the reveal happens */
+  method: string;
+}
+
+/**
+ * Get all story threads that have a reveal_timeline entry covering the
+ * given chapter, along with their current reveal level.
+ *
+ * If a thread has no reveal_timeline, it is skipped.
+ * If multiple entries match, the last matching entry wins (most specific).
+ */
+export function getActiveThreadsForChapter(
+  threads: StoryThread[],
+  chapterNumber: number,
+): ActiveThreadReveal[] {
+  const results: ActiveThreadReveal[] = [];
+  for (const thread of threads) {
+    if (!thread.reveal_timeline || thread.reveal_timeline.length === 0) continue;
+    // Find the last matching entry for this chapter
+    let matched: RevealTimelineEntry | null = null;
+    for (const entry of thread.reveal_timeline) {
+      if (chapterInRange(entry.chapter_range, chapterNumber)) {
+        matched = entry;
+      }
+    }
+    if (matched) {
+      results.push({
+        thread,
+        level: matched.level,
+        to: matched.to,
+        to_name: matched.to_name,
+        method: matched.method,
+      });
+    }
+  }
+  return results;
+}
+
+/**
+ * Format active thread reveals into a Korean-language guide string
+ * for use in writer/blueprint prompts.
+ */
+export function formatThreadRevealsForPrompt(
+  reveals: ActiveThreadReveal[],
+): string {
+  if (reveals.length === 0) return "";
+  const lines = reveals.map((r) => {
+    const ownerStr = r.thread.owner ? `${r.thread.owner}의 ` : "";
+    const targetStr = r.to === "specific" && r.to_name
+      ? `→ ${r.to_name}에게`
+      : `→ ${r.to}에게`;
+    const levelInstructions: Record<string, string> = {
+      hidden: "절대 드러내지 마세요. 행동으로만 간접 암시.",
+      hinted: "독자가 '뭔가 있다'고 느끼게만 하세요. 직접 언급 금지.",
+      partial: "부분적으로 드러내세요. 전체 그림은 아직 숨기세요.",
+      revealed: "완전히 공개하세요. 독자와 해당 캐릭터가 확실히 알게 하세요.",
+    };
+    return `- ${ownerStr}${r.thread.name}: [${r.level}] ${targetStr} — ${levelInstructions[r.level] || ""}\n  방법: ${r.method}`;
+  });
+  return lines.join("\n");
 }

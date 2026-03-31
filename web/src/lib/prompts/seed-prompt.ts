@@ -96,6 +96,76 @@ chapter_outlines:
       - "mc"
     tension_level: 5
 
+story_threads:
+  - id: "kasian_true_motive"
+    type: secret
+    owner: 카시안
+    name: "카시안의 진짜 동기"
+    description: "레오나를 지키려는 진짜 이유는 봉인 의식의 제물로 바치지 않기 위해서"
+    relations: []
+    reveal_timeline:
+      - chapter_range: "1-14"
+        to: reader
+        level: hidden
+        method: "카시안의 행동이 과보호처럼 보이지만 이유는 숨김"
+      - chapter_range: "15"
+        to: reader
+        level: hinted
+        method: "카시안이 제단 앞에서 혼잣말하는 장면"
+      - chapter_range: "30-39"
+        to: reader
+        level: partial
+        method: "봉인 의식 관련 문서 조각이 발견됨"
+      - chapter_range: "40"
+        to: protagonist
+        level: revealed
+        method: "레오나가 봉인 의식 문서를 발견"
+  - id: "leona_emotion"
+    type: emotion
+    owner: 레오나
+    name: "레오나의 카시안에 대한 감정"
+    description: "경계 → 호기심 → 신뢰 → 사랑"
+    relations:
+      - target: "kasian_true_motive"
+        relation: "conflicts_with"
+        description: "카시안의 비밀을 알게 되면 감정이 흔들림"
+    reveal_timeline:
+      - chapter_range: "1-10"
+        to: reader
+        level: hinted
+        method: "내면 묘사로 살짝 보여줌 (본인도 자각 못함)"
+      - chapter_range: "11-25"
+        to: reader
+        level: partial
+        method: "독백과 행동으로 감정 변화 드러남"
+      - chapter_range: "26"
+        to: love_interest
+        level: revealed
+        method: "위기 상황에서 본심이 터져나옴"
+  - id: "core_twist"
+    type: plot_twist
+    owner: ""
+    name: "핵심 플롯 트위스트"
+    description: "봉인이 풀리면 세계가 멸망하는 것이 아니라 진짜 위협은 봉인을 유지하는 자들"
+    relations: []
+    reveal_timeline:
+      - chapter_range: "1-30"
+        to: reader
+        level: hidden
+        method: "봉인의 중요성만 강조, 진실은 완전히 숨김"
+      - chapter_range: "31-44"
+        to: reader
+        level: hinted
+        method: "봉인 수호자들의 수상한 행동이 포착됨"
+      - chapter_range: "45-49"
+        to: protagonist
+        level: partial
+        method: "주인공이 옛 기록에서 모순을 발견"
+      - chapter_range: "50"
+        to: public
+        level: revealed
+        method: "봉인 수호자의 진짜 목적이 만천하에 드러남"
+
 foreshadowing:
   - id: "fs_1"
     name: "복선 이름"
@@ -128,6 +198,17 @@ style:
 \`\`\`
 
 주의사항:
+0. **스토리 스레드 & 공개 타임라인 (매우 중요!)**:
+   story_threads에 최소 3~5개의 스레드를 만드세요:
+   - **남주/여주 비밀** (type: "secret"): 주요 캐릭터가 숨기고 있는 것. owner 필수.
+   - **여주/남주 감정선** (type: "emotion"): 감정의 변화 과정. owner 필수.
+   - **핵심 플롯 트위스트** (type: "plot_twist"): 이야기의 큰 반전.
+   - **관계 변화** (type: "relationship"): 두 캐릭터 사이의 관계 전환점.
+   - 각 스레드에는 reveal_timeline으로 **hidden → hinted → partial → revealed** 순서의 공개 과정을 설계하세요.
+   - reveal_timeline은 소설 전체에 걸쳐 분산하세요. 처음 10화에 모두 공개되면 안 됩니다!
+   - "to" 필드로 누구에게 공개되는지 구분하세요:
+     reader(독자만 아는), protagonist(주인공이 아는), love_interest(상대역이 아는), public(모두 아는), specific(특정 캐릭터)
+   - method에는 구체적 공개 방법을 적으세요: "독백", "문서 발견", "대화 중 실수", "목격", "제3자 고백" 등
 1. 캐릭터는 첫 60화에 등장할 **핵심 인물 8~12명**을 정의. 주인공, 상대역, 조력자 2~3명, 적대자 2명, 멘토 1명, 서브 캐릭터 2~3명. 각 캐릭터의 대사 예시는 성격이 명확히 드러나도록. introduction_chapter를 1~30 사이에 분산시킬 것.
    **gender 필드 필수**: 모든 캐릭터에 gender("male"/"female"/"other")를 명시하세요. 이 값이 대명사(그/그녀)와 호칭(공작/공작부인, 기사/여기사)을 결정합니다.
 2. **캐릭터 등장 페이싱 (매우 중요)**: introduction_chapter를 반드시 분산시킬 것!

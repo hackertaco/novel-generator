@@ -9,6 +9,7 @@
 
 import { getAgent } from "./llm-agent";
 import type { NovelSeed } from "@/lib/schema/novel";
+import { getActiveThreadsForChapter, formatThreadRevealsForPrompt } from "@/lib/schema/novel";
 import type { SceneSpec } from "@/lib/schema/planning";
 import type { TokenUsage } from "@/lib/agents/types";
 
@@ -284,11 +285,17 @@ ${previousChapterEnding}
       ? `\n# 장면 맥락\n${sceneContextParts.join("\n")}\n`
       : "";
 
+    // Thread reveal guide for this chapter
+    const activeReveals = getActiveThreadsForChapter(seed.story_threads || [], chapterNumber);
+    const threadGuideBlock = activeReveals.length > 0
+      ? `\n# 캐릭터 내면 가이드\n${formatThreadRevealsForPrompt(activeReveals)}\n`
+      : "";
+
     const prompt = `# 소설 정보
 제목: ${seed.title} | 장르: ${seed.world.genre} | ${chapterNumber}화
 감정톤: ${scene.emotional_tone}
 ${emotionalLine}
-${sceneContextBlock}
+${sceneContextBlock}${threadGuideBlock}
 # 캐릭터 목소리
 ${charVoices}
 

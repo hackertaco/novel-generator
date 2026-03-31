@@ -6,15 +6,17 @@
 import { getAgent } from "../agents/llm-agent";
 import type { NovelSeed, StoryThread } from "../schema/novel";
 import { z } from "zod";
-import { ThreadRelationSchema } from "../schema/novel";
+import { ThreadRelationSchema, RevealTimelineEntrySchema } from "../schema/novel";
 
 const ThreadResponseSchema = z.object({
   story_threads: z.array(z.object({
     id: z.string(),
     name: z.string(),
-    type: z.enum(["main", "sub"]),
+    type: z.enum(["main", "sub", "secret", "emotion", "plot_twist", "relationship"]).default("sub"),
+    owner: z.string().optional(),
     description: z.string(),
     relations: z.array(ThreadRelationSchema).default([]),
+    reveal_timeline: z.array(RevealTimelineEntrySchema).default([]),
   })),
   chapter_thread_map: z.record(z.string(), z.array(z.string())).default({}),
 });
@@ -84,7 +86,7 @@ JSON으로 출력:
     // Fallback: create minimal threads from logline
     return {
       threads: [
-        { id: "main", name: seed.logline.slice(0, 30), type: "main", description: seed.logline, relations: [] },
+        { id: "main", name: seed.logline.slice(0, 30), type: "main", description: seed.logline, relations: [], reveal_timeline: [] },
       ],
       chapterThreadMap: {},
     };

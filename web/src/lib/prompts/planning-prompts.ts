@@ -1,5 +1,6 @@
 // src/lib/prompts/planning-prompts.ts
 import type { NovelSeed } from "@/lib/schema/novel";
+import { getActiveThreadsForChapter, formatThreadRevealsForPrompt } from "@/lib/schema/novel";
 import type { PartPlan, ArcPlan } from "@/lib/schema/planning";
 
 /**
@@ -206,6 +207,14 @@ ${(seed.story_threads || []).map((t) => {
   const relStr = (t.relations || []).map((r) => `  ${r.relation} → ${r.target}: ${r.description}`).join("\n");
   return `- ${t.type === "main" ? "🔴" : "🔵"} ${t.name}: ${t.description}${relStr ? "\n" + relStr : ""}`;
 }).join("\n") || "미정"}
+
+## 이 화에서의 감정/비밀 공개 상태
+${(() => {
+  const chapterNum = targetChapter ?? arc.start_chapter;
+  const activeReveals = getActiveThreadsForChapter(seed.story_threads || [], chapterNum);
+  const formatted = formatThreadRevealsForPrompt(activeReveals);
+  return formatted || "해당 화에 활성 스레드 없음";
+})()}
 
 ## 챕터 아웃라인 (what/why)
 ${seed.chapter_outlines

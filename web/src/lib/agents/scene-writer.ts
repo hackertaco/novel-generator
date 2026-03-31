@@ -8,7 +8,7 @@
 
 import { getAgent } from "./llm-agent";
 import type { NovelSeed } from "@/lib/schema/novel";
-import { getForeshadowingActions } from "@/lib/schema/novel";
+import { getForeshadowingActions, getActiveThreadsForChapter, formatThreadRevealsForPrompt } from "@/lib/schema/novel";
 import type { ChapterBlueprint, SceneSpec } from "@/lib/schema/planning";
 import type { TokenUsage } from "@/lib/agents/types";
 import { validateScene, buildSceneRepairPrompt } from "./scene-validator";
@@ -273,6 +273,16 @@ ${endingText}
       }
     }
     parts.push("");
+  }
+
+  // Story thread reveal guide for this chapter
+  const activeReveals = getActiveThreadsForChapter(seed.story_threads || [], chapterNumber);
+  if (activeReveals.length > 0) {
+    const revealGuide = formatThreadRevealsForPrompt(activeReveals);
+    parts.push(`# 이 화에서의 캐릭터 내면 가이드
+${revealGuide}
+⚠️ [hidden]은 절대 독자에게 드러내지 마세요. [hinted]는 간접 암시만. [partial]은 일부만. [revealed]는 확실하게.
+`);
   }
 
   // Previous scenes in this chapter
