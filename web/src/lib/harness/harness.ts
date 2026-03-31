@@ -441,15 +441,15 @@ export class NovelHarness {
     };
 
     // Run pipeline
-    let completedText = "";
     for await (const event of this.runPipeline(ctx)) {
       yield { type: "pipeline_event", chapter: chapterNumber, event };
-      if (event.type === "replace_text") {
-        completedText = event.content;
-      }
     }
 
-    completedText = completedText || ctx.text;
+    // Always use ctx.text as the authoritative final text.
+    // Pipeline agents (including RuleGuardAgent's enforceLength) write to ctx.text
+    // but may not emit replace_text events, so tracking the last replace_text event
+    // could miss post-processing and return the pre-trimmed text.
+    const completedText = ctx.text;
 
     // Extract summary
     const outline = seed.chapter_outlines.find((o) => o.chapter_number === chapterNumber);

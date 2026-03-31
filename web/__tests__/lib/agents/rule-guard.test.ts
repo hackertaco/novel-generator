@@ -9,6 +9,7 @@ import {
   detectSentenceStartRepeat,
   detectShortDialogueSequence,
   trimPostHookPadding,
+  deduplicateScenes,
 } from "@/lib/agents/rule-guard";
 
 // ===========================================================================
@@ -729,5 +730,65 @@ describe("trimPostHookPadding", () => {
     const result = trimPostHookPadding(text);
     expect(result).toContain("배신자");
     expect(result).not.toContain("아무도 말");
+  });
+});
+
+// ===========================================================================
+// deduplicateScenes
+// ===========================================================================
+
+describe("deduplicateScenes", () => {
+  it("removes a duplicated scene separated by ***", () => {
+    const scene1 = "세레인은 침대에서 일어났다. 온실로 향했다. 문이 잠겨 있었다. 이상한 목소리가 들렸다.";
+    const scene2 = "세레인은 침대에서 일어났다. 온실로 향했다. 문이 잠겨 있었다. 이상한 목소리가 들렸다.";
+    const text = `${scene1}\n\n***\n\n${scene2}`;
+    const result = deduplicateScenes(text);
+    // Should keep only one copy
+    expect(result).toBe(scene1);
+  });
+
+  it("keeps distinct scenes intact", () => {
+    const scene1 = "세레인은 침대에서 일어났다. 온실로 향했다. 문이 잠겨 있었다.";
+    const scene2 = "마법사는 탑 꼭대기에서 주문을 외웠다. 하늘이 붉게 물들었다. 폭풍이 몰아쳤다.";
+    const text = `${scene1}\n\n***\n\n${scene2}`;
+    const result = deduplicateScenes(text);
+    expect(result).toContain(scene1);
+    expect(result).toContain(scene2);
+  });
+
+  it("removes near-duplicate scenes (>60% overlap)", () => {
+    const scene1 = "세레인은 침대에서 일어났다. 온실로 향했다. 문이 잠겨 있었다. 이상한 목소리가 들렸다. 공포에 떨며 뒤돌아보았다.";
+    // Same scene with minor edits
+    const scene2 = "세레인은 침대에서 일어났다. 온실 쪽으로 향했다. 문이 잠겨 있었다. 이상한 목소리가 들렸다. 두려움에 떨며 뒤돌아보았다.";
+    const text = `${scene1}\n\n***\n\n${scene2}`;
+    const result = deduplicateScenes(text);
+    // Should keep only scene1
+    expect(result).toContain("공포에 떨며");
+    expect(result).not.toContain("두려움에 떨며");
+  });
+
+  it("detects internal duplication within a long scene", () => {
+    // Build a scene >3000 chars where the two halves are near-identical
+    const block = "세레인은 정원을 걸었다. 꽃들이 바람에 흔들렸다. 햇빛이 따사로웠다. 나비가 날아다녔다. 분수에서 물이 솟았다. 새들이 노래했다. 향기가 코끝을 간질였다. 구름이 천천히 흘러갔다. ";
+    // Repeat until >1600 chars per half
+    const half = block.repeat(20); // ~2000+ chars
+    const longScene = half + "\n\n" + half;
+    expect(longScene.length).toBeGreaterThan(3000);
+    const result = deduplicateScenes(longScene);
+    // Should be roughly half the length
+    expect(result.length).toBeLessThan(longScene.length * 0.7);
+  });
+
+  it("returns text unchanged when there are no scene breaks and text is short", () => {
+    const text = "짧은 단일 장면입니다. 문제가 없어야 합니다.";
+    expect(deduplicateScenes(text)).toBe(text);
+  });
+
+  it("preserves scene break markers between kept scenes", () => {
+    const scene1 = "첫 번째 장면의 내용입니다. 주인공이 등장합니다.";
+    const scene2 = "완전히 다른 두 번째 장면입니다. 악당이 나타납니다.";
+    const text = `${scene1}\n\n***\n\n${scene2}`;
+    const result = deduplicateScenes(text);
+    expect(result).toContain("***");
   });
 });

@@ -68,6 +68,97 @@ export function sanitize(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// DeduplicateScenes — remove scene-level duplication via n-gram similarity
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute character bigram set from a string (for Jaccard similarity).
+ */
+function charBigrams(text: string): Set<string> {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  const grams = new Set<string>();
+  for (let i = 0; i < normalized.length - 1; i++) {
+    grams.add(normalized.slice(i, i + 2));
+  }
+  return grams;
+}
+
+/**
+ * Jaccard similarity between two sets: |A ∩ B| / |A ∪ B|.
+ */
+function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 && b.size === 0) return 1;
+  let intersection = 0;
+  for (const gram of a) {
+    if (b.has(gram)) intersection++;
+  }
+  const union = a.size + b.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+/**
+ * Remove scene-level duplication.
+ *
+ * 1. Split text by scene break markers (`***`).
+ * 2. For each pair of scenes, compute Jaccard similarity of character bigrams.
+ *    If two scenes have >60% overlap, drop the later one.
+ * 3. Within a single scene longer than 3000 chars, check if the two halves
+ *    are similar (>50% overlap). If so, keep only the first half.
+ */
+export function deduplicateScenes(text: string): string {
+  // Split on scene break markers (*** possibly surrounded by whitespace)
+  const sceneBreakPattern = /\n\s*\*{3,}\s*\n/;
+  const scenes = text.split(sceneBreakPattern).map(s => s.trim()).filter(s => s.length > 0);
+
+  if (scenes.length === 0) return text;
+
+  // Step 1: Remove duplicate scenes (compare each pair, keep the first)
+  const kept: string[] = [];
+  const keptBigrams: Set<string>[] = [];
+
+  for (const scene of scenes) {
+    const bg = charBigrams(scene);
+    let isDuplicate = false;
+    for (const prevBg of keptBigrams) {
+      if (jaccardSimilarity(bg, prevBg) > 0.6) {
+        isDuplicate = true;
+        break;
+      }
+    }
+    if (!isDuplicate) {
+      kept.push(scene);
+      keptBigrams.push(bg);
+    }
+  }
+
+  // Step 2: Within each remaining scene, check for internal duplication
+  const result: string[] = [];
+  for (const scene of kept) {
+    if (scene.length > 3000) {
+      // Split roughly in half at a paragraph boundary near the midpoint
+      const mid = Math.floor(scene.length / 2);
+      // Find nearest paragraph break (\n\n) to the midpoint
+      let splitIdx = scene.lastIndexOf("\n\n", mid + 200);
+      if (splitIdx < mid - 200 || splitIdx < 0) {
+        splitIdx = scene.indexOf("\n\n", mid - 200);
+      }
+      if (splitIdx > 0 && splitIdx < scene.length - 100) {
+        const firstHalf = scene.slice(0, splitIdx).trim();
+        const secondHalf = scene.slice(splitIdx).trim();
+        const sim = jaccardSimilarity(charBigrams(firstHalf), charBigrams(secondHalf));
+        if (sim > 0.5) {
+          result.push(firstHalf);
+          continue;
+        }
+      }
+    }
+    result.push(scene);
+  }
+
+  return result.join("\n\n***\n\n");
+}
+
+// ---------------------------------------------------------------------------
 // DeduplicateParagraphs — remove repeat paragraphs (exact or near-match)
 // ---------------------------------------------------------------------------
 
@@ -572,6 +663,7 @@ export class RuleGuardAgent implements PipelineAgent {
     yield { type: "stage_change", stage: "rule_check" };
 
     ctx.text = sanitize(ctx.text);
+    ctx.text = deduplicateScenes(ctx.text);
     ctx.text = deduplicateParagraphs(ctx.text);
     ctx.text = deduplicateSentences(ctx.text);
     ctx.text = fixEndingRepeat(ctx.text);
