@@ -2,6 +2,7 @@ import type { RuleIssue, ChapterContext, PipelineAgent, LifecycleEvent } from ".
 import { enforceLength, DEFAULT_TARGET_CHARS, DEFAULT_TOLERANCE } from "./length-enforcer";
 import { enforceSpeechLevels } from "../evaluators/speech-level-enforcer";
 import { evaluateConsistencyGate } from "../evaluators/consistency-gate";
+import { computeDeterministicScores } from "../evaluators/deterministic-scorer";
 
 // ---------------------------------------------------------------------------
 // Sanitize — remove LLM meta markers from generated text
@@ -729,6 +730,12 @@ export class RuleGuardAgent implements PipelineAgent {
       })),
       ...povIssues,
     ];
+
+    // Compute deterministic score so bestScore is always populated,
+    // even in fast preset where QualityLoop/StateMachine are disabled.
+    const detScores = computeDeterministicScores(ctx.text, ctx.seed, ctx.chapterNumber);
+    ctx.bestScore = Math.max(ctx.bestScore, detScores.overall);
+    ctx.snapshots.push({ text: ctx.text, score: detScores.overall, iteration: 0 });
   }
 }
 
