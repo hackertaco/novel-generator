@@ -274,11 +274,21 @@ ${previousChapterEnding}
 `
       : "";
 
+    // 5W1H context for scene grounding
+    const sceneContextParts: string[] = [];
+    if (scene.who) sceneContextParts.push(`누가: ${scene.who}`);
+    if (scene.when) sceneContextParts.push(`언제: ${scene.when}`);
+    if (scene.where_detail) sceneContextParts.push(`어디서: ${scene.where_detail}`);
+    if (scene.how) sceneContextParts.push(`어떻게: ${scene.how}`);
+    const sceneContextBlock = sceneContextParts.length > 0
+      ? `\n# 장면 맥락\n${sceneContextParts.join("\n")}\n`
+      : "";
+
     const prompt = `# 소설 정보
 제목: ${seed.title} | 장르: ${seed.world.genre} | ${chapterNumber}화
 감정톤: ${scene.emotional_tone}
 ${emotionalLine}
-
+${sceneContextBlock}
 # 캐릭터 목소리
 ${charVoices}
 

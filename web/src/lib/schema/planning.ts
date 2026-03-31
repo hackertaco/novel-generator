@@ -22,6 +22,11 @@ export const SceneSpecSchema = z.object({
   estimated_chars: z.number().int().default(1000).describe("Estimated character count"),
   emotional_tone: z.string().default("neutral").describe("Emotional tone of scene"),
   must_reveal: z.array(z.string()).default([]).describe("독자가 이 씬에서 반드시 알게 되어야 할 구체적 팩트 (예: '사형 서류에 서명이 누락됨', '범인은 북회랑에 있었음')"),
+  // 5W1H (육하원칙) fields for scene context
+  who: z.string().optional().describe("주체 → 상대 (예: '레오나 → 카시안')"),
+  when: z.string().optional().describe("시간적 맥락 (예: '계약 종료일 오후, 해가 지기 직전')"),
+  where_detail: z.string().optional().describe("구체적 장소 묘사 (예: '헤르츠 공작저 서재. 벽면 전체가 장부철, 창밖으로 겨울 정원')"),
+  how: z.string().optional().describe("행동 시퀀스 (예: '레오나가 서명 거부 → 청혼서를 증거로 가져감 → 연회 참석 선언')"),
 });
 export type SceneSpec = z.infer<typeof SceneSpecSchema>;
 

@@ -59,6 +59,7 @@ export const ChapterOutlineSchema = z.object({
   title: z.string(),
   arc_id: z.string(),
   one_liner: z.string().describe("One sentence description"),
+  opening_context: z.string().optional().describe("1화 전용: 독자에게 알려줄 초기 맥락 (배경, 시간, 장소, 주인공 처지)"),
   advances_thread: z.array(z.string()).default([]).describe("Which story_threads this chapter advances (IDs)"),
   key_points: z.array(PlotPointSchema).default([]).describe("Key plot points with what/why/reveal timing"),
   characters_involved: z.array(z.string()).default([]),

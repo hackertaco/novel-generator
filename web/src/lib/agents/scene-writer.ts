@@ -349,13 +349,28 @@ ${lastSummary.summary.slice(0, 300)}
     ? `\n**⚠️ 반드시 전달할 정보** (이 팩트들이 독자에게 명확히 전달되어야 합니다):\n${scene.must_reveal.map((r: string) => `- ${r}`).join("\n")}\n→ 감각 묘사로 암시하지 말고, 서술이나 대사로 명확하게 전달하세요.\n`
     : "";
 
+  // 5W1H context for this scene
+  const fiveW1HParts: string[] = [];
+  if (scene.who) fiveW1HParts.push(`**누가(→상대)**: ${scene.who}`);
+  if (scene.when) fiveW1HParts.push(`**언제**: ${scene.when}`);
+  if (scene.where_detail) fiveW1HParts.push(`**어디서**: ${scene.where_detail}`);
+  if (scene.how) fiveW1HParts.push(`**어떻게**: ${scene.how}`);
+  const fiveW1HSection = fiveW1HParts.length > 0
+    ? `\n${fiveW1HParts.join("\n")}\n`
+    : "";
+
+  // Opening context for chapter 1
+  const openingContextSection = (chapterNumber === 1 && sceneIndex === 0 && chapterOutline?.opening_context)
+    ? `\n**📖 초기 맥락 (1화 도입부에서 자연스럽게 전달하세요)**:\n${chapterOutline.opening_context}\n→ 직접 설명하지 말고, 행동/감각/대사 속에 녹여서 보여주세요.\n`
+    : "";
+
   parts.push(`# ${sceneLabel} 지시
 
 **목적**: ${scene.purpose}
 **유형**: ${scene.type}
 **감정톤**: ${scene.emotional_tone}
 **목표 분량**: ${scene.estimated_chars}자
-${mustRevealSection}${correctionRule}
+${fiveW1HSection}${openingContextSection}${mustRevealSection}${correctionRule}
 ## 작성 규칙
 1. 이 씬의 목적에만 집중하세요. 다른 사건을 끌어오지 마세요.
 2. 씬 전환 시 반드시 빈 줄 + \`***\` + 빈 줄로 구분하세요. 새 씬 첫 문장에 장소와 시간을 명시하세요. 장소를 이동할 때 이동 과정을 1-2문장으로 묘사하세요.
