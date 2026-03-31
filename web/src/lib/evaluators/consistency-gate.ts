@@ -181,18 +181,43 @@ function checkUnnamedSceneStart(
   return issues;
 }
 
+/** Common Korean words that get falsely detected as character names in dialogue attribution */
+const COMMON_WORD_EXCLUSION = new Set([
+  "그리고", "하지만", "그러나", "그래서", "그런데", "그녀", "누군가", "아무도", "모두", "라고",
+  "하나", "누군", "아무", "그것", "이것", "저것", "여기", "거기", "저기",
+  "무엇", "어디", "언제", "우리", "너희", "자신", "서로", "다시", "함께",
+  "사이", "마치", "처럼", "때문", "덕분", "대신", "동안", "이후", "이전",
+]);
+
 function checkCharacterExistence(
   text: string,
   characters: Array<{ name: string; [key: string]: unknown }>,
 ): ConsistencyIssue[] {
   const issues: ConsistencyIssue[] = [];
-  const characterNames = new Set(characters.map((c) => c.name));
+  const characterFullNames = new Set(characters.map((c) => c.name));
+
+  // Build a set of first names (2+ chars) for partial matching
+  // e.g. "세레나 에버딘" -> also match "세레나"
+  const characterFirstNames = new Set<string>();
+  for (const c of characters) {
+    const parts = c.name.split(/\s+/);
+    if (parts[0].length >= 2) {
+      characterFirstNames.add(parts[0]);
+    }
+  }
+
+  /** Check if a speaker matches any known character (full name or first name) */
+  function isKnownCharacter(speaker: string): boolean {
+    if (characterFullNames.has(speaker)) return true;
+    if (characterFirstNames.has(speaker)) return true;
+    return false;
+  }
 
   // Extract dialogue speakers by looking for NAME + particle patterns before quotes or
   // "라고 말했다/물었다" patterns after quotes.
   // Strategy 1: NAME[이가은는] "..." or NAME[이가은는] 말했다
   const beforeQuotePattern = /([가-힣]{2,})[이가은는]\s*["\u201C]/g;
-  // Strategy 2: "..." + 라고 + speech verb — look back for the speaker name
+  // Strategy 2: "..." + 라고 + speech verb -- look back for the speaker name
   const afterQuotePattern = /["\u201D][^.]*?([가-힣]{2,})[이가은는]\s*(?:라고\s*)?(?:말했|물었|외쳤|속삭였|중얼거렸|소리쳤|대답했)/g;
   // Strategy 3: NAME[이가은는] + speech verb (no quotes)
   const directSpeechPattern = /([가-힣]{2,})[이가은는]\s+(?:말했|물었|외쳤|속삭였|중얼거렸|소리쳤|대답했|웃으며)/g;
@@ -206,9 +231,9 @@ function checkCharacterExistence(
       const speaker = match[1];
       // Skip common non-name words and short/long words
       if (speaker.length < 2 || speaker.length > 5) continue;
-      if (/^(그리고|하지만|그러나|그래서|그런데|그녀|누군가|아무도|모두|라고)$/.test(speaker)) continue;
+      if (COMMON_WORD_EXCLUSION.has(speaker)) continue;
 
-      if (!characterNames.has(speaker)) {
+      if (!isKnownCharacter(speaker)) {
         unknownSpeakers.add(speaker);
       }
     }
@@ -435,13 +460,34 @@ function checkRankConsistency(
 // ---------------------------------------------------------------------------
 
 /** Common Korean particles/postpositions that follow names — NOT surnames */
-const COMMON_PARTICLES = /^(은|는|이|가|을|를|에게|의|과|와|도|만|까지|부터|에|서|로|께|한테)$/;
+const COMMON_PARTICLES = /^(은|는|이|가|을|를|에게|의|과|와|도|만|까지|부터|에|서|로|께|한테|께서|에게서|한테서|으로)$/;
 
 /** Particles that attach directly to the end of a name (no space) */
 const ATTACHED_PARTICLES = [
-  "에게", "한테",  // longer particles first to match greedily
-  "가", "를", "이", "은", "는", "의", "에", "로", "와", "과", "도",
+  "에게서", "한테서", "께서",  // longest particles first to match greedily
+  "에게", "한테", "부터", "까지", "으로",
+  "가", "를", "을", "이", "은", "는", "의", "에", "로", "와", "과", "도", "께",
 ];
+
+/**
+ * Korean honorifics/titles that follow a first name — NOT surnames.
+ * e.g. "세레나 영애", "루시안 전하가"
+ */
+const KOREAN_HONORIFICS = new Set([
+  "영애", "공녀", "전하", "폐하", "공작", "공자", "백작", "후작", "남작",
+  "시녀", "기사", "님", "씨", "양", "군", "경", "선배", "후배", "교수",
+  "대장", "장군", "대감", "나리", "마마", "아가씨", "도련님",
+]);
+
+/**
+ * Korean titles that may be used as if they were a first name (e.g. "황후 폐하께서").
+ * When a character's firstName is actually one of these titles, skip name consistency
+ * checks since "황후 + X" is a title reference, not a name inconsistency.
+ */
+const KOREAN_TITLE_WORDS = new Set([
+  "황후", "황제", "황태자", "황녀", "왕", "왕비", "왕자", "공주",
+  "공작", "후작", "백작", "자작", "남작", "귀족", "영주",
+]);
 
 function checkNameConsistency(
   text: string,
@@ -457,23 +503,41 @@ function checkNameConsistency(
     const firstName = nameParts[0];
     const knownSurname = nameParts.slice(1).join(" ");
 
+    // If the firstName is a Korean title word (황후, 황제, etc.), skip entirely.
+    // "황후 폐하께서" is a title reference, not a name inconsistency.
+    if (KOREAN_TITLE_WORDS.has(firstName)) continue;
+
     // Find all instances of firstName + space + word in text
-    const pattern = new RegExp(`${firstName}\\s+([가-힣]{2,4})`, "g");
+    const pattern = new RegExp(`${firstName}\\s+([가-힣]{2,})`, "g");
     let match;
     const wrongSurnames = new Set<string>();
 
     while ((match = pattern.exec(text)) !== null) {
       const followingWord = match[1];
 
-      // Skip if it matches the known surname
-      if (knownSurname.includes(followingWord)) continue;
+      // Strip attached particles from the end of followingWord for comparison.
+      // e.g. "에버딘을" -> base "에버딘", suffix "을"
+      // e.g. "에버딘께서" -> base "에버딘", suffix "께서"
+      let strippedWord = followingWord;
+      for (const particle of ATTACHED_PARTICLES) {
+        if (followingWord.endsWith(particle) && followingWord.length > particle.length) {
+          strippedWord = followingWord.slice(0, -particle.length);
+          break;
+        }
+      }
 
-      // Skip if the word is the known surname with an attached Korean particle
-      // e.g. "벨로아가" = "벨로아" + particle "가"
+      // Skip if the stripped word matches the known surname
+      if (knownSurname === strippedWord || knownSurname.includes(strippedWord)) continue;
+
+      // Skip if the word is the known surname with an attached Korean particle (legacy check)
       if (followingWord.startsWith(knownSurname)) {
         const suffix = followingWord.slice(knownSurname.length);
-        if (suffix.length > 0 && ATTACHED_PARTICLES.includes(suffix)) continue;
+        if (suffix.length === 0 || ATTACHED_PARTICLES.includes(suffix)) continue;
       }
+
+      // Skip if followingWord (or its stripped form) is a Korean honorific
+      // e.g. "세레나 영애", "루시안 전하가" (전하 + 가)
+      if (KOREAN_HONORIFICS.has(followingWord) || KOREAN_HONORIFICS.has(strippedWord)) continue;
 
       // Skip common particles/postpositions
       if (COMMON_PARTICLES.test(followingWord)) continue;
@@ -481,8 +545,8 @@ function checkNameConsistency(
       // Skip common non-surname words (verbs, common nouns)
       if (/[었했했된된는]$/.test(followingWord)) continue;
 
-      // Check if it looks like a surname (2-4 syllable Korean word)
-      if (followingWord.length >= 2 && followingWord.length <= 4) {
+      // Check if it looks like a surname (2-4 syllable Korean word after stripping)
+      if (strippedWord.length >= 2 && strippedWord.length <= 4) {
         wrongSurnames.add(followingWord);
       }
     }

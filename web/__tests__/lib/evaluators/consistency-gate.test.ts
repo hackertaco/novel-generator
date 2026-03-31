@@ -313,7 +313,106 @@ describe("gate scoring", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 7. Integration: consistency gate acts as multiplier
+// 7. Name consistency false-positive fixes
+// ---------------------------------------------------------------------------
+
+describe("name consistency false positives", () => {
+  const fantasyChars = [
+    { name: "세레나 에버딘", role: "주인공" },
+    { name: "루시안 벨로아", role: "상대역" },
+    { name: "황후 비앙카", role: "황후" },
+  ];
+
+  it("does not flag name + surname with particle '을' (세레나 에버딘을)", () => {
+    const text = "세레나 에버딘을 향해 루시안 벨로아가 걸어왔다.";
+    const result = evaluateConsistencyGate(text, fantasyChars);
+    const nameIssues = result.issues.filter((i) => i.type === "name_inconsistency");
+    expect(nameIssues).toHaveLength(0);
+  });
+
+  it("does not flag name + surname with particle '께서' (에버딘께서)", () => {
+    const text = "세레나 에버딘께서 입장하셨다.";
+    const result = evaluateConsistencyGate(text, fantasyChars);
+    const nameIssues = result.issues.filter((i) => i.type === "name_inconsistency");
+    expect(nameIssues).toHaveLength(0);
+  });
+
+  it("does not flag name + surname with particle '에게서'", () => {
+    const text = "세레나 에버딘에게서 편지가 왔다.";
+    const result = evaluateConsistencyGate(text, fantasyChars);
+    const nameIssues = result.issues.filter((i) => i.type === "name_inconsistency");
+    expect(nameIssues).toHaveLength(0);
+  });
+
+  it("does not flag name + honorific '영애' (세레나 영애)", () => {
+    const text = "세레나 영애는 정원을 거닐었다.";
+    const result = evaluateConsistencyGate(text, fantasyChars);
+    const nameIssues = result.issues.filter((i) => i.type === "name_inconsistency");
+    expect(nameIssues).toHaveLength(0);
+  });
+
+  it("does not flag name + honorific '전하' with particle (루시안 전하가)", () => {
+    const text = "루시안 전하가 명령을 내렸다.";
+    const result = evaluateConsistencyGate(text, fantasyChars);
+    const nameIssues = result.issues.filter((i) => i.type === "name_inconsistency");
+    expect(nameIssues).toHaveLength(0);
+  });
+
+  it("does not flag title-as-firstName references (황후 폐하께서)", () => {
+    const text = "황후 폐하께서 연회를 열었다.";
+    const result = evaluateConsistencyGate(text, fantasyChars);
+    const nameIssues = result.issues.filter((i) => i.type === "name_inconsistency");
+    expect(nameIssues).toHaveLength(0);
+  });
+
+  it("still detects genuine wrong surname", () => {
+    const text = "세레나 몬타나가 걸어왔다.";
+    const result = evaluateConsistencyGate(text, fantasyChars);
+    const nameIssues = result.issues.filter((i) => i.type === "name_inconsistency");
+    expect(nameIssues.length).toBeGreaterThan(0);
+    expect(nameIssues[0].description).toContain("몬타나");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. Character existence false-positive fixes
+// ---------------------------------------------------------------------------
+
+describe("character existence false positives", () => {
+  const fantasyChars = [
+    { name: "세레나 에버딘", role: "주인공" },
+    { name: "루시안 벨로아", role: "상대역" },
+  ];
+
+  it("matches first-name-only usage (세레나) to full name", () => {
+    const text = '세레나가 "조심해"라고 외쳤다.';
+    const result = evaluateConsistencyGate(text, fantasyChars);
+    const charIssues = result.issues.filter((i) => i.type === "character_existence");
+    expect(charIssues).toHaveLength(0);
+  });
+
+  it("does not flag common Korean words as unknown characters", () => {
+    const text = '하나가 "무엇인가"라고 물었다. 누군가 대답했다.';
+    const result = evaluateConsistencyGate(text, fantasyChars);
+    const charIssues = result.issues.filter((i) => i.type === "character_existence");
+    // "하나" should be excluded as common word; "누군" is in exclusion list
+    const falsePositives = charIssues.filter(
+      (i) => i.description.includes("하나") || i.description.includes("누군"),
+    );
+    expect(falsePositives).toHaveLength(0);
+  });
+
+  it("still detects genuinely unknown speakers", () => {
+    const text = '김태수가 "이리 오라"라고 말했다.';
+    const result = evaluateConsistencyGate(text, fantasyChars);
+    const charIssues = result.issues.filter((i) => i.type === "character_existence");
+    expect(charIssues.length).toBeGreaterThan(0);
+    expect(charIssues[0].description).toContain("김태수");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Integration: consistency gate acts as multiplier
 // ---------------------------------------------------------------------------
 
 describe("integration with scoring concept", () => {
