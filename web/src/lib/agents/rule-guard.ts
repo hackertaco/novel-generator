@@ -36,7 +36,20 @@ export function sanitize(text: string): string {
   result = result.replace(/^.*(수정본|정리했습니다|교정[된하]|다듬[었어]|윤문[했된]|아래는.*본문).{0,30}$/gm, "");
 
   // Remove scene meta markers from bridge stitching and LLM output
-  result = result.replace(/^#{0,3}\s*(수정된\s*)?씬\s*\d+\s*(시작부분|끝부분|연결부분|시작|끝)?.*$/gm, "");
+  // Covers: "## 씬 1 끝부분", "# 씬 2", "### 씬 3 시작", bare "씬 2", "수정된 씬 3"
+  result = result.replace(/^#{0,6}\s*(수정된\s*)?씬\s*\d+.*$/gm, "");
+
+  // Remove bracket/paren scene markers: "[씬 1]", "(씬 2)", "[씬 3 시작]" etc.
+  result = result.replace(/^[\[(]\s*씬\s*\d+[^\])]*/gm, "").replace(/^[\])]\s*$/gm, "");
+  result = result.replace(/[\[(]씬\s*\d+[^\])]*[\])]/g, "");
+
+  // Remove any markdown header line with Korean text (header leak into novel text)
+  // e.g. "# 장면 전환", "## 다음 날 아침", "### 에필로그"
+  result = result.replace(/^#{1,6}\s+[가-힣].*$/gm, "");
+
+  // Convert scene transition separators to plain scene break markers
+  // e.g. "--- 씬 전환 ---", "--- 장면 전환 ---", "--- 씬 1 끝 ---"
+  result = result.replace(/^-{2,}\s*.*?(씬|장면)\s*(전환|끝|시작|\d+).*?-{2,}$/gm, "***");
 
   // Remove LLM format acknowledgments and meta markers
   result = result.replace(/^(출력은|결과물은|아래는|다음은).*?(형식|포맷|요청).*$/gm, "");

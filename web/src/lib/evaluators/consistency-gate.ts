@@ -391,6 +391,12 @@ function checkRankConsistency(
 /** Common Korean particles/postpositions that follow names — NOT surnames */
 const COMMON_PARTICLES = /^(은|는|이|가|을|를|에게|의|과|와|도|만|까지|부터|에|서|로|께|한테)$/;
 
+/** Particles that attach directly to the end of a name (no space) */
+const ATTACHED_PARTICLES = [
+  "에게", "한테",  // longer particles first to match greedily
+  "가", "를", "이", "은", "는", "의", "에", "로", "와", "과", "도",
+];
+
 function checkNameConsistency(
   text: string,
   characters: Array<{ name: string; [key: string]: unknown }>,
@@ -415,6 +421,13 @@ function checkNameConsistency(
 
       // Skip if it matches the known surname
       if (knownSurname.includes(followingWord)) continue;
+
+      // Skip if the word is the known surname with an attached Korean particle
+      // e.g. "벨로아가" = "벨로아" + particle "가"
+      if (followingWord.startsWith(knownSurname)) {
+        const suffix = followingWord.slice(knownSurname.length);
+        if (suffix.length > 0 && ATTACHED_PARTICLES.includes(suffix)) continue;
+      }
 
       // Skip common particles/postpositions
       if (COMMON_PARTICLES.test(followingWord)) continue;
