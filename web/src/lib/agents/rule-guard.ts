@@ -106,7 +106,70 @@ function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
  * 3. Within a single scene longer than 3000 chars, check if the two halves
  *    are similar (>50% overlap). If so, keep only the first half.
  */
+/**
+ * Extract Korean proper nouns from text. Returns a set of unique entities.
+ */
+function extractNamedEntities(text: string): Set<string> {
+  const entities = new Set<string>();
+  const pattern = /([가-힣]{2,5})(?:[은는이가을를의에서로와과도만]|\s)/g;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    entities.add(match[1]);
+  }
+  return entities;
+}
+
+/**
+ * Compute overlap of named entities between two text segments.
+ * High overlap (>0.7) suggests the same characters/places appear in both.
+ */
+function namedEntityOverlap(a: string, b: string): number {
+  const entA = extractNamedEntities(a);
+  const entB = extractNamedEntities(b);
+  if (entA.size === 0 || entB.size === 0) return 0;
+  let intersection = 0;
+  for (const e of entA) {
+    if (entB.has(e)) intersection++;
+  }
+  return intersection / Math.min(entA.size, entB.size);
+}
+
+/**
+ * Detect "scene restart" — a paragraph that re-introduces the same location+time
+ * as an earlier paragraph, signaling the LLM rewrote the same scene.
+ * Returns the index of the restart paragraph, or -1.
+ */
+function detectSceneRestart(paragraphs: string[]): number {
+  // Extract location keywords from the first 3 paragraphs (the scene opening)
+  const openingText = paragraphs.slice(0, 3).join(" ");
+  const PLACE_SUFFIXES = "대성당|성당|연회장|집무실|궁전|궁|저택|광장|복도|서재|홀|방|온실|제단|통로|침실|서고|회랑";
+  const locationWords = openingText.match(new RegExp(`(?:[가-힣]+\\s*)?(?:${PLACE_SUFFIXES})`, "g")) || [];
+  if (locationWords.length === 0) return -1;
+
+  // Look for the same location words appearing in a "scene opening" pattern later
+  // (paragraph starting with location + time/atmosphere description)
+  const openingPattern = /[,.].*(?:밝|어두|비|가득|정오|새벽|밤|저녁|아침|빛|차가|따뜻|조용|넓)/;
+  for (let i = Math.max(3, Math.floor(paragraphs.length * 0.3)); i < paragraphs.length; i++) {
+    const para = paragraphs[i];
+    // Check if this paragraph contains an opening location AND looks like a scene start
+    const hasLocation = locationWords.some(loc => para.includes(loc));
+    const looksLikeOpening = openingPattern.test(para) && para.length > 30;
+    if (hasLocation && looksLikeOpening) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 export function deduplicateScenes(text: string): string {
+  // Step 0: Detect scene restart within continuous text (no *** break)
+  const paragraphs = text.split("\n\n").map(p => p.trim()).filter(p => p.length > 0);
+  const restartIdx = detectSceneRestart(paragraphs);
+  if (restartIdx > 0) {
+    // Keep only paragraphs before the restart
+    text = paragraphs.slice(0, restartIdx).join("\n\n");
+  }
+
   // Split on scene break markers (*** possibly surrounded by whitespace)
   const sceneBreakPattern = /\n\s*\*{3,}\s*\n/;
   const scenes = text.split(sceneBreakPattern).map(s => s.trim()).filter(s => s.length > 0);
@@ -133,12 +196,12 @@ export function deduplicateScenes(text: string): string {
   }
 
   // Step 2: Within each remaining scene, check for internal duplication
+  // Uses both bigram similarity AND named entity overlap for semantic dedup
   const result: string[] = [];
   for (const scene of kept) {
     if (scene.length > 3000) {
       // Split roughly in half at a paragraph boundary near the midpoint
       const mid = Math.floor(scene.length / 2);
-      // Find nearest paragraph break (\n\n) to the midpoint
       let splitIdx = scene.lastIndexOf("\n\n", mid + 200);
       if (splitIdx < mid - 200 || splitIdx < 0) {
         splitIdx = scene.indexOf("\n\n", mid - 200);
@@ -146,8 +209,10 @@ export function deduplicateScenes(text: string): string {
       if (splitIdx > 0 && splitIdx < scene.length - 100) {
         const firstHalf = scene.slice(0, splitIdx).trim();
         const secondHalf = scene.slice(splitIdx).trim();
-        const sim = jaccardSimilarity(charBigrams(firstHalf), charBigrams(secondHalf));
-        if (sim > 0.5) {
+        const bigramSim = jaccardSimilarity(charBigrams(firstHalf), charBigrams(secondHalf));
+        const entitySim = namedEntityOverlap(firstHalf, secondHalf);
+        // Either high bigram similarity OR high entity overlap with moderate bigrams
+        if (bigramSim > 0.5 || (entitySim > 0.7 && bigramSim > 0.2)) {
           result.push(firstHalf);
           continue;
         }
