@@ -230,17 +230,65 @@ function checkCharacterExistence(
 // Time tracking
 // ---------------------------------------------------------------------------
 
-// "다음 날" must come first so it is checked before "아침"/"밤" in the same paragraph
+/**
+ * Indoor lighting words — when these appear alongside light-related words
+ * (빛, 밝은, 빛나 etc.), it indicates artificial light rather than daylight.
+ */
+const INDOOR_LIGHTING = /촛불|샹들리에|등불|횃불|램프|전등|벽난로|화롯불|랜턴|조명|불빛|가로등|촛대/;
+
+/**
+ * Ambiguous light words that could mean daylight OR artificial light.
+ * These only count as "낮" evidence when NO indoor-lighting context is present.
+ */
+const AMBIGUOUS_LIGHT_WORDS = /빛|밝은|밝아|빛나|빛이|환한|환하게/;
+
+/**
+ * Strong time-of-day markers — full phrases that reliably indicate time.
+ * We require stronger evidence (phrase-level, not single word fragments)
+ * to reduce false positives from words like "아침" appearing inside
+ * compound words or casual mentions.
+ */
 const TIME_MARKERS: Array<{ pattern: RegExp; order: number; label: string }> = [
+  // "다음 날" must come first — it resets the timeline
   { pattern: /다음\s*날/, order: 100, label: "다음 날" },
-  { pattern: /새벽/, order: 0, label: "새벽" },
-  { pattern: /아침/, order: 1, label: "아침" },
-  { pattern: /오전/, order: 2, label: "오전" },
-  { pattern: /낮/, order: 3, label: "낮" },
-  { pattern: /오후/, order: 4, label: "오후" },
-  { pattern: /저녁/, order: 5, label: "저녁" },
-  { pattern: /밤/, order: 6, label: "밤" },
+  // Strong phrase-level patterns: require surrounding context or sentence-boundary
+  { pattern: /새벽[이에녘]|새벽\s*(?:빛|녘|무렵|시간)/, order: 0, label: "새벽" },
+  { pattern: /아침[이에]\s|아침\s*(?:해|빛|햇살|일찍|식사|밥)|아침이\s*(?:밝|되|오|왔)/, order: 1, label: "아침" },
+  { pattern: /오전[이에]\s|오전\s*(?:중|내내|시간)/, order: 2, label: "오전" },
+  { pattern: /한낮[이에]|대낮[이에]|낮[이에]\s*(?:되|밝)/, order: 3, label: "낮" },
+  { pattern: /오후[가에]\s|오후\s*(?:되|늦|시간|내내|햇살)/, order: 4, label: "오후" },
+  { pattern: /저녁[이에]\s|저녁\s*(?:되|무렵|노을|식사|밥|때)|저녁이\s*되/, order: 5, label: "저녁" },
+  { pattern: /밤[이에]\s|밤이\s*(?:깊|되|오|찾|내리)|밤\s*(?:하늘|늦|깊|사이)|한밤|깊은\s*밤/, order: 6, label: "밤" },
 ];
+
+/**
+ * Check whether a paragraph contains a reliable time marker.
+ * Returns the matched marker or null.
+ *
+ * Ambiguous light words (빛, 밝은 …) are suppressed when indoor-lighting
+ * context (촛불, 횃불 …) is present in the same paragraph, preventing
+ * false "낮" detection in candlelit nighttime scenes.
+ */
+function detectTimeMarker(
+  para: string,
+): { order: number; label: string } | null {
+  for (const marker of TIME_MARKERS) {
+    if (marker.pattern.test(para)) {
+      return marker;
+    }
+  }
+
+  // Fallback: check if ambiguous light words imply "낮" —
+  // but ONLY when there is no indoor-lighting context.
+  if (AMBIGUOUS_LIGHT_WORDS.test(para) && !INDOOR_LIGHTING.test(para)) {
+    // Even then, only treat as daytime if accompanied by outdoor cues
+    if (/햇살|햇빛|태양|하늘/.test(para)) {
+      return { order: 3, label: "낮" };
+    }
+  }
+
+  return null;
+}
 
 function checkTimelineContradiction(paragraphs: string[]): ConsistencyIssue[] {
   const issues: ConsistencyIssue[] = [];
@@ -257,27 +305,25 @@ function checkTimelineContradiction(paragraphs: string[]): ConsistencyIssue[] {
       continue;
     }
 
-    for (const marker of TIME_MARKERS) {
-      if (marker.pattern.test(para)) {
-        if (marker.order === 100) {
-          // "다음 날" resets
-          lastTimeOrder = -1;
-          lastTimeLabel = "다음 날";
-          break;
-        }
-        if (lastTimeOrder >= 0 && marker.order < lastTimeOrder) {
-          issues.push({
-            type: "timeline_contradiction",
-            severity: "major",
-            description: `시간 역행 (문단 ${i + 1}): "${lastTimeLabel}" → "${marker.label}" (씬 전환 없이)`,
-            detail: `시간이 "${lastTimeLabel}"에서 "${marker.label}"로 역행 (문단 ${i + 1})`,
-            position: i,
-          });
-        }
-        lastTimeOrder = marker.order;
-        lastTimeLabel = marker.label;
-        break; // Only track first time marker per paragraph
+    const detected = detectTimeMarker(para);
+    if (detected) {
+      if (detected.order === 100) {
+        // "다음 날" resets
+        lastTimeOrder = -1;
+        lastTimeLabel = "다음 날";
+        continue;
       }
+      if (lastTimeOrder >= 0 && detected.order < lastTimeOrder) {
+        issues.push({
+          type: "timeline_contradiction",
+          severity: "major",
+          description: `시간 역행 (문단 ${i + 1}): "${lastTimeLabel}" → "${detected.label}" (씬 전환 없이)`,
+          detail: `시간이 "${lastTimeLabel}"에서 "${detected.label}"로 역행 (문단 ${i + 1})`,
+          position: i,
+        });
+      }
+      lastTimeOrder = detected.order;
+      lastTimeLabel = detected.label;
     }
   }
 

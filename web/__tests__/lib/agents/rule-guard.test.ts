@@ -8,6 +8,7 @@ import {
   detectEndingRepeat,
   detectSentenceStartRepeat,
   detectShortDialogueSequence,
+  trimPostHookPadding,
 } from "@/lib/agents/rule-guard";
 
 // ===========================================================================
@@ -583,5 +584,150 @@ describe("detectShortDialogueSequence", () => {
     const issues = detectShortDialogueSequence(text);
     expect(issues.length).toBeGreaterThan(0);
     expect(issues[0].severity).toBe("critical");
+  });
+});
+
+// ===========================================================================
+// 9. trimPostHookPadding
+// ===========================================================================
+
+describe("trimPostHookPadding", () => {
+  it("removes mood-summary padding after a crisis-keyword hook", () => {
+    const text = [
+      "긴 본문 문단이 여기 있다.",
+      '"누가 당신을 죽이려 했는지."',
+      "연회장이 숨을 죽였다. 황제는 웃지 않았다.",
+    ].join("\n\n");
+    const result = trimPostHookPadding(text);
+    expect(result).toContain("죽이려 했는지");
+    expect(result).not.toContain("숨을 죽");
+  });
+
+  it("removes multiple trailing padding paragraphs", () => {
+    const text = [
+      "본문.",
+      '"그 비밀을 아는 자는 이미 죽었다."',
+      "침묵이 흘렀다.",
+      "그렇게 고요한 정적이 남아 있었다.",
+    ].join("\n\n");
+    const result = trimPostHookPadding(text);
+    expect(result).toContain("죽었다");
+    expect(result).not.toContain("침묵");
+    expect(result).not.toContain("정적");
+  });
+
+  it("removes padding after a question-mark hook", () => {
+    const text = [
+      "본문.",
+      "대체 누가 그런 짓을 한 거지?",
+      "침묵이 흘렀다.",
+    ].join("\n\n");
+    const result = trimPostHookPadding(text);
+    expect(result).toContain("한 거지?");
+    expect(result).not.toContain("침묵");
+  });
+
+  it("removes padding after an ellipsis hook", () => {
+    const text = [
+      "본문.",
+      "그의 손이 천천히 내려갔다...",
+      "고요한 정적이 흘렀다.",
+    ].join("\n\n");
+    const result = trimPostHookPadding(text);
+    expect(result).toContain("내려갔다...");
+    expect(result).not.toContain("정적");
+  });
+
+  it("removes padding after an ellipsis (unicode) hook", () => {
+    const text = [
+      "본문.",
+      "그의 손이 천천히 내려갔다\u2026",
+      "고요한 정적이 흘렀다.",
+    ].join("\n\n");
+    const result = trimPostHookPadding(text);
+    expect(result).toContain("내려갔다\u2026");
+    expect(result).not.toContain("정적");
+  });
+
+  it("does NOT remove non-padding paragraphs after a hook", () => {
+    const text = [
+      "본문.",
+      '"누가 당신을 죽이려 했는지."',
+      "세레인은 검을 뽑아 들고 문 밖으로 뛰쳐나갔다.",
+    ].join("\n\n");
+    const result = trimPostHookPadding(text);
+    // The trailing paragraph has action, not padding — should be kept
+    expect(result).toContain("뛰쳐나갔다");
+  });
+
+  it("does NOT remove trailing paragraphs containing dialogue", () => {
+    const text = [
+      "본문.",
+      '"그 비밀을 아는 자는 이미 죽었다."',
+      '"침묵하라." 황제가 말했다.',
+    ].join("\n\n");
+    const result = trimPostHookPadding(text);
+    expect(result).toContain("침묵하라");
+  });
+
+  it("does NOT trim if trailing paragraph is long (>80 chars)", () => {
+    const text = [
+      "본문.",
+      '"그 비밀을 아는 자는 이미 죽었다."',
+      "침묵이 흘렀다. 그리고 그 침묵 속에서 누군가가 조용히 일어섰고 모든 시선이 그에게로 쏠렸다. 그의 손에는 칼이 들려 있었고 그 칼끝에서는 핏방울이 떨어지고 있었다.",
+    ].join("\n\n");
+    const result = trimPostHookPadding(text);
+    // Long trailing paragraph should be kept even if it has padding words
+    expect(result).toContain("침묵이 흘렀다");
+  });
+
+  it("returns text unchanged when no hook is found in last 5 paragraphs", () => {
+    const text = [
+      "평범한 문단 하나.",
+      "평범한 문단 둘.",
+      "평범한 문단 셋.",
+    ].join("\n\n");
+    expect(trimPostHookPadding(text)).toBe(text);
+  });
+
+  it("returns text unchanged when hook is the last paragraph", () => {
+    const text = [
+      "본문.",
+      '"누가 당신을 죽이려 했는지."',
+    ].join("\n\n");
+    expect(trimPostHookPadding(text)).toBe(text);
+  });
+
+  it("handles single paragraph", () => {
+    const text = "유일한 문단.";
+    expect(trimPostHookPadding(text)).toBe(text);
+  });
+
+  it("handles empty text", () => {
+    expect(trimPostHookPadding("")).toBe("");
+  });
+
+  it("only removes padding if ALL trailing paragraphs are padding", () => {
+    const text = [
+      "본문.",
+      '"누가 당신을 죽이려 했는지."',
+      "침묵이 흘렀다.",
+      "세레인은 검을 뽑아 들었다.",
+    ].join("\n\n");
+    const result = trimPostHookPadding(text);
+    // Second trailing paragraph is not padding, so nothing is removed
+    expect(result).toContain("침묵");
+    expect(result).toContain("검을 뽑아");
+  });
+
+  it("detects dialogue hook with tension keywords", () => {
+    const text = [
+      "긴 서사 문단이 있다.",
+      "\u201C배신자의 이름을 대라.\u201D",
+      "아무도 말하지 않았다.",
+    ].join("\n\n");
+    const result = trimPostHookPadding(text);
+    expect(result).toContain("배신자");
+    expect(result).not.toContain("아무도 말");
   });
 });

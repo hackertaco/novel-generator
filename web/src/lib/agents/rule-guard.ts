@@ -442,6 +442,126 @@ export function detectShortDialogueSequence(text: string): RuleIssue[] {
 }
 
 // ---------------------------------------------------------------------------
+// TrimPostHookPadding — remove weak mood-summary paragraphs after a hook line
+// ---------------------------------------------------------------------------
+
+/** Keywords signaling crisis / revelation in a short hook line. */
+const HOOK_CRISIS_KEYWORDS =
+  /[죽독칼피비밀진실배신저주복수살인음모함정독약암살반역멸망파멸]/;
+
+/** Mood / summary filler words that add no new information. */
+const PADDING_WORDS = [
+  "침묵",
+  "고요",
+  "정적",
+  "조용",
+  "남아 있었다",
+  "그렇게",
+  "길고 무거",
+  "얼어붙",
+  "숨을 죽",
+  "무거운 침묵",
+  "아무도 말",
+  "아무 말",
+  "그 말이",
+  "여운",
+  "잔향",
+  "그 순간",
+  "시간이 멈",
+];
+
+const PADDING_PATTERN = new RegExp(PADDING_WORDS.map(w => w.replace(/\s/g, "\\s*")).join("|"));
+
+/**
+ * Detect whether a paragraph qualifies as a "hook candidate" —
+ * a strong cliffhanger line near the end of the chapter.
+ */
+function isHookCandidate(para: string): boolean {
+  const trimmed = para.trim();
+
+  // Ends with question mark
+  if (trimmed.endsWith("?")) return true;
+
+  // Ends with ellipsis
+  if (/[.]{3}$|…$/.test(trimmed)) return true;
+
+  // Short line (< 40 chars) with crisis/revelation keywords
+  if (trimmed.length < 40 && HOOK_CRISIS_KEYWORDS.test(trimmed)) return true;
+
+  // Dialogue with tension keywords — e.g. "누가 당신을 죽이려 했는지."
+  const hasQuote = /[""\u201C\u201D]/.test(trimmed);
+  if (hasQuote && HOOK_CRISIS_KEYWORDS.test(trimmed)) return true;
+
+  return false;
+}
+
+/**
+ * Detect whether a paragraph is "padding" — a mood summary that weakens
+ * a preceding hook. Must be conservative: only clearly filler paragraphs.
+ */
+function isPaddingParagraph(para: string): boolean {
+  const trimmed = para.trim();
+
+  // Must not be empty
+  if (trimmed.length === 0) return false;
+
+  // If it contains dialogue, it might carry new information — keep it
+  if (/[""\u201C\u201D]/.test(trimmed)) return false;
+
+  // Must contain at least one padding word
+  if (!PADDING_PATTERN.test(trimmed)) return false;
+
+  // Must be relatively short (long paragraphs likely have real content)
+  if (trimmed.length > 80) return false;
+
+  return true;
+}
+
+/**
+ * Scan the last 5 paragraphs for a hook candidate. If found and there
+ * are trailing padding paragraphs after it, remove them.
+ *
+ * Conservative: only removes clearly padding paragraphs after a clear hook.
+ */
+export function trimPostHookPadding(text: string): string {
+  const paragraphs = text.split("\n\n").map(p => p.trim()).filter(p => p.length > 0);
+
+  if (paragraphs.length < 2) return text;
+
+  // Scan last 5 paragraphs for a hook candidate that has trailing content.
+  // We search forward from the window start so we find the hook that
+  // maximizes the amount of trailing padding we can remove.
+  const searchStart = Math.max(0, paragraphs.length - 5);
+  let hookIndex = -1;
+
+  for (let i = searchStart; i < paragraphs.length - 1; i++) {
+    if (isHookCandidate(paragraphs[i])) {
+      // Verify at least the immediate next paragraph is padding —
+      // this avoids picking a "hook" whose trailing content is real.
+      if (isPaddingParagraph(paragraphs[i + 1])) {
+        hookIndex = i;
+        // Keep scanning; a later hook is better if it also has trailing padding
+      }
+    }
+  }
+
+  // No hook found — return unchanged
+  if (hookIndex === -1) return text;
+
+  // No trailing paragraphs after hook — nothing to trim
+  if (hookIndex >= paragraphs.length - 1) return text;
+
+  // Check if ALL paragraphs after the hook are padding
+  const trailing = paragraphs.slice(hookIndex + 1);
+  const allPadding = trailing.every(p => isPaddingParagraph(p));
+
+  if (!allPadding) return text;
+
+  // Remove trailing padding paragraphs
+  return paragraphs.slice(0, hookIndex + 1).join("\n\n");
+}
+
+// ---------------------------------------------------------------------------
 // RuleGuardAgent — PipelineAgent implementation
 // ---------------------------------------------------------------------------
 
@@ -455,6 +575,9 @@ export class RuleGuardAgent implements PipelineAgent {
     ctx.text = deduplicateParagraphs(ctx.text);
     ctx.text = deduplicateSentences(ctx.text);
     ctx.text = fixEndingRepeat(ctx.text);
+
+    // Trim mood-summary padding after a strong hook ending
+    ctx.text = trimPostHookPadding(ctx.text);
 
     // Fix sentence start repetition (e.g., "세레인이... 세레인은... 세레인의..." → pronoun)
     const genderMap = new Map<string, string>();
