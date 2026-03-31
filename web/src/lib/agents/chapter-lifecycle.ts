@@ -8,6 +8,7 @@ import { RuleGuardAgent } from "./rule-guard";
 import { ConsistencyChecker } from "./consistency-checker";
 import { QualityLoop } from "./quality-loop";
 import { PolisherAgent } from "./polisher-agent";
+import { FinalRewriterAgent } from "./final-rewriter";
 import { enforceLength } from "./length-enforcer";
 import { getChapterLengthConfig } from "../policy/narrative-rules";
 
@@ -62,6 +63,7 @@ export async function* runChapterLifecycle(
     new ConsistencyChecker(),
     new QualityLoop(),
     new PolisherAgent(),
+    new FinalRewriterAgent(),
   ];
 
   for (const agent of pipeline) {

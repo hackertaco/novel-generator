@@ -177,6 +177,8 @@ function lazyPipeline(): PipelineStepConfig[] {
   const { QualityLoop } = require("../agents/quality-loop");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { PolisherAgent } = require("../agents/polisher-agent");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { FinalRewriterAgent } = require("../agents/final-rewriter");
 
   return [
     { create: () => new WriterAgent(), enabled: true },
@@ -185,6 +187,7 @@ function lazyPipeline(): PipelineStepConfig[] {
     { create: () => new ConsistencyChecker(), enabled: true },
     { create: () => new QualityLoop(), enabled: true },
     { create: () => new PolisherAgent(), enabled: true },
+    { create: () => new FinalRewriterAgent(), enabled: true },
   ];
 }
 
@@ -196,6 +199,7 @@ export function getDefaultConfig(name = "default"): HarnessConfig {
   pipeline[3].enabled = false; // ConsistencyChecker — full-text LLM rewrite undoes RuleGuard fixes
   pipeline[4].enabled = false; // QualityLoop
   pipeline[5].enabled = false; // Polisher — overlaps with RuleGuard, LLM rewrites undo deterministic fixes
+  // FinalRewriter (index 6) stays enabled — final editorial polish pass
   return {
     name,
     models: DEFAULT_MODELS,
