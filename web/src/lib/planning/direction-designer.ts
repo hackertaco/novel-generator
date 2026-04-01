@@ -11,25 +11,56 @@ import { DirectionDesignSchema, type DirectionDesign } from "@/lib/schema/direct
 import type { NovelSeed } from "@/lib/schema/novel";
 import type { TokenUsage } from "@/lib/agents/types";
 
+/** Roles considered "key" characters — limit address_matrix to these. */
+const KEY_ROLES = new Set(["mc", "ml", "fl", "rival", "mentor", "villain"]);
+const MAX_ADDRESS_CHARS = 5;
+
+/**
+ * Select key characters from the seed (mc, ml + up to 3 important supporting).
+ */
+function selectKeyCharacters(seed: NovelSeed) {
+  const key = seed.characters.filter((c) => KEY_ROLES.has(c.role));
+  const rest = seed.characters.filter((c) => !KEY_ROLES.has(c.role));
+  const selected = [...key, ...rest].slice(0, MAX_ADDRESS_CHARS);
+  return selected;
+}
+
+/**
+ * Compute up to 3 chapter ranges for info_budget / emotion_curve.
+ * e.g. total=30 → "1-3", "4-15", "16-30"
+ */
+function computeChapterRanges(totalChapters: number): string[] {
+  if (totalChapters <= 5) return [`1-${totalChapters}`];
+  if (totalChapters <= 15) {
+    return ["1-3", `4-${totalChapters}`];
+  }
+  const mid = Math.floor(totalChapters * 0.4);
+  return ["1-3", `4-${mid}`, `${mid + 1}-${totalChapters}`];
+}
+
 /**
  * Build the prompt for generating a DirectionDesign from a seed.
+ * Scoped to key characters and 3 chapter ranges to keep output compact.
  */
 export function buildDirectionDesignPrompt(seed: NovelSeed): string {
-  // Build character pairs for address matrix
+  const keyChars = selectKeyCharacters(seed);
+
+  // Build character pairs only for key characters
   const charPairs: string[] = [];
-  for (let i = 0; i < seed.characters.length; i++) {
-    for (let j = 0; j < seed.characters.length; j++) {
+  for (let i = 0; i < keyChars.length; i++) {
+    for (let j = 0; j < keyChars.length; j++) {
       if (i === j) continue;
-      const a = seed.characters[i];
-      const b = seed.characters[j];
-      charPairs.push(`${a.name}(${a.role}${a.social_rank ? `/${a.social_rank}` : ""}) → ${b.name}(${b.role}${b.social_rank ? `/${b.social_rank}` : ""})`);
+      const a = keyChars[i];
+      const b = keyChars[j];
+      charPairs.push(`${a.name}(${a.role}) → ${b.name}(${b.role})`);
     }
   }
 
   // Build arc info for emotion curve
-  const arcInfo = seed.arcs.map((a) =>
-    `- ${a.name} (${a.start_chapter}~${a.end_chapter}화): ${a.summary}`,
-  ).join("\n");
+  const arcInfo = seed.arcs
+    .slice(0, 3)
+    .map((a) => `- ${a.name} (${a.start_chapter}~${a.end_chapter}화): ${a.summary}`)
+    .join("\n");
 
   // Chapter 1 outline for hook strategy
   const ch1Outline = seed.chapter_outlines.find((o) => o.chapter_number === 1);
@@ -37,7 +68,10 @@ export function buildDirectionDesignPrompt(seed: NovelSeed): string {
     ? `1화 아웃라인: ${ch1Outline.one_liner}\n핵심 사건: ${ch1Outline.key_points.map((p) => typeof p === "string" ? p : p.what).join(", ")}`
     : "1화 아웃라인 없음";
 
-  return `당신은 한국 웹소설 연출 설계 전문가입니다. 소설 시드를 분석하고, 서사 연출에 필요한 메타데이터를 생성해주세요.
+  const ranges = computeChapterRanges(seed.total_chapters);
+  const rangeExamples = ranges.map((r) => `"${r}"`).join(", ");
+
+  return `당신은 한국 웹소설 연출 설계 전문가입니다.
 
 ## 소설 정보
 제목: ${seed.title}
@@ -45,97 +79,35 @@ export function buildDirectionDesignPrompt(seed: NovelSeed): string {
 장르: ${seed.world.genre} / ${seed.world.sub_genre}
 총 화수: ${seed.total_chapters}
 
-## 캐릭터
-${seed.characters.map((c) => `- ${c.name} (${c.role}${c.social_rank ? `/${c.social_rank}` : ""}): ${c.voice.tone}, 성격: ${c.voice.personality_core}`).join("\n")}
+## 핵심 캐릭터 (${keyChars.length}명)
+${keyChars.map((c) => `- ${c.name} (${c.role}): ${c.voice.tone}`).join("\n")}
 
-## 아크 구조
+## 아크 (상위 3개)
 ${arcInfo || "미정"}
 
 ## ${ch1Info}
 
 ---
 
-다음 4가지를 생성해주세요:
+**반드시 아래 JSON 구조만 출력하세요. 설명, 마크다운 코드블록 없이 순수 JSON만.**
 
-### 1. 호칭 매트릭스 (address_matrix)
-각 캐릭터 쌍에 대해 호칭과 존댓말 수준을 정의하세요.
-고려할 캐릭터 쌍:
-${charPairs.join("\n")}
+4가지를 생성:
 
-**규칙:**
-- social_rank가 높은 쪽에게는 격식체/존댓말
-- 같은 rank면 관계에 따라 결정
-- 비밀 관계(예: 적이지만 연인)면 공식/비공식 호칭 구분 note에 기재
-- 예시: from:"카시안", to:"레오나", address:"레오나", speech_level:"casual", note:"둘만 있을 때"
+1. **address_matrix**: 위 핵심 캐릭터 쌍만 (${charPairs.length}개 항목)
+   대상 쌍: ${charPairs.join(", ")}
+   각 항목: { "from", "to", "address" (호칭), "speech_level" ("formal"|"polite"|"casual"|"intimate"), "note"? }
 
-### 2. 정보 예산 (info_budget)
-챕터 구간별로 정보 공개량을 제한하세요.
+2. **info_budget**: 정확히 ${ranges.length}개 항목, chapter_range: ${rangeExamples}
+   각 항목: { "chapter_range", "new_characters_max" (정수), "new_concepts_max" (정수), "worldbuilding_style" ("action_only"|"brief_aside"|"narration_ok"), "backstory_allowed" ("none"|"one_sentence"|"brief_flashback"|"full_scene"), "info_priority" (문자열 배열, 2-3개) }
 
-**구간 예시:**
-- "1-3" (도입): 새 캐릭터 2명 이하, 새 개념 1개, 행동으로만 전달, 회상 금지
-- "4-10" (전개): 새 캐릭터 3명, 새 개념 2개, 짧은 설명 허용, 한 문장 회상
-- "11-30" (심화): 새 캐릭터 2명, 새 개념 3개, 서술 허용, 회상 씬 가능
+3. **emotion_curve**: 정확히 ${ranges.length}개 항목, chapter_range: ${rangeExamples}
+   각 항목: { "chapter_range", "primary_emotion", "tension_range" (예: "3→7"), "reader_question" }
 
-**info_priority에는 각 구간에서 독자에게 알려줄 정보를 우선순위대로 나열하세요.**
+4. **hook_strategy**: 1개 객체
+   { "opening_scene", "reader_knows_in_3_paragraphs" (3개 문자열 배열), "reader_must_NOT_know" (1-2개 문자열 배열), "emotional_hook" }
 
-### 3. 감정 커브 (emotion_curve)
-챕터 구간별 목표 감정과 긴장도를 설정하세요.
-
-**규칙:**
-- primary_emotion: 궁금, 긴장, 설렘, 분노, 슬픔, 카타르시스, 공포, 안도 등
-- tension_range: "3→7" (점진적 상승) 또는 "steady 5" (유지)
-- reader_question: 독자가 이 구간에서 품어야 할 핵심 질문
-
-### 4. 1화 훅 전략 (hook_strategy)
-1화 첫 3문단의 구체적 전략을 세우세요.
-
-**규칙:**
-- opening_scene: 가장 흥미로운 순간부터 시작 (in medias res 권장)
-- reader_knows_in_3_paragraphs: 3문단 안에 독자가 알아야 할 정보 3가지
-- reader_must_NOT_know: 1화에서 절대 밝히면 안 되는 정보 (서스펜스)
-- emotional_hook: 독자가 느낄 감정적 매력 포인트
-
-## 출력 형식 (JSON)
-
-\`\`\`json
-{
-  "address_matrix": [
-    {
-      "from": "카시안",
-      "to": "레오나",
-      "address": "레오나",
-      "speech_level": "casual",
-      "note": "둘만 있을 때"
-    }
-  ],
-  "info_budget": [
-    {
-      "chapter_range": "1-3",
-      "new_characters_max": 2,
-      "new_concepts_max": 1,
-      "worldbuilding_style": "action_only",
-      "backstory_allowed": "none",
-      "info_priority": ["주인공의 처지", "세계관 핵심 규칙"]
-    }
-  ],
-  "emotion_curve": [
-    {
-      "chapter_range": "1-3",
-      "primary_emotion": "궁금",
-      "tension_range": "3→6",
-      "reader_question": "이 주인공은 어떻게 살아남을까?"
-    }
-  ],
-  "hook_strategy": {
-    "opening_scene": "독화살이 날아오는 혼례식 한가운데",
-    "reader_knows_in_3_paragraphs": ["주인공은 적국 공주", "정략 결혼", "누군가 황제를 죽이려 함"],
-    "reader_must_NOT_know": ["황제가 이미 알고 있었다는 사실"],
-    "emotional_hook": "죽을 수도 있는 상황에서 냉정한 주인공의 매력"
-  }
-}
-\`\`\`
-
-JSON만 출력하세요.`;
+출력:
+{"address_matrix":[...],"info_budget":[...],"emotion_curve":[...],"hook_strategy":{...}}`;
 }
 
 /**
@@ -145,13 +117,15 @@ JSON만 출력하세요.`;
 function buildFallbackDesign(seed: NovelSeed): DirectionDesign {
   console.warn("[direction-designer] LLM 생성 실패, 폴백 사용");
 
-  // Minimal address matrix from character relationships
+  const keyChars = selectKeyCharacters(seed);
+
+  // Minimal address matrix from key characters
   const addressMatrix = [];
-  for (let i = 0; i < seed.characters.length; i++) {
-    for (let j = 0; j < seed.characters.length; j++) {
+  for (let i = 0; i < keyChars.length; i++) {
+    for (let j = 0; j < keyChars.length; j++) {
       if (i === j) continue;
-      const from = seed.characters[i];
-      const to = seed.characters[j];
+      const from = keyChars[i];
+      const to = keyChars[j];
       addressMatrix.push({
         from: from.name,
         to: to.name,
@@ -161,28 +135,77 @@ function buildFallbackDesign(seed: NovelSeed): DirectionDesign {
     }
   }
 
+  const ranges = computeChapterRanges(seed.total_chapters);
+
   return {
     address_matrix: addressMatrix,
-    info_budget: [
-      {
-        chapter_range: "1-3",
-        new_characters_max: 2,
-        new_concepts_max: 1,
-        worldbuilding_style: "action_only" as const,
-        backstory_allowed: "none" as const,
-        info_priority: [],
-      },
-    ],
-    emotion_curve: [
-      {
-        chapter_range: "1-3",
-        primary_emotion: "궁금",
-        tension_range: "3→6",
-        reader_question: "이 이야기는 어디로 향하는가?",
-      },
-    ],
+    info_budget: ranges.map((r) => ({
+      chapter_range: r,
+      new_characters_max: 2,
+      new_concepts_max: 1,
+      worldbuilding_style: "action_only" as const,
+      backstory_allowed: "none" as const,
+      info_priority: [],
+    })),
+    emotion_curve: ranges.map((r) => ({
+      chapter_range: r,
+      primary_emotion: "궁금",
+      tension_range: "3→6",
+      reader_question: "이 이야기는 어디로 향하는가?",
+    })),
     hook_strategy: undefined,
   };
+}
+
+/**
+ * Attempt to repair truncated JSON by closing open brackets/braces.
+ * Returns null if repair is not feasible.
+ */
+function tryRepairTruncatedJson(raw: string): unknown | null {
+  // Find the start of JSON
+  const jsonStart = raw.indexOf("{");
+  if (jsonStart === -1) return null;
+
+  let text = raw.slice(jsonStart);
+
+  // Track open brackets/braces
+  const stack: string[] = [];
+  let inString = false;
+  let escape = false;
+
+  for (const ch of text) {
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (ch === "{") stack.push("}");
+    else if (ch === "[") stack.push("]");
+    else if (ch === "}" || ch === "]") stack.pop();
+  }
+
+  // If we're in a string, close it
+  if (inString) text += '"';
+
+  // Close all open brackets/braces
+  while (stack.length > 0) {
+    text += stack.pop();
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -197,27 +220,82 @@ export async function generateDirectionDesign(
   const agent = getAgent();
   const prompt = buildDirectionDesignPrompt(seed);
 
-  let result;
+  // --- Attempt 1: structured call with schema validation ---
   try {
-    result = await agent.callStructured({
+    const result = await agent.callStructured({
       prompt,
-      system: "당신은 한국 웹소설 연출 설계 전문가입니다. 반드시 유효한 JSON만 출력하세요. 마크다운 코드블록이나 설명 없이 순수 JSON만.",
+      system: "한국 웹소설 연출 설계 전문가. 유효한 JSON만 출력. 마크다운 코드블록 금지.",
       temperature: 0.5,
-      maxTokens: 8000,
+      maxTokens: 8192,
       schema: DirectionDesignSchema,
       format: "json",
       taskId: "direction-design",
+      retryCount: 2,
     });
-  } catch (err) {
-    console.warn(`[direction-designer] 구조적 호출 실패, 폴백 사용: ${err instanceof Error ? err.message : err}`);
-    return {
-      data: buildFallbackDesign(seed),
-      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 },
-    };
+    return { data: result.data, usage: result.usage };
+  } catch (structuredErr) {
+    console.warn(
+      `[direction-designer] 구조적 호출 실패: ${structuredErr instanceof Error ? structuredErr.message : structuredErr}`
+    );
   }
 
+  // --- Attempt 2: plain text call + manual parse (handles truncation) ---
+  try {
+    const plainResult = await agent.call({
+      prompt,
+      system: "한국 웹소설 연출 설계 전문가. 유효한 JSON만 출력. 코드블록 금지. 간결하게.",
+      temperature: 0.5,
+      maxTokens: 8192,
+      taskId: "direction-design-plain",
+    });
+
+    const rawText = plainResult.data;
+
+    // Try normal parse first
+    let parsed: unknown = null;
+    try {
+      // Extract JSON from possible markdown blocks
+      const jsonMatch = rawText.match(/```json\s*([\s\S]*?)```/)
+        || rawText.match(/```\s*([\s\S]*?)```/);
+      const jsonText = jsonMatch ? jsonMatch[1].trim() : rawText.trim();
+      const startIdx = jsonText.indexOf("{");
+      if (startIdx !== -1) {
+        parsed = JSON.parse(jsonText.slice(startIdx));
+      }
+    } catch {
+      // JSON was likely truncated — attempt repair
+      console.warn("[direction-designer] JSON 파싱 실패, 복구 시도...");
+      parsed = tryRepairTruncatedJson(rawText);
+    }
+
+    if (parsed) {
+      const validation = DirectionDesignSchema.safeParse(parsed);
+      if (validation.success) {
+        return { data: validation.data, usage: plainResult.usage };
+      }
+      // Partial parse succeeded but validation failed — try with defaults
+      console.warn("[direction-designer] 스키마 검증 실패, 부분 데이터 사용 시도");
+      const partial = parsed as Record<string, unknown>;
+      const patched = {
+        address_matrix: Array.isArray(partial.address_matrix) ? partial.address_matrix : [],
+        info_budget: Array.isArray(partial.info_budget) ? partial.info_budget : [],
+        emotion_curve: Array.isArray(partial.emotion_curve) ? partial.emotion_curve : [],
+        hook_strategy: partial.hook_strategy ?? undefined,
+      };
+      const patchValidation = DirectionDesignSchema.safeParse(patched);
+      if (patchValidation.success) {
+        return { data: patchValidation.data, usage: plainResult.usage };
+      }
+    }
+  } catch (plainErr) {
+    console.warn(
+      `[direction-designer] 일반 호출도 실패: ${plainErr instanceof Error ? plainErr.message : plainErr}`
+    );
+  }
+
+  // --- Attempt 3: static fallback ---
   return {
-    data: result.data,
-    usage: result.usage,
+    data: buildFallbackDesign(seed),
+    usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 },
   };
 }

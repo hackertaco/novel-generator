@@ -4,6 +4,37 @@ import { NARRATIVE_RULES, generatePromptRules, generateCoreRulesBlock } from "..
 export { NARRATIVE_RULES, generatePromptRules };
 
 // ---------------------------------------------------------------------------
+// 문체 프리셋 (Writing Style Presets)
+// ---------------------------------------------------------------------------
+export type WritingStyle = "A타입" | "C타입";
+
+/** 현재 기본 문체. C타입(쉽고 가벼운 구어체)이 기본값. */
+export const DEFAULT_WRITING_STYLE: WritingStyle = "C타입";
+
+const STYLE_PRESETS: Record<WritingStyle, string> = {
+  /** A타입 — 정제된 문어체 (기존 스타일) */
+  "A타입": `## 문체 (A타입 — 정제된 문어체)
+- 한 문장에 하나의 정보만. 복문보다 단문.
+- 비유는 직관적으로. "금속성 냄새" ❌ → "피 냄새" ✅
+- 수식어는 최소한. "이상할 만큼 얇게 깔린 서늘한" ❌ → "서늘한" ✅
+- 감각 묘사는 구체적이되 과하지 않게. 한 문단에 감각 1-2개.
+- 독자가 "이게 뭔 소리야?" 하면 실패. 모든 문장이 한 번 읽고 이해돼야 한다.`,
+
+  /** C타입 — 쉽고 가벼운 구어체 (DEFAULT) */
+  "C타입": `## 문체 (C타입 — 쉽고 가벼운 구어체)
+- 문장은 20자 이하를 기본으로. 30자 넘으면 쪼개세요.
+- 한자어보다 순우리말. "대답하지 않았다" → "입을 다물었다"
+- 수식어 최소. "그 짧은 지체가 리아의 등을 서늘하게 훑었다" → "등이 서늘했다. 늦으면 끝이다."
+- 서술은 직접적으로. "~라는 것이었다" "~하기 때문이었다" 금지.
+- 내면 묘사는 짧고 날카롭게. "계산이 끝났다." (O) "그 침묵 속에서 복잡한 계산이 끝난 것이었다." (X)
+- 독자에게 말하듯 쓰세요. 논문처럼 쓰지 마세요.`,
+};
+
+export function getStyleBlock(style: WritingStyle = DEFAULT_WRITING_STYLE): string {
+  return STYLE_PRESETS[style];
+}
+
+// ---------------------------------------------------------------------------
 // The "6 core rules" block is generated from NARRATIVE_RULES.
 // Each genre prompt inserts it via CORE_RULES_BLOCK instead of hardcoding.
 // ---------------------------------------------------------------------------
@@ -11,13 +42,17 @@ const CORE_RULES_BLOCK = `## ★ 핵심 6대 규칙 (반드시 준수) ★
 
 ${generateCoreRulesBlock()}`;
 
-const WRITING_TONE_BLOCK = `## 분량 제한 (절대 규칙)
-- 최소 ${NARRATIVE_RULES.chapterLengthLimit.minChars}자, 최대 ${NARRATIVE_RULES.chapterLengthLimit.targetChars + Math.round(NARRATIVE_RULES.chapterLengthLimit.targetChars * NARRATIVE_RULES.chapterLengthLimit.tolerance)}자.
-- ${NARRATIVE_RULES.chapterLengthLimit.minChars}자 미만이면 내용이 부족합니다. 씬을 더 풍성하게 쓰세요.
-- ${NARRATIVE_RULES.chapterLengthLimit.targetChars + Math.round(NARRATIVE_RULES.chapterLengthLimit.targetChars * NARRATIVE_RULES.chapterLengthLimit.tolerance)}자가 넘으면 남은 씬은 다음 화로 미루세요.
+function buildWritingToneBlock(style: WritingStyle = DEFAULT_WRITING_STYLE): string {
+  const maxChars = NARRATIVE_RULES.chapterLengthLimit.targetChars + Math.round(NARRATIVE_RULES.chapterLengthLimit.targetChars * NARRATIVE_RULES.chapterLengthLimit.tolerance);
+  const minChars = NARRATIVE_RULES.chapterLengthLimit.minChars;
+
+  return `## 분량 제한 (절대 규칙)
+- 최소 ${minChars}자, 최대 ${maxChars}자.
+- ${minChars}자 미만이면 내용이 부족합니다. 씬을 더 풍성하게 쓰세요.
+- ${maxChars}자가 넘으면 남은 씬은 다음 화로 미루세요.
 - 블루프린트에 씬이 3개 이상이어도, 2개까지만 쓰고 나머지는 버리세요.
 - 글이 길어지면 독자가 지칩니다. 짧고 강렬하게.
-- ${NARRATIVE_RULES.chapterLengthLimit.targetChars + Math.round(NARRATIVE_RULES.chapterLengthLimit.targetChars * NARRATIVE_RULES.chapterLengthLimit.tolerance)}자 안에 끝나지 않는 씬은 중간에서 절단신공으로 끊으세요.
+- ${maxChars}자 안에 끝나지 않는 씬은 중간에서 절단신공으로 끊으세요.
 
 ## 이해 가능성 (가장 중요한 규칙)
 독자는 매 문단에서 "지금 무슨 일이 벌어지는지"와 "왜 중요한지"를 알 수 있어야 합니다.
@@ -49,6 +84,16 @@ const WRITING_TONE_BLOCK = `## 분량 제한 (절대 규칙)
    ✅ (문단 내 행동하는 캐릭터 1명) "그녀는 문을 닫았다." → 허용
    ✅ (여성 2명이 동시에 행동) "세라가 문을 닫았다." → 이름 사용
 
+### 인물 첫 등장 (절대 규칙)
+캐릭터가 챕터에서 처음 등장할 때, 반드시 이름 앞이나 뒤에 역할/관계를 붙이세요.
+- ❌ "리아 벨른은 서쪽 기둥 옆에 서 있었다." (누구?)
+- ✅ "왕의 호위 리아 벨른은 서쪽 기둥 옆에 서 있었다." (역할이 보임)
+- ❌ "세레나 발테르가 단상 가까이 다가왔다." (누구?)
+- ✅ "의회 대표 세레나 발테르가 단상 가까이 다가왔다." (관계가 보임)
+
+첫 등장 이후에는 이름만 써도 됩니다. 하지만 첫 번째는 반드시 "역할+이름" 형태로.
+주인공도 예외 아닙니다. 1화 1문단에서 주인공의 역할을 밝히세요.
+
 ### 정보 전달
 5. **인물 소개**: 새 인물이 처음 등장하면 1문장으로 누구인지 알려주세요.
    ❌ "유진의 구두 끝이 대리석 앞에서 멈췄다."
@@ -72,14 +117,19 @@ const WRITING_TONE_BLOCK = `## 분량 제한 (절대 규칙)
 
 ## 글쓰기 톤
 당신은 카카오페이지 인기 웹소설 작가입니다. 중학생도 술술 읽을 수 있는 쉽고 명확한 문장을 씁니다.
-- 한 문장에 하나의 정보만. 복문보다 단문.
-- 비유는 직관적으로. "금속성 냄새" ❌ → "피 냄새" ✅
-- 수식어는 최소한. "이상할 만큼 얇게 깔린 서늘한" ❌ → "서늘한" ✅
-- 감각 묘사는 구체적이되 과하지 않게. 한 문단에 감각 1-2개.
-- 독자가 "이게 뭔 소리야?" 하면 실패. 모든 문장이 한 번 읽고 이해돼야 한다.
 - ${NARRATIVE_RULES.nameConsistency.promptText} 성씨를 새로 만들지 마세요.
 
+${getStyleBlock(style)}
+
+## 카메라 규칙 (한 문단 = 한 시선)
+- 한 문단에서 묘사하는 대상은 최대 2개.
+- ❌ "천장 아래 촛대가 타오르고, 왕좌에는 카셀이 앉고, 귀족들이 원을 이루고, 출입문에 호위가 서고, 탁자에 잔이 남아 있었다." (대상 5개)
+- ✅ "천장 아래 금빛 촛대가 줄지어 타올랐다. 홀 끝 왕좌에 카셀이 앉아 있었다." (대상 2개)
+- 다음 문단에서 다른 대상으로 넘어가세요.
+- 장소 진입 시: 공간 전체 → 핵심 인물 → 눈에 띄는 사물. 각각 별도 문단.
+
 `;
+}
 
 const WRITER_SYSTEM_PROMPTS: Record<string, string> = {
   default: `당신은 카카오페이지 상위 랭킹 웹소설 전문 작가입니다.
@@ -214,7 +264,11 @@ ${NARRATIVE_RULES.cameraScanPattern.promptText}
 
 마지막 문장은 15자 이내의 짧고 강렬한 문장이 이상적입니다.`;
 
-export function getWriterSystemPrompt(genre: string, chapterNumber: number): string {
+export function getWriterSystemPrompt(
+  genre: string,
+  chapterNumber: number,
+  style: WritingStyle = DEFAULT_WRITING_STYLE,
+): string {
   // 장르 매칭 (부분 매칭)
   let prompt = WRITER_SYSTEM_PROMPTS.default;
 
@@ -233,7 +287,7 @@ export function getWriterSystemPrompt(genre: string, chapterNumber: number): str
     prompt = WRITER_SYSTEM_PROMPTS["로맨스 판타지"];
   }
 
-  let result = WRITING_TONE_BLOCK + prompt + UNIVERSAL_RULES_SUFFIX;
+  let result = buildWritingToneBlock(style) + prompt + UNIVERSAL_RULES_SUFFIX;
 
   if (chapterNumber === 1) {
     result += `
