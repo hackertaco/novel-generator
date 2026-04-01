@@ -1,6 +1,7 @@
 import type { NovelSeed } from "@/lib/schema/novel";
 import type { ChapterSummary } from "@/lib/schema/chapter";
 import type { ChapterBlueprint } from "@/lib/schema/planning";
+import type { DirectionDesign } from "@/lib/schema/direction";
 import type { TokenUsage } from "@/lib/agents/types";
 
 /** Lightweight summary passed between pipeline stages (not the full ChapterSummary). */
@@ -74,6 +75,8 @@ export interface ChapterContext {
   fastMode?: boolean;
   /** Generate scenes in parallel + bridge stitching (fastest) */
   parallelMode?: boolean;
+  /** Direction design metadata (address matrix, info budget, emotion curve, hook strategy) */
+  directionDesign?: DirectionDesign;
 }
 
 // --- LifecycleEvent (defined here to avoid circular imports; chapter-lifecycle.ts re-exports from here) ---

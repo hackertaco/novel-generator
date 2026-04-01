@@ -2,6 +2,13 @@
 import type { NovelSeed } from "@/lib/schema/novel";
 import { getActiveThreadsForChapter, formatThreadRevealsForPrompt } from "@/lib/schema/novel";
 import type { PartPlan, ArcPlan } from "@/lib/schema/planning";
+import type { DirectionDesign } from "@/lib/schema/direction";
+import {
+  getInfoBudgetForChapter,
+  getEmotionTargetForChapter,
+  formatInfoBudgetForPrompt,
+  formatEmotionTargetForPrompt,
+} from "@/lib/schema/direction";
 
 /**
  * L1: Master Plan — analyze seed's world complexity and derive part structure.
@@ -185,8 +192,30 @@ export function getChapterBlueprintPrompt(
     unresolved_tension: string;
   } | null,
   targetChapter?: number,
+  directionDesign?: DirectionDesign,
 ): string {
   const recentSummaries = previousChapterSummaries.slice(-5);
+
+  // Direction design context (info budget + emotion target for this chapter)
+  let directionSection = "";
+  if (directionDesign) {
+    const chapterNum = targetChapter ?? arc.start_chapter;
+    const dirParts: string[] = [];
+
+    const infoBudget = getInfoBudgetForChapter(directionDesign, chapterNum);
+    if (infoBudget) {
+      dirParts.push(`### 정보 예산 (이 화의 정보 공개 제한)\n${formatInfoBudgetForPrompt(infoBudget)}`);
+    }
+
+    const emotionTarget = getEmotionTargetForChapter(directionDesign, chapterNum);
+    if (emotionTarget) {
+      dirParts.push(`### 감정 목표\n${formatEmotionTargetForPrompt(emotionTarget)}`);
+    }
+
+    if (dirParts.length > 0) {
+      directionSection = `\n## 연출 설계 (반드시 반영)\n${dirParts.join("\n\n")}\n`;
+    }
+  }
 
   return `당신은 한국 웹소설 기획 전문가입니다. 아크 내 각 화의 세부 블루프린트를 작성해주세요.
 
@@ -238,7 +267,7 @@ ${seed.foreshadowing
   .join("\n") || "없음"}
 
 ${recentSummaries.length > 0 ? `## 이전 내용 요약\n${recentSummaries.map((s) => `- ${s.chapter}화: ${s.summary}`).join("\n")}` : ""}
-
+${directionSection}
 ${endingSceneState ? `## ⚠️ 직전 화 종료 시점 상태 (다음 화는 반드시 이 상태에서 이어져야 합니다!)
 - 시간: ${endingSceneState.time_of_day}
 - 장소: ${endingSceneState.location}

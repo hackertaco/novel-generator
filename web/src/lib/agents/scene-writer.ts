@@ -10,6 +10,16 @@ import { getAgent } from "./llm-agent";
 import type { NovelSeed } from "@/lib/schema/novel";
 import { getForeshadowingActions, getActiveThreadsForChapter, formatThreadRevealsForPrompt } from "@/lib/schema/novel";
 import type { ChapterBlueprint, SceneSpec } from "@/lib/schema/planning";
+import type { DirectionDesign } from "@/lib/schema/direction";
+import {
+  getAddressEntriesForCharacters,
+  getInfoBudgetForChapter,
+  getEmotionTargetForChapter,
+  formatAddressMatrixForPrompt,
+  formatInfoBudgetForPrompt,
+  formatEmotionTargetForPrompt,
+  formatHookStrategyForPrompt,
+} from "@/lib/schema/direction";
 import type { TokenUsage } from "@/lib/agents/types";
 import { validateScene, buildSceneRepairPrompt } from "./scene-validator";
 import { planBeats, writeSceneByBeats } from "./beat-writer";
@@ -43,6 +53,8 @@ export interface SceneWriterOptions {
   fastMode?: boolean;
   /** Generate scenes in parallel + bridge stitching (fastest) */
   parallelMode?: boolean;
+  /** Direction design metadata (address matrix, info budget, emotion curve, hook strategy) */
+  directionDesign?: DirectionDesign;
 }
 
 export interface SceneWriterResult {
@@ -74,6 +86,7 @@ export function buildScenePrompt(
     threadReminders?: string[];
     correctionContext?: string;
     previousChapterEnding?: string;
+    directionDesign?: DirectionDesign;
   },
 ): string {
   const parts: string[] = [];
@@ -299,6 +312,40 @@ ${lastScene.slice(-800)}
     parts.push(`# 톤 가이드\n${extras.toneGuidance}\n`);
   }
 
+  // Direction design injection (address matrix, info budget, emotion curve, hook strategy)
+  if (extras?.directionDesign) {
+    const dd = extras.directionDesign;
+    const directionParts: string[] = [];
+
+    // Address matrix for characters in this scene
+    const sceneCharNames = sceneChars.filter(Boolean).map((c) => c!.name);
+    const addressEntries = getAddressEntriesForCharacters(dd, sceneCharNames);
+    if (addressEntries.length > 0) {
+      directionParts.push(`## 호칭 규칙 (반드시 준수!)\n${formatAddressMatrixForPrompt(addressEntries)}`);
+    }
+
+    // Info budget for this chapter
+    const infoBudget = getInfoBudgetForChapter(dd, chapterNumber);
+    if (infoBudget) {
+      directionParts.push(`## 정보 예산\n${formatInfoBudgetForPrompt(infoBudget)}`);
+    }
+
+    // Emotion target for this chapter
+    const emotionTarget = getEmotionTargetForChapter(dd, chapterNumber);
+    if (emotionTarget) {
+      directionParts.push(`## 감정 목표\n${formatEmotionTargetForPrompt(emotionTarget)}`);
+    }
+
+    // Hook strategy for chapter 1
+    if (chapterNumber === 1 && sceneIndex === 0 && dd.hook_strategy) {
+      directionParts.push(`## 1화 훅 전략\n${formatHookStrategyForPrompt(dd.hook_strategy)}`);
+    }
+
+    if (directionParts.length > 0) {
+      parts.push(`# 연출 설계\n${directionParts.join("\n\n")}\n`);
+    }
+  }
+
   // Warn about already-covered content from previous chapters
   if (sceneIndex === 0 && previousSummaries.length > 0) {
     const lastSummary = previousSummaries[previousSummaries.length - 1];
@@ -498,6 +545,7 @@ export async function writeChapterByScenes(
     correctionContext,
     previousChapterEnding,
     fastMode,
+    directionDesign,
   } = options;
 
   const agent = getAgent();
@@ -538,7 +586,7 @@ export async function writeChapterByScenes(
       const scenePrompt = buildScenePrompt(
         seed, chapterNumber, blueprint, scene, i,
         sceneTexts, previousSummaries,
-        { memoryContext, toneGuidance, progressContext, threadReminders, correctionContext, previousChapterEnding },
+        { memoryContext, toneGuidance, progressContext, threadReminders, correctionContext, previousChapterEnding, directionDesign },
       );
       const result = await agent.call({
         prompt: scenePrompt,
@@ -562,6 +610,7 @@ export async function writeChapterByScenes(
         systemPrompt,
         model,
         previousChapterEnding,
+        directionDesign,
       });
       totalUsage = addUsage(totalUsage, beatResult.usage);
       sceneText = beatResult.text;
@@ -664,6 +713,7 @@ export async function writeChapterParallel(
     threadReminders,
     correctionContext,
     previousChapterEnding,
+    directionDesign,
   } = options;
 
   const agent = getAgent();
@@ -700,6 +750,7 @@ export async function writeChapterParallel(
         threadReminders: i >= blueprint.scenes.length - 2 ? threadReminders : undefined,
         correctionContext,
         previousChapterEnding: previousChapterEnding,
+        directionDesign,
       },
     );
 

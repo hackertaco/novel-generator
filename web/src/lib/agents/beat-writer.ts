@@ -11,6 +11,16 @@ import { getAgent } from "./llm-agent";
 import type { NovelSeed } from "@/lib/schema/novel";
 import { getActiveThreadsForChapter, formatThreadRevealsForPrompt } from "@/lib/schema/novel";
 import type { SceneSpec } from "@/lib/schema/planning";
+import type { DirectionDesign } from "@/lib/schema/direction";
+import {
+  getAddressEntriesForCharacters,
+  getInfoBudgetForChapter,
+  getEmotionTargetForChapter,
+  formatAddressMatrixForPrompt,
+  formatInfoBudgetForPrompt,
+  formatEmotionTargetForPrompt,
+  formatHookStrategyForPrompt,
+} from "@/lib/schema/direction";
 import type { TokenUsage } from "@/lib/agents/types";
 
 // ---------------------------------------------------------------------------
@@ -238,8 +248,9 @@ export async function writeSceneByBeats(options: {
   systemPrompt: string;
   model?: string;
   previousChapterEnding?: string; // actual text from previous chapter for continuity
+  directionDesign?: DirectionDesign; // direction design metadata
 }): Promise<BeatWriterResult> {
-  const { beats, scene, seed, chapterNumber, previousText, systemPrompt, model, previousChapterEnding } = options;
+  const { beats, scene, seed, chapterNumber, previousText, systemPrompt, model, previousChapterEnding, directionDesign } = options;
   const agent = getAgent();
   let totalUsage: TokenUsage = { ...ZERO_USAGE };
   const beatTexts: string[] = [];
@@ -291,11 +302,39 @@ ${previousChapterEnding}
       ? `\n# 캐릭터 내면 가이드\n${formatThreadRevealsForPrompt(activeReveals)}\n`
       : "";
 
+    // Direction design context
+    let directionBlock = "";
+    if (directionDesign) {
+      const ddParts: string[] = [];
+      const sceneCharNames = scene.characters
+        .map((id) => seed.characters.find((c) => c.id === id))
+        .filter(Boolean)
+        .map((c) => c!.name);
+      const addressEntries = getAddressEntriesForCharacters(directionDesign, sceneCharNames);
+      if (addressEntries.length > 0) {
+        ddParts.push(`호칭 규칙:\n${formatAddressMatrixForPrompt(addressEntries)}`);
+      }
+      const infoBudget = getInfoBudgetForChapter(directionDesign, chapterNumber);
+      if (infoBudget) {
+        ddParts.push(`정보 예산:\n${formatInfoBudgetForPrompt(infoBudget)}`);
+      }
+      const emotionTarget = getEmotionTargetForChapter(directionDesign, chapterNumber);
+      if (emotionTarget) {
+        ddParts.push(`감정 목표: ${formatEmotionTargetForPrompt(emotionTarget)}`);
+      }
+      if (chapterNumber === 1 && i === 0 && directionDesign.hook_strategy) {
+        ddParts.push(`1화 훅 전략:\n${formatHookStrategyForPrompt(directionDesign.hook_strategy)}`);
+      }
+      if (ddParts.length > 0) {
+        directionBlock = `\n# 연출 설계\n${ddParts.join("\n")}\n`;
+      }
+    }
+
     const prompt = `# 소설 정보
 제목: ${seed.title} | 장르: ${seed.world.genre} | ${chapterNumber}화
 감정톤: ${scene.emotional_tone}
 ${emotionalLine}
-${sceneContextBlock}${threadGuideBlock}
+${sceneContextBlock}${threadGuideBlock}${directionBlock}
 # 캐릭터 목소리
 ${charVoices}
 

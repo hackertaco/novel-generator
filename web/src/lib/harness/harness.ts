@@ -9,6 +9,7 @@
 import type { NovelSeed } from "../schema/novel";
 import type { ChapterSummary } from "../schema/chapter";
 import type { MasterPlan, ChapterBlueprint } from "../schema/planning";
+import type { DirectionDesign } from "../schema/direction";
 import type { ChapterContext, LifecycleEvent, PipelineAgent } from "../agents/pipeline";
 import type { HarnessConfig } from "./config";
 import type { TokenUsage } from "../agents/types";
@@ -91,6 +92,7 @@ export class NovelHarness {
   private _plots?: PlotOption[];
   private _selectedPlot?: PlotOption;
   private _seed?: NovelSeed;
+  private _directionDesign?: DirectionDesign;
 
   // Tracking subsystems
   private memory?: HierarchicalMemory;
@@ -117,6 +119,7 @@ export class NovelHarness {
       selectedPlot: this._selectedPlot,
       seed: this._seed,
       masterPlan: this.masterPlan,
+      directionDesign: this._directionDesign,
     };
   }
 
@@ -351,7 +354,7 @@ export class NovelHarness {
       }
       if (arc && scheduler.needsChapterBlueprint(chapterNumber)) {
         try {
-          const bpResult = await generateChapterBlueprints(seed, arc, previousSummaries, previousChapterEnding, endingSceneState, chapterNumber);
+          const bpResult = await generateChapterBlueprints(seed, arc, previousSummaries, previousChapterEnding, endingSceneState, chapterNumber, this._directionDesign);
           arc.chapter_blueprints = [...(arc.chapter_blueprints || []).filter(bp => bp.chapter_number !== chapterNumber), ...bpResult.data];
         } catch (err) {
           console.warn(`[harness] 블루프린트 생성 실패, 최소 블루프린트 생성: ${err instanceof Error ? err.message : err}`);
@@ -438,6 +441,7 @@ export class NovelHarness {
       previousChapterEnding,
       fastMode: this.config.fastMode,
       parallelMode: this.config.parallelMode,
+      directionDesign: this._directionDesign,
     };
 
     // Run pipeline
@@ -528,6 +532,17 @@ export class NovelHarness {
         // advances_thread is applied to outlines inside generateStoryThreads
       } catch (err) {
         console.warn("[harness] story_threads 생성 실패, 스킵:", err instanceof Error ? err.message : err);
+      }
+    }
+
+    // Generate direction design (address matrix, info budget, emotion curve, hook strategy)
+    if (!this._directionDesign) {
+      try {
+        const { generateDirectionDesign } = await import("../planning/direction-designer");
+        const ddResult = await generateDirectionDesign(seed);
+        this._directionDesign = ddResult.data;
+      } catch (err) {
+        console.warn("[harness] 연출 설계 생성 실��, 스킵:", err instanceof Error ? err.message : err);
       }
     }
 
@@ -738,6 +753,17 @@ ${plot.arc_summary.map((a: string) => `- ${a}`).join("\n")}
       }
     } catch (err) {
       console.warn(`[harness] 개연성 검증 실패, 건너뜀: ${err instanceof Error ? err.message : err}`);
+    }
+
+    // Direction design (address matrix, info budget, emotion curve, hook strategy)
+    if (!this._directionDesign) {
+      try {
+        const { generateDirectionDesign } = await import("../planning/direction-designer");
+        const ddResult = await generateDirectionDesign(s);
+        this._directionDesign = ddResult.data;
+      } catch (err) {
+        console.warn(`[harness] 연출 설계 생성 실패, 스킵: ${err instanceof Error ? err.message : err}`);
+      }
     }
 
     // Master plan

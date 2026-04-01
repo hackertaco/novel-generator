@@ -2,6 +2,7 @@ import { getAgent } from "@/lib/agents/llm-agent";
 import { getChapterBlueprintPrompt } from "@/lib/prompts/planning-prompts";
 import { ChapterBlueprintSchema, type ChapterBlueprint, type ArcPlan } from "@/lib/schema/planning";
 import type { NovelSeed } from "@/lib/schema/novel";
+import type { DirectionDesign } from "@/lib/schema/direction";
 import type { TokenUsage } from "@/lib/agents/types";
 import { z } from "zod";
 
@@ -28,9 +29,10 @@ export async function generateChapterBlueprints(
     unresolved_tension: string;
   } | null,
   targetChapter?: number,
+  directionDesign?: DirectionDesign,
 ): Promise<{ data: ChapterBlueprint[]; usage: TokenUsage }> {
   const agent = getAgent();
-  const prompt = getChapterBlueprintPrompt(seed, arc, previousChapterSummaries, previousChapterEnding, endingSceneState, targetChapter);
+  const prompt = getChapterBlueprintPrompt(seed, arc, previousChapterSummaries, previousChapterEnding, endingSceneState, targetChapter, directionDesign);
 
   const result = await agent.callStructured({
     prompt,

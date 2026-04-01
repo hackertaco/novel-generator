@@ -3,6 +3,10 @@ import { getFinalRewriterSystemPrompt } from "@/lib/prompts/final-rewriter-promp
 import { sanitize } from "./rule-guard";
 import { accumulateUsage } from "./pipeline";
 import type { PipelineAgent, ChapterContext, LifecycleEvent } from "./pipeline";
+import {
+  getAddressEntriesForCharacters,
+  formatAddressMatrixForPrompt,
+} from "@/lib/schema/direction";
 
 /**
  * Build the user prompt for the FinalRewriter agent.
@@ -13,11 +17,25 @@ export function buildFinalRewriterPrompt(
   text: string,
   genre: string,
   chapterNumber: number,
+  ctx?: ChapterContext,
 ): string {
   const parts: string[] = [];
 
   parts.push(`장르: ${genre}`);
   parts.push(`회차: ${chapterNumber}화`);
+
+  // Inject address matrix from direction design if available
+  if (ctx?.directionDesign) {
+    const allCharNames = ctx.seed.characters.map((c) => c.name);
+    const addressEntries = getAddressEntriesForCharacters(ctx.directionDesign, allCharNames);
+    if (addressEntries.length > 0) {
+      parts.push("");
+      parts.push("## 호칭 규칙 (편집 시 반드시 확인!)");
+      parts.push(formatAddressMatrixForPrompt(addressEntries));
+      parts.push("⚠️ 호칭이 위 규칙과 다르면 수정하세요.");
+    }
+  }
+
   parts.push("");
   parts.push("## 다듬을 본문");
   parts.push("");
@@ -46,7 +64,7 @@ export class FinalRewriterAgent implements PipelineAgent {
     yield { type: "stage_change", stage: "final-rewriting" };
 
     const genre = ctx.seed.world.genre;
-    const prompt = buildFinalRewriterPrompt(ctx.text, genre, ctx.chapterNumber);
+    const prompt = buildFinalRewriterPrompt(ctx.text, genre, ctx.chapterNumber, ctx);
     const system = getFinalRewriterSystemPrompt();
 
     // Use repair model (gpt-4o) to keep costs low
