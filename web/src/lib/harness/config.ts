@@ -34,9 +34,9 @@ export const DEFAULT_MODELS: ModelConfig = {
 
 export const BUDGET_MODELS: ModelConfig = {
   planning: "gpt-4o",
-  writing: "gpt-4o",
+  writing: "gpt-5.4",     // writing quality is non-negotiable
   critique: "gpt-4o-mini",
-  repair: "gpt-4o-mini",
+  repair: "gpt-4o",       // repair/rewriter needs decent quality for 문체 consistency
   default: "gpt-4o-mini",
 };
 
