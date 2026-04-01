@@ -146,15 +146,20 @@ function detectSceneRestart(paragraphs: string[]): number {
   const locationWords = openingText.match(new RegExp(`(?:[가-힣]+\\s*)?(?:${PLACE_SUFFIXES})`, "g")) || [];
   if (locationWords.length === 0) return -1;
 
-  // Look for the same location words appearing in a "scene opening" pattern later
-  // (paragraph starting with location + time/atmosphere description)
-  const openingPattern = /[,.].*(?:밝|어두|비|가득|정오|새벽|밤|저녁|아침|빛|차가|따뜻|조용|넓)/;
-  for (let i = Math.max(3, Math.floor(paragraphs.length * 0.3)); i < paragraphs.length; i++) {
+  // A scene restart must:
+  // 1. Paragraph STARTS with a known location (in first 30 chars)
+  // 2. Contains a time marker (정오, 밤, 아침, 새벽, 저녁, 당일, 직전 etc.)
+  // 3. Is at least 40% into the text
+  // 4. The paragraph is long (>60 chars) — scene openings describe multiple things
+  const TIME_WORDS = /정오|밤|아침|새벽|저녁|당일|직전|직후|한낮|황혼|자정|해가|달이|날이/;
+  for (let i = Math.max(4, Math.floor(paragraphs.length * 0.4)); i < paragraphs.length; i++) {
     const para = paragraphs[i];
-    // Check if this paragraph contains an opening location AND looks like a scene start
-    const hasLocation = locationWords.some(loc => para.includes(loc));
-    const looksLikeOpening = openingPattern.test(para) && para.length > 30;
-    if (hasLocation && looksLikeOpening) {
+    if (para.length < 60) continue;
+    // Location must appear in the first 30 characters (scene opening, not mid-mention)
+    const paraStart = para.slice(0, 30);
+    const hasLocationAtStart = locationWords.some(loc => paraStart.includes(loc));
+    const hasTimeWord = TIME_WORDS.test(para);
+    if (hasLocationAtStart && hasTimeWord) {
       return i;
     }
   }
