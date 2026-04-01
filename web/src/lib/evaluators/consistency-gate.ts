@@ -434,6 +434,9 @@ function checkRankConsistency(
   for (const character of characters) {
     const rank = character.social_rank;
     if (!rank) continue;
+    // "commoner" is the default — skip rank checks as seed generation
+    // often defaults to commoner even for titled characters
+    if (rank === "commoner") continue;
 
     // For each title word from OTHER rank groups, check if it appears right before the character name
     for (const [title, titleRank] of TITLE_TO_RANK) {
@@ -477,6 +480,9 @@ const KOREAN_HONORIFICS = new Set([
   "영애", "공녀", "전하", "폐하", "공작", "공자", "백작", "후작", "남작",
   "시녀", "기사", "님", "씨", "양", "군", "경", "선배", "후배", "교수",
   "대장", "장군", "대감", "나리", "마마", "아가씨", "도련님",
+  // Common words that follow first names but are NOT surnames
+  "자신", "혼자", "쪽으로", "쪽에", "쪽을", "앞에", "뒤에", "옆에",
+  "역시", "만이", "조차", "마저", "뿐이", "때문", "덕분", "탓에",
 ]);
 
 /**
