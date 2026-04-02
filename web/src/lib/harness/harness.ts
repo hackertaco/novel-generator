@@ -31,6 +31,7 @@ import { generateSeedCandidates } from "../planning/seed-evolver";
 import { evaluateCandidate } from "../evolution/candidate-evaluator";
 import { crossoverSeeds } from "../evolution/seed-crossover";
 import type { PlotOption } from "../schema/plot";
+import { generatePartOutlines, getPartBoundaries } from "../planning/part-planner";
 
 // Tracking imports
 import { HierarchicalMemory, summarizeChapter } from "../memory";
@@ -599,6 +600,9 @@ export class NovelHarness {
       console.warn(`[harness] 인과 그래프 검증 실패, 건너뜀: ${err instanceof Error ? err.message : err}`);
     }
 
+    // Ensure all extended outlines are generated upfront
+    await this.generateRemainingOutlines(seed);
+
     const chapters: ChapterResult[] = [];
     // Seed summaries from caller (for continuation from previous chapters)
     const summaries: Array<{ chapter: number; title: string; summary: string }> = [
@@ -613,29 +617,8 @@ export class NovelHarness {
         break;
       }
 
-      // Part-level outline generation — trigger when current Part is 80% consumed
-      try {
-        const { shouldGeneratePartOutlines, generatePartOutlines } = await import("../planning/part-planner");
-        const partNeed = shouldGeneratePartOutlines(seed, ch);
-        if (partNeed) {
-          console.log(`[harness] Part${partNeed.partNumber} 아웃라인 생성 시작 (${partNeed.startChapter}~${partNeed.endChapter}화)`);
-          const partResult = await generatePartOutlines(
-            seed,
-            partNeed.partNumber,
-            partNeed.startChapter,
-            partNeed.endChapter,
-            summaries,
-          );
-          // Merge new outlines into seed
-          seed.extended_outlines = [
-            ...(seed.extended_outlines || []),
-            ...partResult.outlines,
-          ];
-          console.log(`[harness] Part${partNeed.partNumber} 아웃라인 ${partResult.outlines.length}화 생성 완료`);
-        }
-      } catch (err) {
-        console.warn(`[harness] Part 아웃라인 생성 실패, 건너뜀: ${err instanceof Error ? err.message : err}`);
-      }
+      // NOTE: Part-level outlines are now generated upfront at seed time (see stepSeed / generateRemainingOutlines).
+      // The lazy shouldGeneratePartOutlines check has been removed.
 
       const previousEnding = chapters.length > 0
         ? chapters[chapters.length - 1].text.slice(-500)
@@ -746,9 +729,70 @@ ${plot.arc_summary.map((a: string) => `- ${a}`).join("\n")}
         this._seed = best.candidate.seed;
       }
 
+      // Generate remaining extended outlines (151 ~ total_chapters) upfront
+      // The seed prompt already generates 11-150; this covers the rest.
+      await this.generateRemainingOutlines(this._seed);
+
       yield { type: "seed_generated", seed: this._seed };
     } catch (err) {
       yield { type: "error", chapter: 0, message: `시드 생성 실패: ${err instanceof Error ? err.message : err}` };
+    }
+  }
+
+  /**
+   * Generate extended outlines for chapters not covered by the seed prompt.
+   *
+   * The seed prompt generates outlines for chapters 11-150.
+   * This method fills in the remaining chapters (151 to total_chapters)
+   * using the part-planner utility. If extended_outlines is empty (backward
+   * compatibility), it does nothing.
+   */
+  private async generateRemainingOutlines(seed: NovelSeed): Promise<void> {
+    const totalChapters = seed.total_chapters || 300;
+    const existingOutlines = seed.extended_outlines || [];
+
+    // Find the highest chapter already covered
+    const maxCovered = existingOutlines.reduce(
+      (max, o) => Math.max(max, o.chapter_number),
+      0,
+    );
+
+    // If we already cover all chapters, or the seed came back empty (backward compat), skip
+    if (maxCovered === 0 || maxCovered >= totalChapters) return;
+
+    const remainingStart = maxCovered + 1;
+    if (remainingStart > totalChapters) return;
+
+    console.log(`[harness] 잔여 아웃라인 생성: ${remainingStart}~${totalChapters}화`);
+
+    try {
+      // Determine which part boundaries still need outlines
+      const boundaries = getPartBoundaries(seed);
+      const uncoveredParts = boundaries.filter(
+        (b) => b.end > maxCovered && b.start <= totalChapters,
+      );
+
+      for (const part of uncoveredParts) {
+        const start = Math.max(part.start, remainingStart);
+        const end = Math.min(part.end, totalChapters);
+        if (start > end) continue;
+
+        // Check if this range already has outlines
+        const hasOutlines = existingOutlines.some(
+          (o) => o.chapter_number >= start && o.chapter_number <= end,
+        );
+        if (hasOutlines) continue;
+
+        console.log(`[harness] Part${part.part} 아웃라인 생성 (${start}~${end}화)`);
+        const partResult = await generatePartOutlines(seed, part.part, start, end, []);
+        seed.extended_outlines = [
+          ...(seed.extended_outlines || []),
+          ...partResult.outlines,
+        ];
+        console.log(`[harness] Part${part.part} 아웃라인 ${partResult.outlines.length}화 생성 완료`);
+      }
+    } catch (err) {
+      console.warn(`[harness] 잔여 아웃라인 생성 실패, 건너뜀: ${err instanceof Error ? err.message : err}`);
     }
   }
 
