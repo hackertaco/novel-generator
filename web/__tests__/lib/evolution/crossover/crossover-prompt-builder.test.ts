@@ -129,6 +129,7 @@ function makeBaseSeed(overrides: Partial<NovelSeed> = {}): NovelSeed {
         tension_level: 4,
       },
     ],
+    extended_outlines: [],
     foreshadowing: [
       {
         id: "fs_1",

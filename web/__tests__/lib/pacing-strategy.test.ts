@@ -157,6 +157,7 @@ const MOCK_SEED: NovelSeed = {
       tension_level: 4,
     },
   ],
+  extended_outlines: [],
   foreshadowing: [
     {
       id: "fs_1",

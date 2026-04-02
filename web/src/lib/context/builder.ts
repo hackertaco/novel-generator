@@ -155,6 +155,22 @@ ${currentArc.summary}
 ${points.map((p) => formatPlotPoint(p)).join("\n")}
 긴장도: ${outline.tension_level}/10
 `);
+  } else {
+    // Fallback: use extended_outlines for chapters beyond the detailed set
+    const extOutline = seed.extended_outlines?.find(
+      (o) => o.chapter_number === chapterNum,
+    );
+    if (extOutline) {
+      const revealThreads = (extOutline.reveals || [])
+        .map((tid: string) => seed.story_threads?.find((t: { id: string }) => t.id === tid))
+        .filter(Boolean) as Array<{ id: string; name: string; type?: string }>;
+      const threads = revealThreads.map((t) => `${t.type === "main" ? "🔴 메인" : "🔵 서브"}: ${t.name}`);
+
+      parts.push(`# ${chapterNum}화 아웃라인 (확장)
+제목: ${extOutline.title}
+핵심: ${extOutline.one_liner}${threads.length > 0 ? `\n이번 화가 진전시키는 스토리 라인:\n${threads.map((t: string) => `- ${t}`).join("\n")}` : ""}
+`);
+    }
   }
 
   // Characters — filter by introduction_chapter to prevent premature appearances
@@ -274,6 +290,16 @@ export function buildSmartChapterContext(options: SmartContextOptions): string {
     parts.push(
       `# ${chapterNum}화 아웃라인\n제목: ${outline.title}\n핵심: ${outline.one_liner}\n포인트:\n${outline.key_points.map((p) => `- ${p}`).join("\n")}\n긴장도: ${outline.tension_level}/10\n`,
     );
+  } else {
+    // Fallback: extended outlines for chapters beyond the detailed set
+    const extOutline = seed.extended_outlines?.find(
+      (o) => o.chapter_number === chapterNum,
+    );
+    if (extOutline) {
+      parts.push(
+        `# ${chapterNum}화 아웃라인 (확장)\n제목: ${extOutline.title}\n핵심: ${extOutline.one_liner}\n`,
+      );
+    }
   }
 
   // Characters (always include characters for this chapter)

@@ -57,6 +57,7 @@ function makeSeed(
       characters_involved: [],
       tension_level: 5,
     })),
+    extended_outlines: [],
     foreshadowing: [],
     style: {
       max_paragraph_length: 3,

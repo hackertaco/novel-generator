@@ -173,6 +173,15 @@ export const WorldSettingSchema = z.object({
 
 export type WorldSetting = z.infer<typeof WorldSettingSchema>;
 
+export const ExtendedOutlineSchema = z.object({
+  chapter_number: z.number().int(),
+  title: z.string(),
+  one_liner: z.string(),
+  reveals: z.array(z.string()).default([]).describe("Which story_thread IDs get advanced this chapter"),
+});
+
+export type ExtendedOutline = z.infer<typeof ExtendedOutlineSchema>;
+
 export const NovelSeedSchema = z.object({
   // Meta
   title: z.string().describe("Novel title"),
@@ -191,6 +200,11 @@ export const NovelSeedSchema = z.object({
   // Plot structure
   arcs: z.array(PlotArcSchema).default([]),
   chapter_outlines: z.array(ChapterOutlineSchema).default([]),
+
+  // Extended outlines — lightweight (title + one_liner) for chapters beyond the initial 10
+  extended_outlines: z.array(ExtendedOutlineSchema).default([]).describe(
+    "Part-level outlines for chapters beyond the initial detailed 10. Generated per-Part as needed."
+  ),
 
   // Foreshadowing (timeline set here)
   foreshadowing: z.array(ForeshadowingSchema).default([]),

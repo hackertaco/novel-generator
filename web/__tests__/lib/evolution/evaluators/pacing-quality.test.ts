@@ -50,6 +50,7 @@ function makeSeed(chapterOverrides: Partial<{
       characters_involved: [],
       tension_level: o.tension_level ?? 3,
     })),
+    extended_outlines: [],
     foreshadowing: [],
     style: {
       max_paragraph_length: 3,

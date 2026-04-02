@@ -246,16 +246,28 @@ ${(() => {
 })()}
 
 ## 챕터 아웃라인 (what/why)
-${seed.chapter_outlines
-  .filter((o) => o.chapter_number >= arc.start_chapter && o.chapter_number <= arc.end_chapter)
-  .map((o) => {
-    const points = o.key_points.map((p) => {
-      if (typeof p === "string") return p;
-      return `${p.what}${p.why ? ` (이유: ${p.why})` : ""}${p.reveal === "delayed" ? " [서스펜스 — 아직 밝히지 않음]" : ""}`;
-    }).join("; ");
-    const threads = (o.advances_thread || []).join(", ");
-    return `- ${o.chapter_number}화: ${o.one_liner}${threads ? ` [${threads}]` : ""}${points ? ` | ${points}` : ""}`;
-  }).join("\n")}
+${(() => {
+  // Detailed outlines (chapters 1-10 typically)
+  const detailed = seed.chapter_outlines
+    .filter((o) => o.chapter_number >= arc.start_chapter && o.chapter_number <= arc.end_chapter)
+    .map((o) => {
+      const points = o.key_points.map((p) => {
+        if (typeof p === "string") return p;
+        return `${p.what}${p.why ? ` (이유: ${p.why})` : ""}${p.reveal === "delayed" ? " [서스펜스 — 아직 밝히지 않음]" : ""}`;
+      }).join("; ");
+      const threads = (o.advances_thread || []).join(", ");
+      return `- ${o.chapter_number}화: ${o.one_liner}${threads ? ` [${threads}]` : ""}${points ? ` | ${points}` : ""}`;
+    });
+  // Extended outlines (lightweight, for chapters beyond the detailed set)
+  const detailedChapters = new Set(seed.chapter_outlines.map((o) => o.chapter_number));
+  const extended = (seed.extended_outlines || [])
+    .filter((o) => o.chapter_number >= arc.start_chapter && o.chapter_number <= arc.end_chapter && !detailedChapters.has(o.chapter_number))
+    .map((o) => {
+      const reveals = (o.reveals || []).join(", ");
+      return `- ${o.chapter_number}화: ${o.one_liner}${reveals ? ` [진전: ${reveals}]` : ""}`;
+    });
+  return [...detailed, ...extended].join("\n") || "아웃라인 없음";
+})()}
 
 ## 캐릭터
 ${seed.characters.map((c) => `- ${c.name} (${c.role}${c.social_rank ? `/${c.social_rank}` : ""}): ${c.voice.tone}`).join("\n")}

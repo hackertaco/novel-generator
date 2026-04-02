@@ -24,6 +24,7 @@ describe("/api/evaluate smoke test", () => {
     }],
     arcs: [{ id: "arc_1", name: "1부", start_chapter: 1, end_chapter: 50, summary: "요약", key_events: [], climax_chapter: 48 }],
     chapter_outlines: [],
+    extended_outlines: [],
     story_threads: [],
     foreshadowing: [],
     style: { max_paragraph_length: 3, dialogue_ratio: 0.6, sentence_style: "short", hook_ending: true, pov: "1인칭", tense: "과거형", formatting_rules: [] },

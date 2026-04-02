@@ -363,15 +363,18 @@ export class NovelHarness {
           // Generate a minimal blueprint from seed data so we don't fall back to
           // uncontrolled single-shot generation
           const outline = seed.chapter_outlines.find((o) => o.chapter_number === chapterNumber);
+          const extOutline = !outline
+            ? seed.extended_outlines?.find((o) => o.chapter_number === chapterNumber)
+            : undefined;
           const prevCharNames = previousChapterEnding
             ? seed.characters.filter((c) => previousChapterEnding.includes(c.name)).map((c) => c.id)
             : seed.characters.filter((c) => c.introduction_chapter <= chapterNumber).slice(0, 3).map((c) => c.id);
 
           arc.chapter_blueprints = [{
             chapter_number: chapterNumber,
-            title: outline?.title || `${chapterNumber}화`,
+            title: outline?.title || extOutline?.title || `${chapterNumber}화`,
             arc_id: arc.id,
-            one_liner: outline?.one_liner || arc.summary,
+            one_liner: outline?.one_liner || extOutline?.one_liner || arc.summary,
             role_in_arc: chapterNumber <= arc.start_chapter + 2 ? "setup" : "rising_action",
             scenes: [
               {
@@ -457,7 +460,10 @@ export class NovelHarness {
 
     // Extract summary
     const outline = seed.chapter_outlines.find((o) => o.chapter_number === chapterNumber);
-    const title = blueprint?.title || outline?.title || `${chapterNumber}화`;
+    const extOutline = !outline
+      ? seed.extended_outlines?.find((o) => o.chapter_number === chapterNumber)
+      : undefined;
+    const title = blueprint?.title || outline?.title || extOutline?.title || `${chapterNumber}화`;
     const summary = extractSummaryRuleBased(chapterNumber, title, completedText, seed);
     summary.style_score = ctx.bestScore;
 
@@ -605,6 +611,30 @@ export class NovelHarness {
       if (this.config.budgetUsd !== null && totalUsage.cost_usd >= this.config.budgetUsd) {
         yield { type: "error", chapter: ch, message: `예산 초과: $${totalUsage.cost_usd.toFixed(4)}` };
         break;
+      }
+
+      // Part-level outline generation — trigger when current Part is 80% consumed
+      try {
+        const { shouldGeneratePartOutlines, generatePartOutlines } = await import("../planning/part-planner");
+        const partNeed = shouldGeneratePartOutlines(seed, ch);
+        if (partNeed) {
+          console.log(`[harness] Part${partNeed.partNumber} 아웃라인 생성 시작 (${partNeed.startChapter}~${partNeed.endChapter}화)`);
+          const partResult = await generatePartOutlines(
+            seed,
+            partNeed.partNumber,
+            partNeed.startChapter,
+            partNeed.endChapter,
+            summaries,
+          );
+          // Merge new outlines into seed
+          seed.extended_outlines = [
+            ...(seed.extended_outlines || []),
+            ...partResult.outlines,
+          ];
+          console.log(`[harness] Part${partNeed.partNumber} 아웃라인 ${partResult.outlines.length}화 생성 완료`);
+        }
+      } catch (err) {
+        console.warn(`[harness] Part 아웃라인 생성 실패, 건너뜀: ${err instanceof Error ? err.message : err}`);
       }
 
       const previousEnding = chapters.length > 0

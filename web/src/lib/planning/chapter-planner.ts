@@ -81,6 +81,16 @@ export async function generateChapterBlueprints(
 
     // Flow key_points.why → scene must_reveal (connect planning layers)
     const outline = seed.chapter_outlines.find((o) => o.chapter_number === bp.chapter_number);
+    const extOutline = !outline
+      ? seed.extended_outlines?.find((o) => o.chapter_number === bp.chapter_number)
+      : undefined;
+
+    // For extended outlines without key_points, inject the one_liner as context
+    if (!outline && extOutline && bp.scenes.length > 0 && !bp.scenes[0].must_reveal?.length) {
+      bp.scenes[0].must_reveal = bp.scenes[0].must_reveal || [];
+      bp.scenes[0].must_reveal.push(extOutline.one_liner);
+    }
+
     if (outline && outline.key_points.length > 0) {
       const reveals: string[] = [];
       for (const point of outline.key_points) {

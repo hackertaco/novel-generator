@@ -56,6 +56,7 @@ const testSeed: NovelSeed = {
     },
   ],
   chapter_outlines: [],
+    extended_outlines: [],
   foreshadowing: [
     {
       id: "fs_ring",

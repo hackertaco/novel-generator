@@ -26,6 +26,7 @@ function makeSeed(overrides: Partial<{ characters: unknown[] }> = {}): NovelSeed
     story_threads: [],
     arcs: [],
     chapter_outlines: [],
+    extended_outlines: [],
     foreshadowing: [],
     style: { max_paragraph_length: 3, dialogue_ratio: 0.6, sentence_style: "short", hook_ending: true, pov: "1인칭", tense: "과거형", formatting_rules: [] },
   } as NovelSeed;

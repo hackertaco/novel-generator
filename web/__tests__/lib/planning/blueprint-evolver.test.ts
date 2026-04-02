@@ -42,6 +42,7 @@ function makeSeed(): NovelSeed {
     ],
     arcs: [{ id: "arc_1", name: "시작", start_chapter: 1, end_chapter: 10, summary: "", key_events: ["만남"], climax_chapter: 8 }],
     chapter_outlines: [],
+    extended_outlines: [],
     story_threads: [],
     foreshadowing: [
       { id: "fs_1", name: "복선1", description: "테스트", importance: "critical", planted_at: 2, hints_at: [5], reveal_at: 8, status: "pending", hint_count: 1 },

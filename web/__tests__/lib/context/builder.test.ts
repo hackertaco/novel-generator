@@ -65,6 +65,7 @@ const testSeed: NovelSeed = {
       tension_level: 6,
     },
   ],
+  extended_outlines: [],
   story_threads: [],
   foreshadowing: [
     {

@@ -86,6 +86,7 @@ function makeMinimalSeed(
     story_threads: [],
     arcs: [],
     chapter_outlines: [],
+    extended_outlines: [],
     foreshadowing: [],
     style: {
       max_paragraph_length: 3,
