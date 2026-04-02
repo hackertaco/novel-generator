@@ -65,6 +65,7 @@ export class WriterAgent implements PipelineAgent {
           correctionContext: ctx.trackingContext.correctionContext,
         } : {}),
         directionDesign,
+        worldStateContext: ctx.worldStateContext,
       });
 
       ctx.sceneTexts = sceneResult.sceneTexts;

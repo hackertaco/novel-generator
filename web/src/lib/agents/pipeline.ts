@@ -77,6 +77,8 @@ export interface ChapterContext {
   parallelMode?: boolean;
   /** Direction design metadata (address matrix, info budget, emotion curve, hook strategy) */
   directionDesign?: DirectionDesign;
+  /** Formatted world state context from WorldStateManager (facts + character states) */
+  worldStateContext?: string;
 }
 
 // --- LifecycleEvent (defined here to avoid circular imports; chapter-lifecycle.ts re-exports from here) ---

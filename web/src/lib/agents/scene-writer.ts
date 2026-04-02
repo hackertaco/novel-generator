@@ -55,6 +55,8 @@ export interface SceneWriterOptions {
   parallelMode?: boolean;
   /** Direction design metadata (address matrix, info budget, emotion curve, hook strategy) */
   directionDesign?: DirectionDesign;
+  /** Formatted world state context from WorldStateManager */
+  worldStateContext?: string;
 }
 
 export interface SceneWriterResult {
@@ -87,6 +89,7 @@ export function buildScenePrompt(
     correctionContext?: string;
     previousChapterEnding?: string;
     directionDesign?: DirectionDesign;
+    worldStateContext?: string;
   },
 ): string {
   const parts: string[] = [];
@@ -219,6 +222,11 @@ ${dialogues.map((d) => `  "${d}"`).join("\n") || '  (없음)'}${stateBlock}
 `);
       }
     }
+  }
+
+  // World state context (TKG facts + character states)
+  if (extras?.worldStateContext) {
+    parts.push(`# ${extras.worldStateContext}\n`);
   }
 
   // Previous context: hierarchical memory (preferred) or chapter summaries (fallback)
@@ -546,6 +554,7 @@ export async function writeChapterByScenes(
     previousChapterEnding,
     fastMode,
     directionDesign,
+    worldStateContext,
   } = options;
 
   const agent = getAgent();
@@ -586,7 +595,7 @@ export async function writeChapterByScenes(
       const scenePrompt = buildScenePrompt(
         seed, chapterNumber, blueprint, scene, i,
         sceneTexts, previousSummaries,
-        { memoryContext, toneGuidance, progressContext, threadReminders, correctionContext, previousChapterEnding, directionDesign },
+        { memoryContext, toneGuidance, progressContext, threadReminders, correctionContext, previousChapterEnding, directionDesign, worldStateContext },
       );
       const result = await agent.call({
         prompt: scenePrompt,
@@ -714,6 +723,7 @@ export async function writeChapterParallel(
     correctionContext,
     previousChapterEnding,
     directionDesign,
+    worldStateContext,
   } = options;
 
   const agent = getAgent();
@@ -748,6 +758,7 @@ export async function writeChapterParallel(
         toneGuidance,
         progressContext,
         threadReminders: i >= blueprint.scenes.length - 2 ? threadReminders : undefined,
+        worldStateContext,
         correctionContext,
         previousChapterEnding: previousChapterEnding,
         directionDesign,

@@ -44,6 +44,11 @@ import {
 } from "../tracking";
 import { FeedbackAccumulator, postProcessChapter } from "../feedback";
 
+// World state + progressive outliner imports
+import { WorldStateManager } from "../memory/world-state-manager";
+import { extractChapterFacts } from "../memory/fact-extractor";
+import { generateDetailedOutlines, needsDetailedOutline } from "../planning/progressive-outliner";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -104,6 +109,7 @@ export class NovelHarness {
   private feedbackAccumulator?: FeedbackAccumulator;
   private constraintChecker?: ConstraintChecker;
   private pendingCorrectionContext?: string;
+  private worldStateManager?: WorldStateManager;
 
   constructor(config?: Partial<HarnessConfig>) {
     this.config = { ...getDefaultConfig(), ...config };
@@ -138,6 +144,7 @@ export class NovelHarness {
     if (t.progress) this.progressMonitor = new ProgressMonitor(seed);
     if (t.feedback) this.feedbackAccumulator = new FeedbackAccumulator();
     this.constraintChecker = new ConstraintChecker(seed);
+    this.worldStateManager = new WorldStateManager();
   }
 
   private buildTrackingContext(seed: NovelSeed, chapterNumber: number) {
@@ -446,6 +453,9 @@ export class NovelHarness {
       fastMode: this.config.fastMode,
       parallelMode: this.config.parallelMode,
       directionDesign: this._directionDesign,
+      worldStateContext: this.worldStateManager && this.worldStateManager.size > 0
+        ? this.worldStateManager.formatForWriter(chapterNumber)
+        : undefined,
     };
 
     // Run pipeline
@@ -470,6 +480,27 @@ export class NovelHarness {
 
     // Post-chapter tracking
     await this.updateTracking(seed, chapterNumber, completedText);
+
+    // Post-chapter fact extraction (TKG) — runs in background, non-blocking on failure
+    if (this.worldStateManager) {
+      try {
+        const previousFacts = this.worldStateManager.getCurrentFacts();
+        const chapterWorldState = await extractChapterFacts(
+          completedText,
+          seed,
+          chapterNumber,
+          previousFacts,
+        );
+        // Detect contradictions before adding
+        const contradictions = this.worldStateManager.detectContradictions(chapterWorldState.facts);
+        if (contradictions.length > 0) {
+          console.warn(`[harness] ${chapterNumber}화 모순 감지: ${contradictions.map((c) => c.description).join("; ")}`);
+        }
+        this.worldStateManager.addChapterState(chapterWorldState);
+      } catch (err) {
+        console.warn(`[harness] ${chapterNumber}화 사실 추출 실패, 건너뜀:`, err instanceof Error ? err.message : err);
+      }
+    }
 
     // Validate character appearances against blueprint (informational — premature
     // introductions are now blocked at blueprint generation time in chapter-planner.ts)
@@ -619,6 +650,37 @@ export class NovelHarness {
 
       // NOTE: Part-level outlines are now generated upfront at seed time (see stepSeed / generateRemainingOutlines).
       // The lazy shouldGeneratePartOutlines check has been removed.
+
+      // Progressive detailed outline generation for chapters 11+
+      if (needsDetailedOutline(seed, ch)) {
+        try {
+          const batchEnd = Math.min(ch + 9, endChapter);
+          console.log(`[harness] ${ch}~${batchEnd}화 상세 아웃라인 생성`);
+          const detailedOutlines = await generateDetailedOutlines({
+            seed,
+            startChapter: ch,
+            endChapter: batchEnd,
+            worldState: this.worldStateManager,
+            previousSummaries: summaries.map((s) => ({ chapter: s.chapter, summary: s.summary })),
+          });
+          if (detailedOutlines.length > 0) {
+            // Merge into seed.chapter_outlines (replace or add)
+            for (const outline of detailedOutlines) {
+              const idx = seed.chapter_outlines.findIndex(
+                (o) => o.chapter_number === outline.chapter_number,
+              );
+              if (idx >= 0) {
+                seed.chapter_outlines[idx] = outline;
+              } else {
+                seed.chapter_outlines.push(outline);
+              }
+            }
+            console.log(`[harness] ${detailedOutlines.length}화 상세 아웃라인 생성 완료`);
+          }
+        } catch (err) {
+          console.warn(`[harness] 상세 아웃라인 생성 실패, 건너뜀:`, err instanceof Error ? err.message : err);
+        }
+      }
 
       const previousEnding = chapters.length > 0
         ? chapters[chapters.length - 1].text.slice(-500)
