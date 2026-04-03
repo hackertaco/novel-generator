@@ -134,11 +134,24 @@ ${chapterNumber}화 — ${blueprint.one_liner}
   const tensionLevel = chapterOutline?.tension_level ?? blueprint.tension_level ?? 5;
   if (chapterOutline) {
     const keyPtsStr = chapterOutline.key_points.length > 0
-      ? `\n핵심 사건: ${chapterOutline.key_points.join(" / ")}`
+      ? `\n핵심 사건: ${chapterOutline.key_points.map((p) => typeof p === "string" ? p : p.what).join(" / ")}`
       : "";
+
+    // Extract causality info from key_points for scene writer guidance
+    const causalityLines: string[] = [];
+    for (const p of chapterOutline.key_points) {
+      if (typeof p === "string") continue;
+      if (p.caused_by) causalityLines.push(`- 원인: ${p.caused_by}`);
+      if (p.prerequisite) causalityLines.push(`- 독자가 이미 알고 있어야 할 것: ${p.prerequisite}`);
+      if (p.consequence) causalityLines.push(`- 이 씬 이후 바뀌는 것: ${p.consequence}`);
+    }
+    const causalityBlock = causalityLines.length > 0
+      ? `\n\n## 이 씬의 인과관계\n${causalityLines.join("\n")}\n⚠️ 원인이 명시된 사건은 반드시 그 원인을 독자가 납득할 수 있게 연결하세요. 결과가 명시된 사건은 결과의 씨앗이 이 씬 안에서 보여야 합니다.`
+      : "";
+
     parts.push(`# 이번 화 설계
 ${chapterOutline.one_liner}${keyPtsStr}
-긴장도: ${tensionLevel}/10 — 이 챕터의 긴장도는 ${tensionLevel}/10입니다. 그에 맞는 페이스로 작성하세요.
+긴장도: ${tensionLevel}/10 — 이 챕터의 긴장도는 ${tensionLevel}/10입니다. 그에 맞는 페이스로 작성하세요.${causalityBlock}
 `);
   } else if (blueprint.tension_level != null) {
     parts.push(`# 이번 화 긴장도

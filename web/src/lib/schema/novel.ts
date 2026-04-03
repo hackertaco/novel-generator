@@ -66,6 +66,8 @@ export const PlotPointSchema = z.union([
   z.object({
     what: z.string().describe("무슨 일이 일어나는가"),
     why: z.string().default("").describe("왜 그런 일이 일어나는가 (내부 동기/원인)"),
+    caused_by: z.string().optional().describe("이전 화의 어떤 사건이 이것을 일으켰는가 (예: '1화에서 족쇄가 깨진 충격')"),
+    consequence: z.string().optional().describe("이 사건 때문에 무엇이 바뀌는가 (예: '이후 칼리언이 리에나를 더 가까이 두려 함')"),
     reveal: z.enum(["immediate", "delayed", "implicit"]).default("immediate").describe(
       "immediate: 독자에게 바로 설명. delayed: 숨기고 나중에 밝힘 (서스펜스). implicit: 힌트만 주고 추론하게 함"
     ),

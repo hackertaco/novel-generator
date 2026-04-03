@@ -253,7 +253,13 @@ ${(() => {
     .map((o) => {
       const points = o.key_points.map((p) => {
         if (typeof p === "string") return p;
-        return `${p.what}${p.why ? ` (이유: ${p.why})` : ""}${p.reveal === "delayed" ? " [서스펜스 — 아직 밝히지 않음]" : ""}`;
+        const parts: string[] = [p.what];
+        if (p.why) parts.push(`이유: ${p.why}`);
+        if (p.caused_by) parts.push(`원인: ${p.caused_by}`);
+        if (p.consequence) parts.push(`결과: ${p.consequence}`);
+        if (p.prerequisite) parts.push(`전제: ${p.prerequisite}`);
+        if (p.reveal === "delayed") parts.push("[서스펜스 — 아직 밝히지 않음]");
+        return parts.join(" | ");
       }).join("; ");
       const threads = (o.advances_thread || []).join(", ");
       return `- ${o.chapter_number}화: ${o.one_liner}${threads ? ` [${threads}]` : ""}${points ? ` | ${points}` : ""}`;
