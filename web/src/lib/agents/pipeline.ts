@@ -79,6 +79,8 @@ export interface ChapterContext {
   directionDesign?: DirectionDesign;
   /** Formatted world state context from WorldStateManager (facts + character states) */
   worldStateContext?: string;
+  /** Anti-repeat context: previous chapters' key dialogues/actions to avoid repetition */
+  antiRepeatContext?: string;
 }
 
 // --- LifecycleEvent (defined here to avoid circular imports; chapter-lifecycle.ts re-exports from here) ---

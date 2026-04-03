@@ -21,13 +21,28 @@ export const CharacterStateSchema = z.object({
   })),
 });
 
+export const KeyDialogueSchema = z.object({
+  speaker: z.string(),
+  line: z.string(),              // actual dialogue text
+  context: z.string(),           // brief context
+});
+
+export const KeyActionSchema = z.object({
+  character: z.string(),
+  action: z.string(),            // e.g. "테오가 리에나 옷자락을 붙잡음"
+});
+
 export const ChapterWorldStateSchema = z.object({
   chapter: z.number(),
   facts: z.array(WorldFactSchema),
   character_states: z.array(CharacterStateSchema),
   summary: z.string(),          // 1-2 sentence chapter summary
+  key_dialogues: z.array(KeyDialogueSchema).optional(),
+  key_actions: z.array(KeyActionSchema).optional(),
 });
 
 export type WorldFact = z.infer<typeof WorldFactSchema>;
 export type CharacterState = z.infer<typeof CharacterStateSchema>;
+export type KeyDialogue = z.infer<typeof KeyDialogueSchema>;
+export type KeyAction = z.infer<typeof KeyActionSchema>;
 export type ChapterWorldState = z.infer<typeof ChapterWorldStateSchema>;

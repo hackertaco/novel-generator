@@ -456,6 +456,9 @@ export class NovelHarness {
       worldStateContext: this.worldStateManager && this.worldStateManager.size > 0
         ? this.worldStateManager.formatForWriter(chapterNumber)
         : undefined,
+      antiRepeatContext: this.worldStateManager && this.worldStateManager.size > 0
+        ? this.worldStateManager.formatAntiRepeatContext(chapterNumber)
+        : undefined,
     };
 
     // Run pipeline

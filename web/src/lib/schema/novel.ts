@@ -71,6 +71,7 @@ export const PlotPointSchema = z.union([
     ),
     reveal_at: z.number().int().optional().describe("delayed일 때, 몇 화에서 밝히는지"),
     prerequisite: z.string().optional().describe("이 사건이 일어나려면 독자가 미리 알아야 할 전제 (예: '에단에게 마력이 있다')"),
+    different_from_prev: z.string().optional().describe("이전 화와 비슷한 상황이 반복될 때, 어떻게 달라야 하는지 (예: '3화에서는 울며 매달렸지만, 이번에는 말없이 손만 잡는다')"),
   }),
 ]);
 

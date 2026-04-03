@@ -92,6 +92,7 @@ chapter_outlines:
         why: "나중에 밝혀질 이유"
         reveal: "delayed"
         reveal_at: 5
+        different_from_prev: "3화에서는 울며 매달렸지만, 이번에는 말없이 손만 잡는다"
     characters_involved:
       - "mc"
     tension_level: 5
@@ -251,6 +252,7 @@ style:
    - **7~10화**: 클라이맥스와 반전.
    - **핵심**: 매 화의 key_points는 "누가 무엇을 했다/발견했다/결정했다"여야 한다. "느꼈다/감지했다/인식했다"는 사건이 아니다.
    - **핵심**: 매 화 끝에 독자가 "그래서 어떻게 되는 거야?"라고 물을 수 있어야 한다.
+   - **반복 방지**: 같은 캐릭터가 비슷한 상황을 반복할 때, key_points에 different_from_prev를 명시하세요. 예: "3화에서는 울며 매달렸지만, 이번에는 말없이 손만 잡는다". 같은 대사나 행동이 여러 화에 걸쳐 반복되면 안 됩니다.
 8. 긴장도(tension_level)는 아크 구조에 맞게 기복 있게. 1~3화는 2~4 수준, 7~10화에서 7~9로 올라가야 자연스럽습니다.
 9. state의 relationships 예시: {"heroine": "첫만남, 호기심", "rival": "적대적"}
 10. chapter_outlines의 characters_involved도 페이싱을 반영: 1화는 ["mc"] 또는 ["mc", "히로인id"] 수준. 한 화에 4명 이상 등장시키지 말 것

@@ -66,6 +66,7 @@ export class WriterAgent implements PipelineAgent {
         } : {}),
         directionDesign,
         worldStateContext: ctx.worldStateContext,
+        antiRepeatContext: ctx.antiRepeatContext,
       });
 
       ctx.sceneTexts = sceneResult.sceneTexts;

@@ -57,6 +57,8 @@ export interface SceneWriterOptions {
   directionDesign?: DirectionDesign;
   /** Formatted world state context from WorldStateManager */
   worldStateContext?: string;
+  /** Anti-repeat context: previous chapters' key dialogues/actions */
+  antiRepeatContext?: string;
 }
 
 export interface SceneWriterResult {
@@ -90,6 +92,7 @@ export function buildScenePrompt(
     previousChapterEnding?: string;
     directionDesign?: DirectionDesign;
     worldStateContext?: string;
+    antiRepeatContext?: string;
   },
 ): string {
   const parts: string[] = [];
@@ -227,6 +230,11 @@ ${dialogues.map((d) => `  "${d}"`).join("\n") || '  (없음)'}${stateBlock}
   // World state context (TKG facts + character states)
   if (extras?.worldStateContext) {
     parts.push(`# ${extras.worldStateContext}\n`);
+  }
+
+  // Anti-repeat context (previous chapters' key dialogues/actions)
+  if (extras?.antiRepeatContext) {
+    parts.push(`# ${extras.antiRepeatContext}\n`);
   }
 
   // Previous context: hierarchical memory (preferred) or chapter summaries (fallback)
@@ -555,6 +563,7 @@ export async function writeChapterByScenes(
     fastMode,
     directionDesign,
     worldStateContext,
+    antiRepeatContext,
   } = options;
 
   const agent = getAgent();
@@ -595,7 +604,7 @@ export async function writeChapterByScenes(
       const scenePrompt = buildScenePrompt(
         seed, chapterNumber, blueprint, scene, i,
         sceneTexts, previousSummaries,
-        { memoryContext, toneGuidance, progressContext, threadReminders, correctionContext, previousChapterEnding, directionDesign, worldStateContext },
+        { memoryContext, toneGuidance, progressContext, threadReminders, correctionContext, previousChapterEnding, directionDesign, worldStateContext, antiRepeatContext },
       );
       const result = await agent.call({
         prompt: scenePrompt,
@@ -724,6 +733,7 @@ export async function writeChapterParallel(
     previousChapterEnding,
     directionDesign,
     worldStateContext,
+    antiRepeatContext,
   } = options;
 
   const agent = getAgent();
@@ -759,6 +769,7 @@ export async function writeChapterParallel(
         progressContext,
         threadReminders: i >= blueprint.scenes.length - 2 ? threadReminders : undefined,
         worldStateContext,
+        antiRepeatContext,
         correctionContext,
         previousChapterEnding: previousChapterEnding,
         directionDesign,

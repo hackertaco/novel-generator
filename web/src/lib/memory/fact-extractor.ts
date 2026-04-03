@@ -45,13 +45,17 @@ ${text.slice(0, 4000)}
   "chapter": ${chapterNumber},
   "facts": [{"subject":"주어","action":"행동","object":"대상","chapter":${chapterNumber}}],
   "character_states": [{"name":"이름","location":"위치","physical":"신체상태","emotional":"감정","knows":["알고있는것"],"relationships":[{"with":"상대","status":"관계"}]}],
-  "summary": "1-2문장 요약"
+  "summary": "1-2문장 요약",
+  "key_dialogues": [{"speaker":"화자이름","line":"실제 대사 원문","context":"상황 설명"}],
+  "key_actions": [{"character":"캐릭터이름","action":"핵심 행동 설명"}]
 }
 
 규칙:
 - 사실 5-15개 추출 (주어-행동-대상 형식)
 - 기존 사실과 모순되면 valid_until: ${chapterNumber} 추가
 - 등장한 캐릭터만 character_states에 포함
+- 이 화에서 가장 인상적인 대사 3-5개를 key_dialogues에 추출하세요 (실제 대사 원문 그대로)
+- 이 화에서 핵심 행동 3-5개를 key_actions에 추출하세요 (캐릭터의 중요한 물리적/감정적 행동)
 - JSON만 출력`;
 
   try {

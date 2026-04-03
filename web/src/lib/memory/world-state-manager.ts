@@ -5,7 +5,7 @@
  * supports contradiction detection, and formats state for the Writer prompt.
  */
 
-import type { ChapterWorldState, WorldFact, CharacterState } from "./world-state";
+import type { ChapterWorldState, WorldFact, CharacterState, KeyDialogue, KeyAction } from "./world-state";
 
 export interface Contradiction {
   existing: WorldFact;
@@ -86,6 +86,64 @@ export class WorldStateManager {
     }
 
     return contradictions;
+  }
+
+  /**
+   * Format anti-repeat context: collects key_dialogues and key_actions
+   * from all previous chapters, groups by character, and returns a prompt
+   * block instructing the Writer to avoid repeating them.
+   */
+  formatAntiRepeatContext(chapterNumber: number): string {
+    // Collect all dialogues and actions from chapters before chapterNumber
+    const dialoguesByChar = new Map<string, Array<{ chapter: number; line: string; context: string }>>();
+    const actionsByChar = new Map<string, Array<{ chapter: number; action: string }>>();
+
+    for (const ch of this.history) {
+      if (ch.chapter >= chapterNumber) continue;
+
+      if (ch.key_dialogues) {
+        for (const d of ch.key_dialogues) {
+          if (!dialoguesByChar.has(d.speaker)) dialoguesByChar.set(d.speaker, []);
+          dialoguesByChar.get(d.speaker)!.push({ chapter: ch.chapter, line: d.line, context: d.context });
+        }
+      }
+      if (ch.key_actions) {
+        for (const a of ch.key_actions) {
+          if (!actionsByChar.has(a.character)) actionsByChar.set(a.character, []);
+          actionsByChar.get(a.character)!.push({ chapter: ch.chapter, action: a.action });
+        }
+      }
+    }
+
+    if (dialoguesByChar.size === 0 && actionsByChar.size === 0) return "";
+
+    const parts: string[] = [];
+    parts.push("## 반복 금지 (이전 화에서 이미 사용된 대사/행동)");
+
+    const allChars = new Set([...dialoguesByChar.keys(), ...actionsByChar.keys()]);
+    for (const charName of allChars) {
+      parts.push(`${charName}:`);
+      const dialogues = dialoguesByChar.get(charName) || [];
+      const actions = actionsByChar.get(charName) || [];
+
+      // Show last 5 dialogues per character to keep prompt concise
+      for (const d of dialogues.slice(-5)) {
+        parts.push(`  - ${d.chapter}화: "${d.line}" (${d.context})`);
+      }
+      for (const a of actions.slice(-5)) {
+        parts.push(`  - ${a.chapter}화: ${a.action}`);
+      }
+
+      // Check for repeated patterns and add warning
+      const lines = dialogues.map((d) => d.line);
+      const duplicates = lines.filter((line, i) => lines.indexOf(line) !== i);
+      if (duplicates.length > 0) {
+        parts.push(`  → 이미 반복된 대사가 있습니다! 같은 감정이라도 다른 표현을 사용하세요.`);
+      }
+      parts.push(`  → 변주하세요: 말 대신 행동, 다른 어휘, 침묵 등`);
+    }
+
+    return parts.join("\n");
   }
 
   /**
