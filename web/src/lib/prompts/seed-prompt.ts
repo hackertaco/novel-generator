@@ -189,17 +189,7 @@ foreshadowing:
       - 27
     reveal_at: 32
 
-extended_outlines:
-  - chapter_number: 11
-    title: "11화 제목"
-    one_liner: "언제/어디서 누가 무엇을 하는지 한 줄 요약"
-    reveals:
-      - "kasian_true_motive"
-  - chapter_number: 12
-    title: "12화 제목"
-    one_liner: "한 줄 요약"
-    reveals: []
-  # ... 13화부터 150화까지 모두 작성 (11~150화)
+extended_outlines: []  # 별도 생성됩니다
 
 style:
   max_paragraph_length: 3
@@ -233,13 +223,7 @@ style:
 4. **아크 크기 (절대 준수)**: 각 아크는 반드시 8~15화! 20화 이상의 아크는 금지! 60화에 최소 5개 아크가 있어야 합니다.
 5. **복선 규칙**: 최소 5개 이상. 심기~회수 사이에 힌트 3개 이상 (5~8화 간격). 회수가 같은 화에 몰리면 안 됨. 다른 아크에서 회수.
 6. 챕터 아웃라인은 처음 10화까지만 상세하게 (key_points, characters_involved 등)
-   **전체 확장 아웃라인 (11~150화)**: extended_outlines 배열에 11화부터 150화까지 각 화의 제목과 한줄 요약(one_liner)을 작성하세요.
-   각 화에 제목과 한줄 요약만 작성하세요. story_threads의 reveal_timeline을 참조하여 비밀/감정 공개 시점을 반영하세요.
-   Part 전환점(60화, 130화)에서는 분위기와 서사의 전환을 명확히 하세요.
-   - key_points는 필요 없습니다. title과 one_liner만 작성.
-   - one_liner는 "언제/어디서 누가 무엇을 한다" 형태로 구체적으로.
-   - story_threads의 reveal_timeline을 참조하여, 해당 화에서 어떤 스레드가 진전(hinted/revealed)되는지 reveals 배열에 thread ID를 넣으세요.
-   - 아크 구조에 맞게 긴장감의 기복을 반영하세요. 클라이맥스 화는 one_liner에서도 드러나야 합니다.
+   extended_outlines는 빈 배열([])로 두세요. 별도로 생성됩니다.
    - **1화에만 opening_context 필수**: 독자에게 알려줄 초기 맥락 (시대, 장소, 주인공의 처지). 2화부터는 생략 가능.
    - **one_liner에 when/where 포함**: "언제, 어디서, 누가 무엇을 한다" 형태로 적으세요. ❌ "주인공이 위기를 맞는다" → ✅ "한밤의 연회장에서 리아가 독잔을 바꿔치기한다"
 7. **초반 페이싱 (매우 중요!)**:
