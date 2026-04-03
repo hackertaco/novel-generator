@@ -26,20 +26,20 @@ export type PlotArc = z.infer<typeof PlotArcSchema>;
 
 export const ThreadRelationSchema = z.object({
   target: z.string().describe("Target thread ID"),
-  relation: z.enum(["feeds_into", "conflicts_with", "blocked_by", "reveals"]).describe(
-    "feeds_into: 이 스레드의 진전이 타겟을 도움. conflicts_with: 이 스레드가 타겟과 충돌. blocked_by: 타겟이 풀려야 이 스레드도 진전. reveals: 이 스레드가 타겟의 숨겨진 면을 드러냄"
+  relation: z.string().default("feeds_into").describe(
+    "feeds_into/conflicts_with/blocked_by/reveals"
   ),
-  description: z.string().default("").describe("구체적 연결 (예: '음모 증거가 누명의 핵심 반증이 됨')"),
+  description: z.string().default("").describe("구체적 연결"),
 });
 
 export const RevealTimelineEntrySchema = z.object({
   chapter_range: z.string().describe("챕터 범위 (예: '1-10', '15', '40-60')"),
-  to: z.enum(["reader", "protagonist", "love_interest", "public", "specific"]).describe(
-    "누구에게 공개되는지 — reader: 독자만, protagonist: 주인공, love_interest: 상대역, public: 모든 인물, specific: 특정 캐릭터"
+  to: z.string().default("reader").describe(
+    "reader/protagonist/love_interest/public/specific"
   ),
   to_name: z.string().optional().describe("to가 'specific'일 때, 어떤 캐릭터에게 공개되는지"),
-  level: z.enum(["hidden", "hinted", "partial", "revealed"]).describe(
-    "hidden: 완전히 숨김, hinted: 간접적 암시, partial: 부분 공개, revealed: 완전 공개"
+  level: z.string().default("hidden").describe(
+    "hidden/hinted/partial/revealed"
   ),
   method: z.string().describe("공개 방법 (예: '독백', '문서 발견', '대화 중 실수', '목격')"),
 });
@@ -49,8 +49,8 @@ export type RevealTimelineEntry = z.infer<typeof RevealTimelineEntrySchema>;
 export const StoryThreadSchema = z.object({
   id: z.string().describe("Thread ID (e.g., 'main', 'romance', 'conspiracy')"),
   name: z.string().describe("Thread name (e.g., '암살 누명 벗기', '라시드와의 관계')"),
-  type: z.enum(["main", "sub", "secret", "emotion", "plot_twist", "relationship"]).default("sub").describe(
-    "main/sub: 메인/서브 줄거리. secret: 비밀. emotion: 감정선. plot_twist: 반전. relationship: 관계 변화"
+  type: z.string().default("sub").describe(
+    "main/sub/secret/emotion/plot_twist/relationship"
   ),
   owner: z.string().optional().describe("이 스레드를 소유한 캐릭터 이름 (비밀/감정 스레드인 경우)"),
   description: z.string().default("").describe("What this thread is about"),
