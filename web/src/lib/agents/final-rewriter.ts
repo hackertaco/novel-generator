@@ -67,8 +67,8 @@ export class FinalRewriterAgent implements PipelineAgent {
     const prompt = buildFinalRewriterPrompt(ctx.text, genre, ctx.chapterNumber, ctx);
     const system = getFinalRewriterSystemPrompt();
 
-    // Use repair model (gpt-4o) to keep costs low
-    const model = process.env.NOVEL_MODEL_REPAIR || "gpt-4o";
+    // Use writing model — rewriter quality must match writer quality
+    const model = process.env.NOVEL_MODEL_WRITING || "gpt-5.4";
 
     const agent = getAgent();
     const stream = agent.callStream({
