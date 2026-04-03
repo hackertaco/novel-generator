@@ -3,6 +3,9 @@
  *
  * Extracts world facts (subject-action-object triples) and character states
  * from a completed chapter text. Uses gpt-4o-mini for cost efficiency.
+ *
+ * Uses plain text call (not structured/JSON mode) for robustness,
+ * with manual JSON parsing and graceful fallback.
  */
 
 import { getAgent } from "../agents/llm-agent";
@@ -59,17 +62,48 @@ ${text.slice(0, 4000)}
 - JSON만 출력`;
 
   try {
-    const result = await agent.callStructured({
+    // Use plain text call instead of structured call for robustness
+    const result = await agent.call({
       prompt,
       system: "소설 텍스트에서 사실을 추출하는 분석기입니다. JSON만 출력하세요.",
-      schema: ChapterWorldStateSchema,
-      format: "json",
       model: "gpt-4o-mini",
+      temperature: 0.2,
+      maxTokens: 4000,
       taskId: `fact-extract-ch${chapterNumber}`,
-      retryCount: 2,
     });
 
-    return result.data;
+    // Manually parse JSON from the response
+    const raw = result.data.trim();
+    const parsed = parseJsonFromText(raw);
+
+    if (parsed) {
+      // Validate with schema, but use parsed data even if validation is loose
+      const validated = ChapterWorldStateSchema.safeParse(parsed);
+      if (validated.success) {
+        return validated.data;
+      }
+      // Schema validation failed but we have parsed JSON — use it with defaults
+      return {
+        chapter: parsed.chapter ?? chapterNumber,
+        facts: Array.isArray(parsed.facts) ? parsed.facts : [],
+        character_states: Array.isArray(parsed.character_states) ? parsed.character_states : [],
+        summary: typeof parsed.summary === "string" ? parsed.summary : `${chapterNumber}화`,
+        key_dialogues: Array.isArray(parsed.key_dialogues) ? parsed.key_dialogues : undefined,
+        key_actions: Array.isArray(parsed.key_actions) ? parsed.key_actions : undefined,
+      };
+    }
+
+    // JSON parsing failed entirely — extract a simple summary only
+    console.warn(
+      `[fact-extractor] ${chapterNumber}화 JSON 파싱 실패, 요약만 추출`,
+    );
+    const summaryMatch = raw.match(/"summary"\s*:\s*"([^"]+)"/);
+    return {
+      chapter: chapterNumber,
+      facts: [],
+      character_states: [],
+      summary: summaryMatch ? summaryMatch[1] : `${chapterNumber}화`,
+    };
   } catch (err) {
     console.warn(
       `[fact-extractor] ${chapterNumber}화 사실 추출 실패:`,
@@ -83,4 +117,40 @@ ${text.slice(0, 4000)}
       summary: `${chapterNumber}화`,
     };
   }
+}
+
+/**
+ * Try to parse JSON from LLM text response.
+ * Handles markdown code blocks, leading/trailing text, etc.
+ */
+function parseJsonFromText(text: string): Record<string, unknown> | null {
+  // Try direct parse first
+  try {
+    return JSON.parse(text);
+  } catch {
+    // continue
+  }
+
+  // Try extracting from markdown code block
+  const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (codeBlockMatch) {
+    try {
+      return JSON.parse(codeBlockMatch[1].trim());
+    } catch {
+      // continue
+    }
+  }
+
+  // Try finding first { to last }
+  const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(text.slice(firstBrace, lastBrace + 1));
+    } catch {
+      // continue
+    }
+  }
+
+  return null;
 }

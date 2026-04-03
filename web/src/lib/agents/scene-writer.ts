@@ -125,6 +125,17 @@ ${chapterNumber}화 — ${blueprint.one_liner}
   if (worldParts.length > 0) {
     parts.push(`# 세계관\n${worldParts.join("\n")}\n`);
   }
+  // Inject world rules prominently for social hierarchy compliance
+  if (seed.world.rules.length > 0) {
+    parts.push(`## 세계관 규칙 (반드시 준수)
+${seed.world.rules.map((r) => `- ${r}`).join("\n")}
+
+특히 신분제:
+- 하급자가 상급자에게: 반드시 존대 + 칭호 사용
+- 무례한 행동 → 반드시 처벌이나 긴장이 따라야 함
+- 주인공이 상급자에게 대들면: 주변 인물이 놀라거나 긴장하는 반응 필수
+`);
+  }
 
   // Chapter outline context (from seed's chapter_outlines)
   const chapterOutline = seed.chapter_outlines.find(
@@ -270,20 +281,27 @@ ${dialogues.map((d) => `  "${d}"`).join("\n") || '  (없음)'}${stateBlock}
       // Extract scene state from ending text for continuity
       const sceneState = extractSceneState(endingText, seed);
 
-      parts.push(`# 직전 화 마지막 장면 (이 내용 바로 다음부터 이어서 쓰세요!)
+      parts.push(`# 이전 화 마지막 장면 (반드시 이어서 시작하세요)
+이전 화는 다음 장면에서 끝났습니다:
+
+---
+${endingText}
+---
 
 ## 직전 화 상태 (반드시 이어서!)
 - 시간대: ${sceneState.timeOfDay}
 - 장소: ${sceneState.location}
 - 등장인물: ${sceneState.characters.join(", ")}
+
+이 화의 첫 장면은 반드시 위 장면과 자연스럽게 이어져야 합니다.
+- 같은 장소에서 시작하거나, 장소 이동이 있으면 이동 과정을 보여주세요.
+- 이전 화 마지막 인물이 다음 화 첫 장면에도 있어야 합니다.
+- 시간이 흘렀으면 "다음 날 아침" 같은 시간 마커를 넣으세요.
 ${sceneState.characters.length > 0 ? `⚠️ 직전 화 마지막에 위 인물들이 있었습니다.
 - 같은 장면이 이어지면 새 인물이 갑자기 등장하면 안 됩니다.
 - 새 인물이 등장하려면 반드시 이유가 있어야 합니다 (문을 열고 들어오는 장면, 전갈이 오는 장면 등).
 - 이미 그 자리에 있던 것처럼 묘사하면 안 됩니다 — "등장하는 순간"을 보여주세요.` : ""}
 
----
-${endingText}
----
 ⚠️ 위는 ${chapterNumber - 1}화의 마지막 부분입니다. 이미 독자가 읽은 내용입니다.
 - 이 장면의 **직후**부터 시작하세요.
 - 위 내용을 반복하거나 같은 상황을 다시 묘사하지 마세요.
