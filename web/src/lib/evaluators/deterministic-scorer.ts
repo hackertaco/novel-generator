@@ -157,8 +157,8 @@ function scoreRhythm(text: string): { score: number; details: Record<string, unk
 const HOOK_PATTERNS = [
   // Question/mystery
   /[?？]/,
-  // Ellipsis (trailing tension)
-  /[…·]{2,}|\.{3,}/,
+  // Ellipsis (trailing tension) — includes single … (U+2026) and repeated dots
+  /…|[·]{2,}|\.{3,}/,
   // New character/entity introduction
   /누군가|어떤\s*[사람목소리]|처음\s*[보듣]/,
   // Danger/crisis keywords
@@ -175,6 +175,10 @@ const HOOK_PATTERNS = [
   /다시|또다시|끝나지\s*않|반복|시작이었/,
   // Decision/resolve cliffhanger
   /결심|각오|선택|돌아서|발을\s*옮|움직였/,
+  // Physical crisis/collapse
+  /쓰러|떨어졌|무너졌|부러졌|벌어졌|갈라졌|깨졌|함께였/,
+  // Negation/denial hook ("it wasn't X", "that's not X")
+  /아닙니다|아니었|없는\s*사람|없습니다|아니야|거짓말/,
   // Unfinished action
   /순간|그때|직전|—$/,
 ];
@@ -197,7 +201,8 @@ function scoreHookEnding(text: string): { score: number; details: Record<string,
   }
 
   // Bonus: ends with dialogue (character voice as hook)
-  if (lastParagraph.match(/[""」][\s]*$/)) {
+  // Include all common Korean quote marks: "" "" 「」 ''
+  if (lastParagraph.match(/["""\u201C\u201D」][\s]*$/)) {
     hookScore += 0.1;
     matchedPatterns.push("대사로 끝남");
   }
