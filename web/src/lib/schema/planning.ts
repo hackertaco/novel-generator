@@ -48,13 +48,16 @@ export const ArcRoleEnum = z.string().transform((val) => {
 }) as unknown as z.ZodType<"setup" | "rising_action" | "midpoint" | "escalation" | "climax" | "falling_action" | "resolution" | "transition">;
 export type ArcRole = z.infer<typeof ArcRoleEnum>;
 
-export const CliffhangerTypeEnum = z.enum(["question", "crisis", "revelation", "twist"]);
+export const CliffhangerTypeEnum = z.string().transform((val) => {
+  const valid = ["question", "crisis", "revelation", "twist"];
+  return valid.includes(val) ? val : "question";
+}) as unknown as z.ZodType<"question" | "crisis" | "revelation" | "twist">;
 export type CliffhangerType = z.infer<typeof CliffhangerTypeEnum>;
 
-export const ChapterSceneTypeEnum = z.enum([
-  "confrontation", "chase", "discovery", "negotiation",
-  "escape", "infiltration", "revelation",
-]);
+export const ChapterSceneTypeEnum = z.string().transform((val) => {
+  const valid = ["confrontation", "chase", "discovery", "negotiation", "escape", "infiltration", "revelation"];
+  return valid.includes(val) ? val : "discovery";
+}) as unknown as z.ZodType<"confrontation" | "chase" | "discovery" | "negotiation" | "escape" | "infiltration" | "revelation">;
 export type ChapterSceneType = z.infer<typeof ChapterSceneTypeEnum>;
 
 export const ChapterBlueprintSchema = z
@@ -82,7 +85,10 @@ export const ChapterBlueprintSchema = z
     /** 챕터 끝 타입 */
     cliffhanger_type: CliffhangerTypeEnum.optional().describe("챕터 끝 타입: question, crisis, revelation, twist"),
     /** 시점 (1인칭/3인칭) */
-    pov: z.enum(["first", "third"]).optional().describe("시점: first(1인칭) or third(3인칭). 기본값 third"),
+    pov: z.string().optional().transform((val) => {
+      if (!val) return undefined;
+      return val === "first" ? "first" : "third";
+    }).describe("시점: first(1인칭) or third(3인칭). 기본값 third") as unknown as z.ZodOptional<z.ZodType<"first" | "third">>,
     /** 시점 인물 (1인칭일 때 화자, 3인칭일 때 초점 인물) */
     pov_character: z.string().optional().describe("시점 인물 이름"),
     /** 챕터 씬 타입 (구조 다양성 확보용) */
@@ -90,7 +96,11 @@ export const ChapterBlueprintSchema = z
     /** 주인공 능동적 행동 (수동 금지) */
     protagonist_action: z.string().optional().describe("주인공이 ~한다 형태의 능동적 행동 (예: '리아가 비밀문을 통해 에단을 안고 도주한다')"),
     /** 긴장 장치 (연속 2챕터 같은 장치 금지) */
-    tension_device: z.enum(["door_threat", "document", "deadline", "witness", "betrayal", "discovery", "confrontation"]).optional().describe("이 챕터의 핵심 긴장 장치. 연속 2챕터에 같은 장치를 쓰지 마세요."),
+    tension_device: z.string().optional().transform((val) => {
+      if (!val) return undefined;
+      const valid = ["door_threat", "document", "deadline", "witness", "betrayal", "discovery", "confrontation"];
+      return valid.includes(val) ? val : undefined;
+    }).describe("이 챕터의 핵심 긴장 장치") as unknown as z.ZodOptional<z.ZodType<"door_threat" | "document" | "deadline" | "witness" | "betrayal" | "discovery" | "confrontation">>,
     /** 핵심 물리적 행동 */
     action_beat: z.string().optional().describe("이 챕터의 핵심 물리적 행동 (예: '리세가 시종 통로로 도주한다')"),
   })
@@ -142,7 +152,10 @@ export type PartPlan = z.infer<typeof PartPlanSchema>;
 export const WorldComplexitySchema = z.object({
   faction_count: z.number().int().default(0),
   location_count: z.number().int().default(0),
-  power_system_depth: z.enum(["shallow", "moderate", "deep"]).default("moderate"),
+  power_system_depth: z.string().default("moderate").transform((val) => {
+    const valid = ["shallow", "moderate", "deep"];
+    return valid.includes(val) ? val : "moderate";
+  }) as unknown as z.ZodType<"shallow" | "moderate" | "deep">,
   subplot_count: z.number().int().default(0),
 });
 export type WorldComplexity = z.infer<typeof WorldComplexitySchema>;
