@@ -198,13 +198,20 @@ function checkCharacterExistence(
   const issues: ConsistencyIssue[] = [];
   const characterFullNames = new Set(characters.map((c) => c.name));
 
-  // Build a set of first names (2+ chars) for partial matching
+  // Build a set of first names and name variants for partial matching
   // e.g. "세레나 에버딘" -> also match "세레나"
+  // e.g. "윤세아" -> also match "세아" (Korean given name suffix)
   const characterFirstNames = new Set<string>();
   for (const c of characters) {
     const parts = c.name.split(/\s+/);
     if (parts[0].length >= 2) {
       characterFirstNames.add(parts[0]);
+    }
+    // For Korean single-word names (3+ chars, no space), add last 2 chars as nickname
+    // e.g. "윤세아" → "세아", "강현우" → "현우"
+    const fullName = c.name.replace(/\s+/g, "");
+    if (parts.length === 1 && fullName.length >= 3) {
+      characterFirstNames.add(fullName.slice(-2));
     }
   }
 
@@ -574,6 +581,15 @@ const KOREAN_HONORIFICS = new Set([
   // Common words that follow first names but are NOT surnames
   "자신", "혼자", "쪽으로", "쪽에", "쪽을", "앞에", "뒤에", "옆에",
   "역시", "만이", "조차", "마저", "뿐이", "때문", "덕분", "탓에",
+  // Body parts (commonly written as "이름 + 신체부위")
+  "눈이", "눈을", "눈에", "눈빛", "눈썹", "입이", "입을", "입술",
+  "손이", "손을", "손에", "손끝", "손등", "손가락", "손바닥",
+  "얼굴", "머리", "이마", "목이", "목을", "어깨", "등이", "등을",
+  "발이", "발을", "무릎", "허리", "가슴", "턱이", "턱을", "볼이",
+  "팔이", "팔을", "고개", "몸이", "몸을", "목소리",
+  // Common nouns/verbs after names
+  "앞에서", "뒤에서", "옆에서", "위에", "아래", "근처", "주변",
+  "말이", "말을", "대답", "표정", "시선", "모습", "행동", "태도",
 ]);
 
 /**

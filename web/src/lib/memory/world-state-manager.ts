@@ -64,11 +64,21 @@ export class WorldStateManager {
   }
 
   /** Check if new facts contradict existing active facts. */
+  /** Actions that naturally change every chapter — not contradictions */
+  private static DIALOGUE_ACTIONS = new Set([
+    "말하다", "물어보다", "전하다", "대답하다", "외치다", "속삭이다",
+    "소리치다", "중얼거리다", "묻다", "부르다", "요청하다", "명령하다",
+    "제안하다", "보고하다", "설명하다",
+  ]);
+
   detectContradictions(newFacts: WorldFact[]): Contradiction[] {
     const currentFacts = this.getCurrentFacts();
     const contradictions: Contradiction[] = [];
 
     for (const incoming of newFacts) {
+      // Skip dialogue actions — speech content naturally changes every chapter
+      if (WorldStateManager.DIALOGUE_ACTIONS.has(incoming.action)) continue;
+
       for (const existing of currentFacts) {
         // Same subject + same action domain but different object → possible contradiction
         if (
