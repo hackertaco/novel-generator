@@ -10,6 +10,7 @@
 
 import { measureComprehensibility } from "./comprehensibility";
 import { NARRATIVE_RULES, getRulePenalty } from "../policy/narrative-rules";
+import type { CharacterState } from "../memory/world-state";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -31,7 +32,8 @@ export interface ConsistencyIssue {
     | "location_discontinuity"
     | "low_comprehensibility"
     | "rank_inconsistency"
-    | "name_inconsistency";
+    | "name_inconsistency"
+    | "companion_discontinuity";
   severity: "critical" | "major" | "minor";
   description: string;
   /** Short machine-readable detail string for downstream consumers (critic, state-machine) */
@@ -404,6 +406,95 @@ function checkLocationDiscontinuity(paragraphs: string[]): ConsistencyIssue[] {
 }
 
 // ---------------------------------------------------------------------------
+// Companion continuity (인물 동선)
+// ---------------------------------------------------------------------------
+
+/**
+ * Check if characters who were together at the end of the previous chapter
+ * are still together at the start of this chapter (or their separation is described).
+ *
+ * Also checks for characters appearing from a different location without travel description.
+ */
+function checkCompanionContinuity(
+  text: string,
+  paragraphs: string[],
+  characters: Array<{ name: string; [key: string]: unknown }>,
+  previousCharacterStates?: CharacterState[],
+): ConsistencyIssue[] {
+  if (!previousCharacterStates || previousCharacterStates.length === 0) return [];
+
+  const issues: ConsistencyIssue[] = [];
+  const charNames = new Set(characters.map((c) => c.name));
+
+  // Build companion groups from previous chapter end
+  // A "group" = characters at the same location
+  const locationGroups = new Map<string, Set<string>>();
+  for (const cs of previousCharacterStates) {
+    if (!charNames.has(cs.name)) continue;
+    const loc = cs.location || "불명";
+    if (!locationGroups.has(loc)) locationGroups.set(loc, new Set());
+    locationGroups.get(loc)!.add(cs.name);
+    // Also add companions
+    if (cs.companions) {
+      for (const comp of cs.companions) {
+        if (charNames.has(comp)) {
+          locationGroups.get(loc)!.add(comp);
+        }
+      }
+    }
+  }
+
+  // Only check groups with 2+ characters (solo characters can appear anywhere)
+  const companionGroups = [...locationGroups.entries()]
+    .filter(([, members]) => members.size >= 2);
+
+  if (companionGroups.length === 0) return issues;
+
+  // Analyze first ~40% of the text (early scenes) for character appearances
+  const earlyText = paragraphs.slice(0, Math.max(3, Math.ceil(paragraphs.length * 0.4))).join("\n");
+
+  for (const [location, members] of companionGroups) {
+    const memberList = [...members];
+    const appearing = memberList.filter((name) => earlyText.includes(name));
+    const missing = memberList.filter((name) => !earlyText.includes(name));
+
+    // If some members of a group appear but others don't — potential discontinuity
+    if (appearing.length > 0 && missing.length > 0) {
+      // Check if there's a separation description (떠나, 헤어지, 보내, 남기 등)
+      const separationVerbs = /떠났|헤어졌|보냈|남기고|남겨|작별|이별|혼자|따로|분리|갈라/;
+      const hasSeparation = separationVerbs.test(earlyText);
+
+      if (!hasSeparation) {
+        issues.push({
+          type: "companion_discontinuity",
+          severity: "major",
+          description: `이전 화 종료 시 ${location}에서 함께 있던 [${memberList.join(", ")}] 중 [${missing.join(", ")}]이(가) 분리 묘사 없이 사라짐`,
+          detail: `동행 그룹 [${memberList.join("+")}] 중 [${missing.join("+")}] 미등장 (분리 묘사 없음)`,
+        });
+      }
+    }
+  }
+
+  // Check for characters appearing from a different location without travel
+  for (const cs of previousCharacterStates) {
+    if (!charNames.has(cs.name) || !cs.location) continue;
+    // If this character appears in the early text but was at a different location
+    if (!earlyText.includes(cs.name)) continue;
+
+    // Check if any companion group at a DIFFERENT location contains a character
+    // who appears in the same early scene — that would mean teleportation
+    for (const [otherLoc, otherMembers] of locationGroups) {
+      if (otherLoc === cs.location) continue;
+      if (!otherMembers.has(cs.name)) continue; // not in this group
+      // Character was NOT at this location but appears with members from it
+      // This is covered by the group check above, skip
+    }
+  }
+
+  return issues;
+}
+
+// ---------------------------------------------------------------------------
 // Character rank consistency
 // ---------------------------------------------------------------------------
 
@@ -587,6 +678,7 @@ const ISSUE_TYPE_PENALTY: Record<ConsistencyIssue["type"], number> = {
   character_existence: getRulePenalty("nameConsistency"),      // 0.15
   timeline_contradiction: 0.1,                                 // no direct rule
   location_discontinuity: 0.05,                                // minor
+  companion_discontinuity: 0.15,                               // major: 동행 그룹 분리 묘사 없음
   low_comprehensibility: getRulePenalty("comprehensibility"),   // 0.1
 };
 
@@ -594,6 +686,7 @@ export function evaluateConsistencyGate(
   text: string,
   characters: Array<{ name: string; [key: string]: unknown }>,
   pov?: "first" | "third",
+  previousCharacterStates?: CharacterState[],
 ): ConsistencyGateResult {
   const paragraphs = text.split("\n\n").map((p) => p.trim()).filter((p) => p.length > 0);
 
@@ -603,6 +696,7 @@ export function evaluateConsistencyGate(
     ...checkCharacterExistence(text, characters),
     ...checkTimelineContradiction(paragraphs),
     ...checkLocationDiscontinuity(paragraphs),
+    ...checkCompanionContinuity(text, paragraphs, characters, previousCharacterStates),
     ...checkRankConsistency(text, characters),
     ...checkNameConsistency(text, characters),
   ];

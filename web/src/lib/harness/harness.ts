@@ -454,10 +454,16 @@ export class NovelHarness {
       parallelMode: this.config.parallelMode,
       directionDesign: this._directionDesign,
       worldStateContext: this.worldStateManager && this.worldStateManager.size > 0
-        ? this.worldStateManager.formatForWriter(chapterNumber)
+        ? [
+            this.worldStateManager.formatForWriter(chapterNumber),
+            this.worldStateManager.formatScenePlacement(chapterNumber),
+          ].filter(Boolean).join("\n\n")
         : undefined,
       antiRepeatContext: this.worldStateManager && this.worldStateManager.size > 0
         ? this.worldStateManager.formatAntiRepeatContext(chapterNumber)
+        : undefined,
+      previousCharacterStates: this.worldStateManager
+        ? this.worldStateManager.getPreviousCharacterStates(chapterNumber)
         : undefined,
     };
 
@@ -564,27 +570,39 @@ export class NovelHarness {
       yield { type: "plan_generated", plan: this.masterPlan };
     }
 
-    // Generate story threads if missing (separate lightweight call)
+    // Generate story threads + direction design in parallel (independent LLM calls)
+    const parallelPlanTasks: Promise<void>[] = [];
+
     if (!seed.story_threads || seed.story_threads.length === 0) {
-      try {
-        const { generateStoryThreads } = await import("../planning/thread-generator");
-        const threadResult = await generateStoryThreads(seed);
-        seed.story_threads = threadResult.threads;
-        // advances_thread is applied to outlines inside generateStoryThreads
-      } catch (err) {
-        console.warn("[harness] story_threads 생성 실패, 스킵:", err instanceof Error ? err.message : err);
-      }
+      parallelPlanTasks.push(
+        (async () => {
+          try {
+            const { generateStoryThreads } = await import("../planning/thread-generator");
+            const threadResult = await generateStoryThreads(seed);
+            seed.story_threads = threadResult.threads;
+          } catch (err) {
+            console.warn("[harness] story_threads 생성 실패, 스킵:", err instanceof Error ? err.message : err);
+          }
+        })(),
+      );
     }
 
-    // Generate direction design (address matrix, info budget, emotion curve, hook strategy)
     if (!this._directionDesign) {
-      try {
-        const { generateDirectionDesign } = await import("../planning/direction-designer");
-        const ddResult = await generateDirectionDesign(seed);
-        this._directionDesign = ddResult.data;
-      } catch (err) {
-        console.warn("[harness] 연출 설계 생성 실��, 스킵:", err instanceof Error ? err.message : err);
-      }
+      parallelPlanTasks.push(
+        (async () => {
+          try {
+            const { generateDirectionDesign } = await import("../planning/direction-designer");
+            const ddResult = await generateDirectionDesign(seed);
+            this._directionDesign = ddResult.data;
+          } catch (err) {
+            console.warn("[harness] 연출 설계 생성 실패, 스킵:", err instanceof Error ? err.message : err);
+          }
+        })(),
+      );
+    }
+
+    if (parallelPlanTasks.length > 0) {
+      await Promise.all(parallelPlanTasks);
     }
 
     // Plausibility check — only when generating a fresh plan (not on continuation)

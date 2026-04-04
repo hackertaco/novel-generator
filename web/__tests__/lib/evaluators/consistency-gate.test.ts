@@ -435,3 +435,96 @@ describe("integration with scoring concept", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Companion continuity (인물 동선)
+// ---------------------------------------------------------------------------
+
+describe("companion continuity", () => {
+  const prevStates = [
+    {
+      name: "강현우",
+      location: "왕궁 별관",
+      physical: "건강",
+      emotional: "긴장",
+      knows: [],
+      companions: ["서연"],
+      relationships: [],
+    },
+    {
+      name: "서연",
+      location: "왕궁 별관",
+      physical: "건강",
+      emotional: "불안",
+      knows: [],
+      companions: ["강현우"],
+      relationships: [],
+    },
+    {
+      name: "이도현",
+      location: "시장",
+      physical: "건강",
+      emotional: "평온",
+      knows: [],
+      companions: [],
+      relationships: [],
+    },
+  ];
+
+  it("detects companion group split without separation description", () => {
+    // 강현우 appears but 서연 doesn't, and no separation verbs
+    const text = [
+      "강현우는 아침 일찍 눈을 떴다.",
+      "차가운 공기가 방 안을 채웠다.",
+      "그는 검을 챙기고 밖으로 나섰다.",
+      "이도현이 시장 골목에서 기다리고 있었다.",
+    ].join("\n\n");
+
+    const result = evaluateConsistencyGate(text, characters, undefined, prevStates);
+    const companionIssues = result.issues.filter((i) => i.type === "companion_discontinuity");
+    expect(companionIssues.length).toBeGreaterThan(0);
+    expect(companionIssues[0].detail).toContain("서연");
+  });
+
+  it("no issue when companion group appears together", () => {
+    const text = [
+      "강현우와 서연은 함께 왕궁 별관을 나섰다.",
+      "두 사람은 긴 복도를 걸었다.",
+      "이도현은 여전히 시장에 있었다.",
+    ].join("\n\n");
+
+    const result = evaluateConsistencyGate(text, characters, undefined, prevStates);
+    const companionIssues = result.issues.filter((i) => i.type === "companion_discontinuity");
+    expect(companionIssues.length).toBe(0);
+  });
+
+  it("no issue when separation is described", () => {
+    const text = [
+      "강현우는 서연에게 작별 인사를 건넸다.",
+      "서연은 떠났고, 강현우는 홀로 남았다.",
+      "그는 검을 챙기고 밖으로 나섰다.",
+    ].join("\n\n");
+
+    const result = evaluateConsistencyGate(text, characters, undefined, prevStates);
+    const companionIssues = result.issues.filter((i) => i.type === "companion_discontinuity");
+    expect(companionIssues.length).toBe(0);
+  });
+
+  it("no issue when no previous character states", () => {
+    const text = "강현우는 아침 일찍 눈을 떴다.\n\n그는 밖으로 나섰다.";
+    const result = evaluateConsistencyGate(text, characters, undefined, undefined);
+    const companionIssues = result.issues.filter((i) => i.type === "companion_discontinuity");
+    expect(companionIssues.length).toBe(0);
+  });
+
+  it("no issue for solo characters at different locations", () => {
+    const soloStates = [
+      { name: "강현우", location: "왕궁", physical: "", emotional: "", knows: [], companions: [], relationships: [] },
+      { name: "서연", location: "시장", physical: "", emotional: "", knows: [], companions: [], relationships: [] },
+    ];
+    const text = "강현우는 눈을 떴다.\n\n그는 밖으로 나섰다.";
+    const result = evaluateConsistencyGate(text, characters, undefined, soloStates);
+    const companionIssues = result.issues.filter((i) => i.type === "companion_discontinuity");
+    expect(companionIssues.length).toBe(0);
+  });
+});

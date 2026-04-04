@@ -3,6 +3,7 @@ import type { ChapterSummary } from "@/lib/schema/chapter";
 import type { ChapterBlueprint } from "@/lib/schema/planning";
 import type { DirectionDesign } from "@/lib/schema/direction";
 import type { TokenUsage } from "@/lib/agents/types";
+import type { CharacterState } from "@/lib/memory/world-state";
 
 /** Lightweight summary passed between pipeline stages (not the full ChapterSummary). */
 export type PreviousChapterSummary = { chapter: number; title: string; summary: string };
@@ -22,7 +23,7 @@ export interface TrackingInjection {
 // --- Issue types ---
 
 export interface RuleIssue {
-  type: "ending_repeat" | "sentence_start_repeat" | "banned_expression" | "consistency" | "short_dialogue_sequence" | "speech_level_violation" | "pov_inconsistency";
+  type: "ending_repeat" | "sentence_start_repeat" | "banned_expression" | "consistency" | "short_dialogue_sequence" | "speech_level_violation" | "pov_inconsistency" | "companion_discontinuity";
   severity?: "warning" | "error" | "critical";
   message?: string;
   position: number; // paragraph index (0-based)
@@ -81,6 +82,8 @@ export interface ChapterContext {
   worldStateContext?: string;
   /** Anti-repeat context: previous chapters' key dialogues/actions to avoid repetition */
   antiRepeatContext?: string;
+  /** Previous chapter's character states for companion continuity checking */
+  previousCharacterStates?: CharacterState[];
 }
 
 // --- LifecycleEvent (defined here to avoid circular imports; chapter-lifecycle.ts re-exports from here) ---

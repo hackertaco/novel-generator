@@ -15,6 +15,7 @@ export const CharacterStateSchema = z.object({
   physical: z.string(),         // "옆구리 상처, 족쇄 자국"
   emotional: z.string(),        // "경계심, 테오에 대한 보호 본능"
   knows: z.array(z.string()),   // ["처형이 중단됨", "테오가 자신을 엄마라 부름"]
+  companions: z.array(z.string()).optional(), // ["테오", "시녀"] — 현재 함께 있는 인물
   relationships: z.array(z.object({
     with: z.string(),
     status: z.string(),         // "경계+의존", "적대", "신뢰"

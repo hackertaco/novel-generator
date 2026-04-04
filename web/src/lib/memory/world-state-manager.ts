@@ -147,6 +147,58 @@ export class WorldStateManager {
   }
 
   /**
+   * Format character placement at the end of the previous chapter.
+   * Groups characters by location and shows who is with whom.
+   * Used to prevent "characters who left together acting separately" errors.
+   */
+  formatScenePlacement(chapterNumber: number): string {
+    if (this.history.length === 0) return "";
+
+    // Get the most recent chapter state before this one
+    const prevChapter = this.history
+      .filter((h) => h.chapter < chapterNumber)
+      .sort((a, b) => b.chapter - a.chapter)[0];
+    if (!prevChapter || prevChapter.character_states.length === 0) return "";
+
+    // Group characters by location
+    const locationGroups = new Map<string, Array<{ name: string; companions: string[] }>>();
+    for (const cs of prevChapter.character_states) {
+      const loc = cs.location || "불명";
+      if (!locationGroups.has(loc)) locationGroups.set(loc, []);
+      locationGroups.get(loc)!.push({
+        name: cs.name,
+        companions: cs.companions || [],
+      });
+    }
+
+    const parts: string[] = [];
+    parts.push(`## 인물 배치 (${prevChapter.chapter}화 종료 시점)`);
+    for (const [location, chars] of locationGroups) {
+      const names = chars.map((c) => c.name).join(", ");
+      parts.push(`- **${location}**: ${names}`);
+    }
+    parts.push("");
+    parts.push("⚠️ 위 배치를 반드시 이어받으세요:");
+    parts.push("- 같은 장소에 있던 인물들은 함께 등장해야 합니다.");
+    parts.push("- 누군가 자리를 떠나려면 떠나는 장면을 묘사하세요.");
+    parts.push("- 다른 장소에 있던 인물이 합류하려면 이동 과정을 보여주세요.");
+
+    return parts.join("\n");
+  }
+
+  /**
+   * Get character states from the most recent chapter before the given one.
+   * Used by the consistency gate to check companion continuity.
+   */
+  getPreviousCharacterStates(chapterNumber: number): CharacterState[] | undefined {
+    const prevChapter = this.history
+      .filter((h) => h.chapter < chapterNumber)
+      .sort((a, b) => b.chapter - a.chapter)[0];
+    if (!prevChapter || prevChapter.character_states.length === 0) return undefined;
+    return prevChapter.character_states;
+  }
+
+  /**
    * Format current world state as a prompt block for the Writer.
    * Keeps it concise to minimize token cost.
    */
@@ -175,8 +227,11 @@ export class WorldStateManager {
         const relStr = state.relationships.length > 0
           ? ` | 관계: ${state.relationships.map((r) => `${r.with}(${r.status})`).join(", ")}`
           : "";
+        const companionStr = state.companions && state.companions.length > 0
+          ? ` | 동행: ${state.companions.join(", ")}`
+          : "";
         parts.push(
-          `- **${state.name}**: ${state.location} / ${state.emotional}${relStr}`,
+          `- **${state.name}**: ${state.location} / ${state.emotional}${companionStr}${relStr}`,
         );
       }
     }

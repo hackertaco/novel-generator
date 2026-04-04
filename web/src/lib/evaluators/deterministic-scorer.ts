@@ -28,6 +28,7 @@ import { measureOriginality } from "./originality";
 import { measurePageTurner } from "./page-turner";
 import { measureReadabilityPacing } from "./readability-pacing";
 import { evaluateConsistencyGate, type ConsistencyIssue } from "./consistency-gate";
+import type { CharacterState } from "../memory/world-state";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -661,6 +662,7 @@ export function computeDeterministicScores(
   chapterNumber: number,
   lengthRange?: { min: number; max: number },
   blueprint?: ChapterBlueprint | null,
+  previousCharacterStates?: CharacterState[],
 ): DeterministicScores {
   const rhythmResult = scoreRhythm(text);
   const hookResult = scoreHookEnding(text);
@@ -746,6 +748,7 @@ export function computeDeterministicScores(
     text,
     seed.characters,
     blueprint?.pov,
+    previousCharacterStates,
   );
   const overall = consistencyResult.score * rawOverall;
 

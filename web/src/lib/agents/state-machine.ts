@@ -481,6 +481,7 @@ export class ChapterStateMachine {
       ctx.chapterNumber,
       undefined,
       ctx.blueprint,
+      ctx.previousCharacterStates,
     );
 
     yield { type: "deterministic_scores", scores: detScores } as LifecycleEvent;

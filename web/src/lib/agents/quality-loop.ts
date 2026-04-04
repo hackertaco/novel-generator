@@ -33,6 +33,7 @@ export class QualityLoop implements PipelineAgent {
       ctx.chapterNumber,
       undefined,
       ctx.blueprint,
+      ctx.previousCharacterStates,
     );
 
     yield {

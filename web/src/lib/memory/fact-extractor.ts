@@ -47,7 +47,7 @@ ${text.slice(0, 4000)}
 {
   "chapter": ${chapterNumber},
   "facts": [{"subject":"주어","action":"행동","object":"대상","chapter":${chapterNumber}}],
-  "character_states": [{"name":"이름","location":"위치","physical":"신체상태","emotional":"감정","knows":["알고있는것"],"relationships":[{"with":"상대","status":"관계"}]}],
+  "character_states": [{"name":"이름","location":"위치","physical":"신체상태","emotional":"감정","knows":["알고있는것"],"companions":["함께있는인물"],"relationships":[{"with":"상대","status":"관계"}]}],
   "summary": "1-2문장 요약",
   "key_dialogues": [{"speaker":"화자이름","line":"실제 대사 원문","context":"상황 설명"}],
   "key_actions": [{"character":"캐릭터이름","action":"핵심 행동 설명"}]
@@ -57,6 +57,8 @@ ${text.slice(0, 4000)}
 - 사실 5-15개 추출 (주어-행동-대상 형식)
 - 기존 사실과 모순되면 valid_until: ${chapterNumber} 추가
 - 등장한 캐릭터만 character_states에 포함
+- **companions 필수**: 화 마지막 시점에서 각 캐릭터가 누구와 함께 있는지 반드시 기록. 혼자이면 빈 배열 []. "같은 장소에 있다" = 동행.
+- **location 필수**: 화 마지막 시점 기준 위치. 이동했으면 마지막 위치.
 - 이 화에서 가장 인상적인 대사 3-5개를 key_dialogues에 추출하세요 (실제 대사 원문 그대로)
 - 이 화에서 핵심 행동 3-5개를 key_actions에 추출하세요 (캐릭터의 중요한 물리적/감정적 행동)
 - JSON만 출력`;
@@ -83,10 +85,21 @@ ${text.slice(0, 4000)}
         return validated.data;
       }
       // Schema validation failed but we have parsed JSON — use it with defaults
+      const charStates = Array.isArray(parsed.character_states)
+        ? (parsed.character_states as Record<string, unknown>[]).map((cs) => ({
+            name: String(cs.name ?? ""),
+            location: String(cs.location ?? "불명"),
+            physical: String(cs.physical ?? ""),
+            emotional: String(cs.emotional ?? ""),
+            knows: Array.isArray(cs.knows) ? cs.knows.map(String) : [],
+            companions: Array.isArray(cs.companions) ? cs.companions.map(String) : [],
+            relationships: Array.isArray(cs.relationships) ? cs.relationships : [],
+          }))
+        : [];
       return {
         chapter: parsed.chapter ?? chapterNumber,
         facts: Array.isArray(parsed.facts) ? parsed.facts : [],
-        character_states: Array.isArray(parsed.character_states) ? parsed.character_states : [],
+        character_states: charStates,
         summary: typeof parsed.summary === "string" ? parsed.summary : `${chapterNumber}화`,
         key_dialogues: Array.isArray(parsed.key_dialogues) ? parsed.key_dialogues : undefined,
         key_actions: Array.isArray(parsed.key_actions) ? parsed.key_actions : undefined,
@@ -120,10 +133,28 @@ ${text.slice(0, 4000)}
 }
 
 /**
- * Try to parse JSON from LLM text response.
- * Handles markdown code blocks, leading/trailing text, etc.
+ * Repair common LLM JSON mistakes:
+ * - trailing commas before } or ]
+ * - single quotes → double quotes (simple cases)
+ * - unescaped newlines inside strings
  */
-function parseJsonFromText(text: string): Record<string, unknown> | null {
+export function repairJson(text: string): string {
+  let s = text;
+  // trailing commas: ,] or ,}
+  s = s.replace(/,\s*([\]}])/g, "$1");
+  // single quotes → double (only outside already-double-quoted strings)
+  // conservative: only when key-value pattern like 'key': 'value'
+  s = s.replace(/'/g, '"');
+  // unescaped real newlines inside strings — replace with space
+  s = s.replace(/"([^"]*)\n([^"]*)"/g, (_, a, b) => `"${a} ${b}"`);
+  return s;
+}
+
+/**
+ * Try to parse JSON from LLM text response.
+ * Handles markdown code blocks, leading/trailing text, common LLM errors.
+ */
+export function parseJsonFromText(text: string): Record<string, unknown> | null {
   // Try direct parse first
   try {
     return JSON.parse(text);
@@ -137,7 +168,12 @@ function parseJsonFromText(text: string): Record<string, unknown> | null {
     try {
       return JSON.parse(codeBlockMatch[1].trim());
     } catch {
-      // continue
+      // try with repair
+      try {
+        return JSON.parse(repairJson(codeBlockMatch[1].trim()));
+      } catch {
+        // continue
+      }
     }
   }
 
@@ -145,11 +181,24 @@ function parseJsonFromText(text: string): Record<string, unknown> | null {
   const firstBrace = text.indexOf("{");
   const lastBrace = text.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const candidate = text.slice(firstBrace, lastBrace + 1);
     try {
-      return JSON.parse(text.slice(firstBrace, lastBrace + 1));
+      return JSON.parse(candidate);
     } catch {
-      // continue
+      // try with repair
+      try {
+        return JSON.parse(repairJson(candidate));
+      } catch {
+        // continue
+      }
     }
+  }
+
+  // Last resort: try repairing the whole text
+  try {
+    return JSON.parse(repairJson(text));
+  } catch {
+    // continue
   }
 
   return null;

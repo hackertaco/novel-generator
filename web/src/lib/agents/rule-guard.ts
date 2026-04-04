@@ -777,6 +777,7 @@ export class RuleGuardAgent implements PipelineAgent {
       ctx.text,
       ctx.seed.characters,
       ctx.blueprint?.pov,
+      ctx.previousCharacterStates,
     );
     const povIssues: RuleIssue[] = consistencyGateResult.issues
       .filter((issue) => issue.type === "pov_inconsistency")
@@ -785,6 +786,15 @@ export class RuleGuardAgent implements PipelineAgent {
         position: issue.position ?? 0,
         detail: `[시점 불일치] ${issue.description}`,
         severity: issue.severity === "critical" ? "critical" as const : "warning" as const,
+      }));
+
+    const companionIssues: RuleIssue[] = consistencyGateResult.issues
+      .filter((issue) => issue.type === "companion_discontinuity")
+      .map((issue) => ({
+        type: "companion_discontinuity" as const,
+        position: issue.position ?? 0,
+        detail: `[동선 불연속] ${issue.description}`,
+        severity: "error" as const,
       }));
 
     ctx.ruleIssues = [
@@ -799,11 +809,12 @@ export class RuleGuardAgent implements PipelineAgent {
         severity: "warning" as const,
       })),
       ...povIssues,
+      ...companionIssues,
     ];
 
     // Compute deterministic score so bestScore is always populated,
     // even in fast preset where QualityLoop/StateMachine are disabled.
-    const detScores = computeDeterministicScores(ctx.text, ctx.seed, ctx.chapterNumber);
+    const detScores = computeDeterministicScores(ctx.text, ctx.seed, ctx.chapterNumber, undefined, ctx.blueprint, ctx.previousCharacterStates);
     ctx.bestScore = Math.max(ctx.bestScore, detScores.overall);
     ctx.snapshots.push({ text: ctx.text, score: detScores.overall, iteration: 0 });
   }
