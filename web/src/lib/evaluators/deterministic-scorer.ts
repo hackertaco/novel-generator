@@ -162,11 +162,19 @@ const HOOK_PATTERNS = [
   // New character/entity introduction
   /누군가|어떤\s*[사람목소리]|처음\s*[보듣]/,
   // Danger/crisis keywords
-  /위험|죽|피|검|칼|비명|폭발|추격|함정/,
+  /위험|죽|피|검|칼|비명|폭발|추격|함정|절벽|심연|낭떠러지|감옥/,
   // Revelation
   /사실은|진실|비밀|정체|알게/,
   // Sound effects (sudden events)
   /[쾅쿵탕팡]/,
+  // Fate/calling/summoning — Korean narrative hooks
+  /불렀|부르|소환|기다리|찾아왔/,
+  // Inescapable fate
+  /피할\s*수\s*없|도망칠\s*수\s*없|막혔|돌아갈\s*수\s*없|되돌릴\s*수\s*없/,
+  // Cyclical/ominous recurrence
+  /다시|또다시|끝나지\s*않|반복|시작이었/,
+  // Decision/resolve cliffhanger
+  /결심|각오|선택|돌아서|발을\s*옮|움직였/,
   // Unfinished action
   /순간|그때|직전|—$/,
 ];

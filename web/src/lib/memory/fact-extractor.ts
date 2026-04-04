@@ -98,7 +98,16 @@ ${text.slice(0, 4000)}
         : [];
       return {
         chapter: parsed.chapter ?? chapterNumber,
-        facts: Array.isArray(parsed.facts) ? parsed.facts : [],
+        facts: Array.isArray(parsed.facts)
+          ? (parsed.facts as Record<string, unknown>[]).map((f) => ({
+              subject: String(f.subject ?? ""),
+              action: String(f.action ?? ""),
+              object: String(f.object ?? ""),
+              chapter: typeof f.chapter === "number" ? f.chapter : chapterNumber,
+              valid_until: typeof f.valid_until === "number" ? f.valid_until : undefined,
+              negated_by: typeof f.negated_by === "string" ? f.negated_by : undefined,
+            }))
+          : [],
         character_states: charStates,
         summary: typeof parsed.summary === "string" ? parsed.summary : `${chapterNumber}화`,
         key_dialogues: Array.isArray(parsed.key_dialogues) ? parsed.key_dialogues : undefined,

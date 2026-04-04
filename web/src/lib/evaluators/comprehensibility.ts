@@ -441,12 +441,29 @@ export function measureComprehensibility(
   // 4. Anaphora resolution possibility (20%)
   const anaphora = computeAnaphoraClarity(sentences, characters);
 
+  // Detect dialogue density — dialogue-heavy text naturally has speaker alternation
+  // which creates ROUGH_SHIFT transitions that are NOT real comprehensibility issues
+  const dialogueLines = text.split("\n").filter(
+    (l) => /["\u201C\u201D""」「]/.test(l),
+  ).length;
+  const totalLines = text.split("\n").filter((l) => l.trim().length > 0).length;
+  const dialogueRatio = totalLines > 0 ? dialogueLines / totalLines : 0;
+  const isDialogueHeavy = dialogueRatio > 0.25;
+
+  // Adjust weights: dialogue-heavy text gets lower centering/entity weight
+  // because speaker alternation ≠ narrative incoherence, and short dialogue
+  // lines structurally produce low entity grid scores (name absent from quotes)
+  const centeringWeight = isDialogueHeavy ? 0.10 : 0.3;
+  const entityWeight = isDialogueHeavy ? 0.10 : 0.3;
+  const subjectWeight = isDialogueHeavy ? 0.40 : 0.2;
+  const anaphoraWeight = isDialogueHeavy ? 0.40 : 0.2;
+
   // Overall weighted score
   const score =
-    entityCoherence * 0.3 +
-    centering.score * 0.3 +
-    subjectOmission.score * 0.2 +
-    anaphora.score * 0.2;
+    entityCoherence * entityWeight +
+    centering.score * centeringWeight +
+    subjectOmission.score * subjectWeight +
+    anaphora.score * anaphoraWeight;
 
   return {
     score,
