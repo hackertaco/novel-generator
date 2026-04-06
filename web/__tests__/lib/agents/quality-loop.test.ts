@@ -59,11 +59,12 @@ describe("QualityLoop", () => {
       quickScore: vi.fn().mockResolvedValue(0.9),
     };
     const surgeonFix = vi.fn(async function*() { yield "수정됨"; return { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 }; });
-    const surgeon = { fix: surgeonFix };
+    const surgeonFixIsolated = vi.fn().mockResolvedValue({ startParagraph: 1, endParagraph: 1, patchedText: "수정됨", usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 } });
+    const surgeon = { fix: surgeonFix, fixIsolated: surgeonFixIsolated };
     const loop = new QualityLoop(critic as unknown as CriticAgent, surgeon as unknown as SurgeonAgent);
     const ctx = makeCtx();
     await collectEvents(loop.run(ctx));
-    expect(surgeonFix).toHaveBeenCalledTimes(1); // only major, not minor
+    expect(surgeonFixIsolated).toHaveBeenCalledTimes(1); // only major, not minor
   });
 
   it("reverts when score drops after surgery", async () => {
@@ -72,7 +73,8 @@ describe("QualityLoop", () => {
       quickScore: vi.fn().mockResolvedValue(0.5), // score dropped
     };
     const surgeonFix = vi.fn(async function*() { yield "bad text"; return { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 }; });
-    const surgeon = { fix: surgeonFix };
+    const surgeonFixIsolated = vi.fn().mockResolvedValue({ startParagraph: 1, endParagraph: 1, patchedText: "bad text", usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 } });
+    const surgeon = { fix: surgeonFix, fixIsolated: surgeonFixIsolated };
     const loop = new QualityLoop(critic as unknown as CriticAgent, surgeon as unknown as SurgeonAgent);
     const ctx = makeCtx();
     const originalText = ctx.text;
@@ -90,7 +92,8 @@ describe("QualityLoop", () => {
       quickScore: vi.fn().mockImplementation(() => Promise.resolve(0.6 + callCount * 0.01)),
     };
     const surgeonFix = vi.fn(async function*() { yield "ok"; return { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 }; });
-    const surgeon = { fix: surgeonFix };
+    const surgeonFixIsolated = vi.fn().mockResolvedValue({ startParagraph: 1, endParagraph: 1, patchedText: "ok", usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 } });
+    const surgeon = { fix: surgeonFix, fixIsolated: surgeonFixIsolated };
     const loop = new QualityLoop(critic as unknown as CriticAgent, surgeon as unknown as SurgeonAgent);
     const ctx = makeCtx();
     await collectEvents(loop.run(ctx));

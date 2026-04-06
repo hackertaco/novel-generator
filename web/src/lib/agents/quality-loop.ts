@@ -1,6 +1,7 @@
-import type { PipelineAgent, ChapterContext, LifecycleEvent } from "./pipeline";
+import type { PipelineAgent, ChapterContext, CriticIssue, LifecycleEvent } from "./pipeline";
 import { CriticAgent } from "./critic-agent";
-import { SurgeonAgent } from "./surgeon-agent";
+import { SurgeonAgent, applyPatch } from "./surgeon-agent";
+import type { SurgeonPatch } from "./surgeon-agent";
 import { sanitize } from "./rule-guard";
 import { segmentText } from "./segmenter";
 import { accumulateUsage } from "./pipeline";
@@ -12,6 +13,42 @@ const QUALITY_THRESHOLD = 0.85;
 /** Deterministic gate thresholds */
 const GATE_REJECT = 0.70;    // Below → skip LLM, needs rewrite
 const GATE_PASS = 0.85;      // Above → skip LLM, pass through
+
+/**
+ * Partition issues into groups of non-overlapping paragraph ranges.
+ * Issues within a group can be fixed in parallel because their patches
+ * target disjoint text regions.
+ *
+ * Uses a greedy interval-colouring approach: sort by start, assign each
+ * issue to the first group whose last issue doesn't overlap.
+ */
+function partitionNonOverlapping(issues: CriticIssue[]): CriticIssue[][] {
+  if (issues.length <= 1) return [issues];
+
+  const sorted = [...issues].sort((a, b) => a.startParagraph - b.startParagraph);
+  const groups: CriticIssue[][] = [];
+  // Track the end paragraph of the last issue added to each group
+  const groupEnds: number[] = [];
+
+  for (const issue of sorted) {
+    let placed = false;
+    for (let g = 0; g < groups.length; g++) {
+      // No overlap: issue starts after previous issue's end (with 1-paragraph gap)
+      if (issue.startParagraph > groupEnds[g] + 1) {
+        groups[g].push(issue);
+        groupEnds[g] = issue.endParagraph;
+        placed = true;
+        break;
+      }
+    }
+    if (!placed) {
+      groups.push([issue]);
+      groupEnds.push(issue.endParagraph);
+    }
+  }
+
+  return groups;
+}
 
 export class QualityLoop implements PipelineAgent {
   name = "quality-loop";
@@ -33,7 +70,6 @@ export class QualityLoop implements PipelineAgent {
       ctx.chapterNumber,
       undefined,
       ctx.blueprint,
-      ctx.previousCharacterStates,
     );
 
     yield {
@@ -132,21 +168,56 @@ export class QualityLoop implements PipelineAgent {
       const actionable = currentReport.issues.filter(iss => iss.severity !== "minor");
       if (actionable.length === 0) break;
 
-      // Surgery phase
+      // Surgery phase — run non-overlapping fixes in parallel
       yield { type: "stage_change", stage: "surgery" };
 
-      for (const issue of actionable) {
+      {
         const paragraphs = segmentText(ctx.text);
-        if (issue.startParagraph >= paragraphs.length) continue;
+        const valid = actionable.filter(
+          (iss) => iss.startParagraph < paragraphs.length,
+        );
 
-        const gen = this.surgeon.fix(ctx, issue);
-        let result = await gen.next();
-        while (!result.done) {
-          // stream chunks from surgeon (ctx.text is mutated inside surgeon.fix)
-          result = await gen.next();
+        // Partition issues into non-overlapping groups that can run in parallel.
+        // Issues within a group do not overlap, so their patches can be applied
+        // independently to the same base text (applied bottom-to-top).
+        const groups = partitionNonOverlapping(valid);
+
+        for (const group of groups) {
+          const baseText = ctx.text;
+          const genre = ctx.seed.world.genre;
+
+          // Fire all fixes in this group concurrently
+          const patches: SurgeonPatch[] = await Promise.all(
+            group.map((issue) =>
+              this.surgeon.fixIsolated(
+                baseText,
+                ctx.chapterNumber,
+                genre,
+                issue,
+              ),
+            ),
+          );
+
+          // Apply patches bottom-to-top so paragraph indices stay valid
+          const sorted = patches
+            .filter((p) => p.patchedText && p.patchedText.trim().length > 0)
+            .sort((a, b) => b.startParagraph - a.startParagraph);
+
+          let text = baseText;
+          for (const patch of sorted) {
+            text = applyPatch(
+              text,
+              patch.startParagraph,
+              patch.endParagraph,
+              patch.patchedText,
+            );
+          }
+          ctx.text = text;
+
+          for (const patch of patches) {
+            ctx.totalUsage = accumulateUsage(ctx.totalUsage, patch.usage);
+          }
         }
-        const usage = result.value;
-        ctx.totalUsage = accumulateUsage(ctx.totalUsage, usage);
       }
 
       ctx.text = sanitize(ctx.text);

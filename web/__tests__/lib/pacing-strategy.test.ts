@@ -347,23 +347,21 @@ describe("Writer system prompt — universal rules", () => {
   for (const genre of genres) {
     it(`${genre} prompt should contain pacing rules`, () => {
       const prompt = getWriterSystemPrompt(genre, 1);
-      expect(prompt).toContain("한 화 = 한 장면이 이상적");
       expect(prompt).toContain("서사 전진");
     });
 
     it(`${genre} prompt should contain character intro rules`, () => {
       const prompt = getWriterSystemPrompt(genre, 1);
-      expect(prompt).toContain("1화는 주인공 1명 중심");
-      expect(prompt).toContain("신분에 맞게 행동");
+      expect(prompt).toContain("개연성");
     });
 
-    it(`${genre} prompt should contain core 6 rules`, () => {
+    it(`${genre} prompt should contain core 5 rules`, () => {
       const prompt = getWriterSystemPrompt(genre, 1);
-      expect(prompt).toContain("핵심 6대 규칙");
-      expect(prompt).toContain("심장이 두근거렸다");
-      expect(prompt).toContain("호기심");
-      expect(prompt).toContain("절단신공");
-      expect(prompt).toContain("읽기 페이싱");
+      expect(prompt).toContain("서사 전진");
+      expect(prompt).toContain("대사는 정보다");
+      expect(prompt).toContain("개연성");
+      expect(prompt).toContain("Show/Tell 밸런스");
+      expect(prompt).toContain("자연스러운 문체");
     });
   }
 });

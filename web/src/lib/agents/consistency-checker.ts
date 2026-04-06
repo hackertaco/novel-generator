@@ -2,40 +2,218 @@
  * ConsistencyChecker — post-generation verification against settings.
  *
  * Separate from CriticAgent (which evaluates style/craft).
- * This checks factual consistency:
- * - Character voice matches their profile
- * - World rules are not violated
- * - Timeline events don't contradict
- * - Dead/absent characters don't appear
- * - Location/time continuity
+ * This checks factual consistency using deterministic regex/heuristic checks:
+ * - Character voice matches their profile (speech pattern regex)
+ * - Dead/absent characters don't speak or act
+ * - Timeline events don't contradict (time marker ordering)
+ * - Location/time continuity (movement verb detection)
+ * - Honorific/speech-level consistency
+ *
+ * Previously LLM-based; replaced with regex to reduce cost ($0 per call).
+ * The existing evaluators/consistency-gate.ts already handles most checks;
+ * this agent wraps those plus adds voice-pattern and character-state checks
+ * that feed into the pipeline's ruleIssues.
  */
 
-import { z } from "zod";
-import { getAgent } from "./llm-agent";
 import type { PipelineAgent, ChapterContext, LifecycleEvent } from "./pipeline";
-import { accumulateUsage } from "./pipeline";
+import { evaluateConsistencyGate } from "../evaluators/consistency-gate";
 
-const ConsistencyIssueSchema = z.object({
-  type: z.enum(["voice", "world_rule", "timeline", "character_state", "location", "knowledge"]),
-  severity: z.enum(["critical", "warning"]),
-  description: z.string(),
-  evidence: z.string().describe("본문에서 문제가 되는 구체적 문장/대사"),
-  fix_suggestion: z.string(),
-});
+export interface ConsistencyIssue {
+  type: "voice" | "world_rule" | "timeline" | "character_state" | "location" | "knowledge";
+  severity: "critical" | "warning";
+  description: string;
+  evidence: string;
+  fix_suggestion: string;
+}
 
-const ConsistencyReportSchema = z.object({
-  issues: z.array(ConsistencyIssueSchema).default([]),
-  voice_check: z.object({
-    passed: z.boolean(),
-    details: z.string().default(""),
-  }).default({ passed: true, details: "" }),
-});
+// ---------------------------------------------------------------------------
+// Deterministic voice-pattern check
+// ---------------------------------------------------------------------------
 
-export type ConsistencyIssue = z.infer<typeof ConsistencyIssueSchema>;
+/**
+ * Extract dialogues attributed to each character and check if their
+ * speech_patterns appear. This mirrors what the old LLM prompt asked for
+ * (존댓말/반말 consistency, character-specific endings).
+ */
+function checkVoicePatterns(
+  text: string,
+  characters: Array<{
+    name: string;
+    id: string;
+    voice: { tone: string; speech_patterns?: string[] };
+    introduction_chapter: number;
+  }>,
+  chapterNumber: number,
+): ConsistencyIssue[] {
+  const issues: ConsistencyIssue[] = [];
+
+  for (const char of characters) {
+    if (char.introduction_chapter > chapterNumber) continue;
+    const patterns = char.voice.speech_patterns;
+    if (!patterns || patterns.length === 0) continue;
+
+    // Find dialogues attributed to this character:
+    // Pattern: NAME + particle + quote
+    const dialogueRegex = new RegExp(
+      `${char.name}[이가은는]?\\s*["\u201C]([^"\u201D]{10,})["\u201D]`,
+      "g",
+    );
+    let match: RegExpExecArray | null;
+    let totalDialogues = 0;
+    let mismatchCount = 0;
+
+    while ((match = dialogueRegex.exec(text)) !== null) {
+      const dialogue = match[1];
+      totalDialogues++;
+      const hasPattern = patterns.some((p) => dialogue.includes(p));
+      if (!hasPattern && dialogue.length > 15) {
+        mismatchCount++;
+        // Only report first 2 mismatches per character to avoid noise
+        if (mismatchCount <= 2) {
+          issues.push({
+            type: "voice",
+            severity: mismatchCount === 1 ? "warning" : "critical",
+            description: `${char.name}의 대사에 설정된 말투 패턴(${patterns.join(", ")})이 없음`,
+            evidence: dialogue.slice(0, 60),
+            fix_suggestion: `${char.name}의 대사에 "${patterns[0]}" 등 설정된 말투 패턴을 반영`,
+          });
+        }
+      }
+    }
+
+    // Check speech level consistency (존댓말 vs 반말)
+    if (totalDialogues >= 2) {
+      const politeEndings = /(?:습니다|합니다|입니다|세요|하세요|드리|겠습니다|주세요)/;
+      const casualEndings = /(?:해|했어|할게|한다|했다|하자|해라|해봐|했잖아)/;
+      const tone = char.voice.tone.toLowerCase();
+      const expectPolite = tone.includes("존댓말") || tone.includes("공손") || tone.includes("정중");
+      const expectCasual = tone.includes("반말") || tone.includes("건방") || tone.includes("거친");
+
+      if (expectPolite || expectCasual) {
+        dialogueRegex.lastIndex = 0;
+        while ((match = dialogueRegex.exec(text)) !== null) {
+          const dialogue = match[1];
+          if (expectPolite && casualEndings.test(dialogue) && !politeEndings.test(dialogue)) {
+            issues.push({
+              type: "voice",
+              severity: "critical",
+              description: `${char.name}은 존댓말 설정인데 반말 사용`,
+              evidence: dialogue.slice(0, 60),
+              fix_suggestion: `${char.name}의 대사를 존댓말로 수정`,
+            });
+            break; // one report per character is enough
+          }
+          if (expectCasual && politeEndings.test(dialogue) && !casualEndings.test(dialogue)) {
+            issues.push({
+              type: "voice",
+              severity: "warning",
+              description: `${char.name}은 반말 설정인데 존댓말 사용`,
+              evidence: dialogue.slice(0, 60),
+              fix_suggestion: `${char.name}의 대사를 반말로 수정`,
+            });
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return issues;
+}
+
+// ---------------------------------------------------------------------------
+// Character state check (dead/absent/injured)
+// ---------------------------------------------------------------------------
+
+/**
+ * Check if characters whose state is "dead", "absent", or "incapacitated"
+ * appear acting or speaking in the text.
+ */
+function checkCharacterState(
+  text: string,
+  characters: Array<{
+    name: string;
+    id: string;
+    state: { status?: string | null; location?: string | null; [key: string]: unknown };
+    introduction_chapter: number;
+  }>,
+  chapterNumber: number,
+): ConsistencyIssue[] {
+  const issues: ConsistencyIssue[] = [];
+
+  for (const char of characters) {
+    if (char.introduction_chapter > chapterNumber) continue;
+    const status = (char.state.status || "normal").toLowerCase();
+
+    // Check dead characters speaking/acting
+    if (status === "dead" || status === "deceased") {
+      // Check if character appears as a speaker (NAME + particle + quote)
+      const speakPattern = new RegExp(
+        `${char.name}[이가은는]?\\s*["\u201C]`,
+      );
+      // Check if character appears performing actions
+      const actionPattern = new RegExp(
+        `${char.name}[이가은는]?\\s*(?:말했|걸어|뛰어|달려|웃으며|소리쳤|외쳤|일어났|눈을 떴)`,
+      );
+
+      if (speakPattern.test(text)) {
+        const speakMatch = text.match(speakPattern);
+        const evidence = speakMatch
+          ? text.slice(Math.max(0, speakMatch.index! - 5), speakMatch.index! + 40)
+          : char.name;
+        issues.push({
+          type: "character_state",
+          severity: "critical",
+          description: `사망한 캐릭터 "${char.name}"이 대사를 함`,
+          evidence,
+          fix_suggestion: `${char.name}은 사망 상태이므로 대사를 제거하거나 회상/환상으로 처리`,
+        });
+      } else if (actionPattern.test(text)) {
+        const actionMatch = text.match(actionPattern);
+        const evidence = actionMatch
+          ? text.slice(Math.max(0, actionMatch.index! - 5), actionMatch.index! + 40)
+          : char.name;
+        issues.push({
+          type: "character_state",
+          severity: "critical",
+          description: `사망한 캐릭터 "${char.name}"이 행동함`,
+          evidence,
+          fix_suggestion: `${char.name}은 사망 상태이므로 행동 묘사를 제거`,
+        });
+      }
+    }
+
+    // Check absent characters appearing
+    if (status === "absent" || status === "away" || status === "missing") {
+      const nameRegex = new RegExp(
+        `${char.name}[이가은는]\\s*(?:["\u201C]|말했|걸어|뛰어)`,
+      );
+      if (nameRegex.test(text)) {
+        issues.push({
+          type: "character_state",
+          severity: "critical",
+          description: `부재중인 캐릭터 "${char.name}"이 등장함`,
+          evidence: char.name,
+          fix_suggestion: `${char.name}은 부재 상태이므로 등장을 제거하거나 복귀 묘사 추가`,
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
+// ---------------------------------------------------------------------------
+// Main class
+// ---------------------------------------------------------------------------
 
 /**
  * ConsistencyChecker runs after WriterAgent and before QualityLoop.
- * If critical issues are found, it asks the writer to fix them.
+ * Uses deterministic regex/heuristic checks (no LLM calls, $0 cost).
+ *
+ * Critical issues are reported via ruleIssues for the state machine to handle.
+ * Unlike the old LLM-based version, this does NOT attempt to auto-fix text
+ * (the LLM rewrite was found to undo RuleGuard fixes — see config.ts comments).
  */
 export class ConsistencyChecker implements PipelineAgent {
   name = "consistency-checker";
@@ -45,153 +223,71 @@ export class ConsistencyChecker implements PipelineAgent {
 
     yield { type: "stage_change", stage: "consistency_check" };
 
-    const agent = getAgent();
     const { seed, chapterNumber } = ctx;
 
-    // Build settings reference
-    const charProfiles = seed.characters
-      .filter((c) => c.introduction_chapter <= chapterNumber)
-      .map((c) => {
-        const gender = c.gender || "male";
-        const genderLabel = gender === "female" ? "여성" : "남성";
-        const state = c.state;
-        return `### ${c.name} (${c.id}, ${c.role}, ${genderLabel})
-말투: ${c.voice.tone}
-말투 특징: ${c.voice.speech_patterns?.join(", ") || "없음"}
-대사 예시: ${c.voice.sample_dialogues?.slice(0, 3).map((d) => `"${d}"`).join(", ") || "없음"}
-현재 상태: ${state.status || "normal"}
-현재 위치: ${state.location || "불명"}
-관계: ${Object.entries(state.relationships || {}).map(([k, v]) => `${k}(${v})`).join(", ") || "없음"}
-알고 있는 비밀: ${state.secrets_known?.join(", ") || "없음"}`;
-      })
-      .join("\n\n");
+    // 1. Run the deterministic consistency gate (POV, timeline, location, name, rank, companion)
+    const activeChars = seed.characters
+      .filter((c) => c.introduction_chapter <= chapterNumber);
 
-    const worldRules = seed.world.rules.length > 0
-      ? seed.world.rules.join("\n- ")
-      : "특별한 규칙 없음";
+    const gateResult = evaluateConsistencyGate(
+      ctx.text,
+      activeChars,
+      undefined, // POV auto-detected
+      ctx.previousCharacterStates,
+    );
 
-    const prompt = `다음 소설 본문이 설정과 일치하는지 검증하세요.
-
-## 세계관
-이름: ${seed.world.name}
-시대: ${seed.world.time_period}
-능력 체계: ${seed.world.magic_system || "없음"}
-규칙:
-- ${worldRules}
-
-## 캐릭터 설정
-${charProfiles}
-
-## ${chapterNumber}화 본문
-${ctx.text.slice(0, 6000)}
-
-## 검증 항목
-
-1. **말투 일관성 (voice)**: 각 캐릭터의 대사가 설정된 말투와 일치하는가?
-   - 존댓말/반말 혼용 없는가?
-   - 캐릭터 고유 어미/패턴이 유지되는가?
-   - A 캐릭터가 B 캐릭터의 말투로 말하고 있지 않은가?
-
-2. **세계관 규칙 (world_rule)**: 설정된 규칙이 위반되지 않는가?
-   - 마법/능력 체계에 맞는가?
-   - 시대에 맞지 않는 용어/기술이 사용되지 않는가?
-
-3. **캐릭터 상태 (character_state)**:
-   - 부상/사망한 캐릭터가 멀쩡하게 행동하는가?
-   - 모르는 정보를 아는 것처럼 행동하는가?
-   - 있어야 할 곳이 아닌 곳에 있는가?
-
-4. **타임라인 (timeline)**: 사건 순서가 논리적인가?
-
-5. **위치 연속성 (location)**: 장소 이동이 자연스러운가?
-
-## 출력 (JSON)
-\`\`\`json
-{
-  "issues": [
-    {
-      "type": "voice",
-      "severity": "critical",
-      "description": "유디트가 반말을 사용함 (설정은 존댓말)",
-      "evidence": "\"가자.\" 유디트가 말했다.",
-      "fix_suggestion": "\"가시죠.\" 유디트가 말했다."
-    }
-  ],
-  "voice_check": {
-    "passed": false,
-    "details": "유디트의 말투가 2곳에서 설정과 불일치"
-  }
-}
-\`\`\`
-
-문제가 없으면 issues를 빈 배열로 반환하세요. critical만 수정이 필요합니다.`;
-
-    try {
-      const result = await agent.callStructured({
-        prompt,
-        system: "당신은 소설 설정 일관성 검증 전문가입니다. 본문과 설정을 비교하여 불일치를 찾아냅니다.",
-        schema: ConsistencyReportSchema,
-        format: "json",
-        temperature: 0.2,
-        maxTokens: 2000,
-        taskId: `consistency-check-${chapterNumber}`,
+    // Map gate issues to ruleIssues
+    for (const issue of gateResult.issues) {
+      ctx.ruleIssues.push({
+        type: "consistency",
+        severity: issue.severity === "critical" ? "critical" : "warning",
+        message: issue.description,
+        position: issue.position ?? 0,
+        detail: issue.detail,
       });
-
-      ctx.totalUsage = accumulateUsage(ctx.totalUsage, result.usage);
-      yield { type: "usage", ...result.usage };
-
-      const report = result.data;
-      const criticalIssues = report.issues.filter((i) => i.severity === "critical");
-
-      if (criticalIssues.length > 0) {
-        // Build repair prompt with specific fixes
-        const fixInstructions = criticalIssues.map((issue, idx) =>
-          `${idx + 1}. [${issue.type}] ${issue.description}\n   문제 부분: "${issue.evidence}"\n   수정 방향: ${issue.fix_suggestion}`
-        ).join("\n");
-
-        yield { type: "stage_change", stage: "consistency_fix" };
-
-        const fixResult = await agent.call({
-          prompt: `다음 소설 본문에서 설정 일관성 문제가 발견되었습니다. 수정해주세요.
-
-## 발견된 문제
-${fixInstructions}
-
-## 수정 규칙
-- 문제가 있는 부분만 최소한으로 수정하세요
-- 전체 흐름과 감정을 해치지 마세요
-- 수정된 전체 본문을 출력하세요
-
-## 현재 본문
-${ctx.text}`,
-          system: "당신은 소설 편집자입니다. 설정 일관성 문제만 최소한으로 수정하세요.",
-          temperature: 0.2,
-          maxTokens: 12000,
-          taskId: `consistency-fix-${chapterNumber}`,
-        });
-
-        ctx.totalUsage = accumulateUsage(ctx.totalUsage, fixResult.usage);
-        yield { type: "usage", ...fixResult.usage };
-
-        const fixedText = fixResult.data.trim();
-        if (fixedText.length > ctx.text.length * 0.7) {
-          ctx.text = fixedText;
-          yield { type: "replace_text", content: ctx.text };
-        }
-      }
-
-      // Report voice check status
-      if (!report.voice_check.passed) {
-        ctx.ruleIssues.push({
-          type: "consistency",
-          severity: "warning",
-          message: `말투 일관성: ${report.voice_check.details}`,
-          position: 0,
-          detail: report.voice_check.details,
-        });
-      }
-    } catch (err) {
-      console.warn(`[consistency-checker] 검증 실패, 건너뜀: ${err instanceof Error ? err.message : err}`);
     }
+
+    // 2. Voice pattern checks (speech pattern matching per character)
+    const voiceIssues = checkVoicePatterns(ctx.text, activeChars, chapterNumber);
+    for (const issue of voiceIssues) {
+      ctx.ruleIssues.push({
+        type: "consistency",
+        severity: issue.severity === "critical" ? "critical" : "warning",
+        message: `말투 일관성: ${issue.description}`,
+        position: 0,
+        detail: `${issue.evidence} → ${issue.fix_suggestion}`,
+      });
+    }
+
+    // 3. Character state checks (dead/absent characters acting)
+    const stateIssues = checkCharacterState(ctx.text, activeChars, chapterNumber);
+    for (const issue of stateIssues) {
+      ctx.ruleIssues.push({
+        type: "consistency",
+        severity: issue.severity === "critical" ? "critical" : "warning",
+        message: issue.description,
+        position: 0,
+        detail: `${issue.evidence} → ${issue.fix_suggestion}`,
+      });
+    }
+
+    // Report summary
+    const totalCritical = [...gateResult.issues, ...voiceIssues, ...stateIssues]
+      .filter((i) => i.severity === "critical").length;
+    const totalWarning = [...gateResult.issues, ...voiceIssues, ...stateIssues]
+      .filter((i) => i.severity !== "critical").length;
+
+    if (totalCritical > 0 || totalWarning > 0) {
+      console.log(
+        `[consistency-checker] ${chapterNumber}화: critical=${totalCritical}, warning=${totalWarning} (deterministic, $0)`,
+      );
+    }
+
+    // NOTE: The old LLM-based version attempted auto-fix via a second LLM call.
+    // This was removed because:
+    // 1. The full-text LLM rewrite often undoes RuleGuard fixes (see config.ts)
+    // 2. Deterministic checks are sufficient for detection; fixes should be
+    //    handled by the writer's repair loop (state machine VALIDATE → REPAIR)
+    // 3. Cost savings: 2 LLM calls eliminated (~$0.02-0.05 per chapter)
   }
 }

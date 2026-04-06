@@ -15,6 +15,7 @@ export function buildSurgeonPrompt(
   next: string | null,
   description: string,
   suggestedFix: string,
+  genre: string = "판타지",
 ): string {
   const parts: string[] = [];
 
@@ -104,6 +105,14 @@ export function applyPatch(
  * SurgeonAgent fixes a single CriticIssue by streaming a patched replacement
  * for the affected paragraph range and applying it back to the chapter text.
  */
+/** Result of an isolated (non-mutating) surgeon fix */
+export interface SurgeonPatch {
+  startParagraph: number;
+  endParagraph: number;
+  patchedText: string;
+  usage: TokenUsage;
+}
+
 export class SurgeonAgent {
   /**
    * Fix a single issue: streams patched text for the specified range.
@@ -113,6 +122,7 @@ export class SurgeonAgent {
   async *fix(ctx: ChapterContext, issue: CriticIssue): AsyncGenerator<string, TokenUsage> {
     const segments = segmentText(ctx.text);
     const { startParagraph, endParagraph, description, suggestedFix } = issue;
+    const genre = ctx.seed.world.genre;
 
     // Extract target range text
     const clampedStart = Math.min(startParagraph, segments.length - 1);
@@ -132,6 +142,7 @@ export class SurgeonAgent {
       nextSegment,
       description,
       suggestedFix,
+      genre,
     );
 
     const agent = getAgent();
@@ -159,5 +170,65 @@ export class SurgeonAgent {
     ctx.text = applyPatch(ctx.text, startParagraph, endParagraph, cleaned);
 
     return usage;
+  }
+
+  /**
+   * Fix a single issue without mutating any shared state.
+   * Reads from the provided `text` snapshot, returns a SurgeonPatch
+   * that can be applied later via applyPatch().
+   */
+  async fixIsolated(
+    text: string,
+    chapterNumber: number,
+    genre: string,
+    issue: CriticIssue,
+  ): Promise<SurgeonPatch> {
+    const segments = segmentText(text);
+    const { startParagraph, endParagraph, description, suggestedFix } = issue;
+
+    const clampedStart = Math.min(startParagraph, segments.length - 1);
+    const clampedEnd = Math.min(endParagraph, segments.length - 1);
+    const target = segments
+      .slice(clampedStart, clampedEnd + 1)
+      .map((s) => s.text)
+      .join("\n\n");
+
+    const prevSegment = clampedStart > 0 ? segments[clampedStart - 1].text : null;
+    const nextSegment = clampedEnd < segments.length - 1 ? segments[clampedEnd + 1].text : null;
+
+    const prompt = buildSurgeonPrompt(
+      target,
+      prevSegment,
+      nextSegment,
+      description,
+      suggestedFix,
+      genre,
+    );
+
+    const agent = getAgent();
+    const stream = agent.callStream({
+      prompt,
+      system: getSurgeonSystemPrompt(),
+      temperature: 0.3,
+      maxTokens: 4096,
+      taskId: `surgeon-ch${chapterNumber}-p${startParagraph}-${endParagraph}`,
+    });
+
+    let collected = "";
+    let result = await stream.next();
+    while (!result.done) {
+      collected += result.value;
+      result = await stream.next();
+    }
+
+    const usage: TokenUsage = result.value;
+    const cleaned = sanitize(collected);
+
+    return {
+      startParagraph,
+      endParagraph,
+      patchedText: cleaned,
+      usage,
+    };
   }
 }
