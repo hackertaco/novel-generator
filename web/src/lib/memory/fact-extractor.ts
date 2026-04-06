@@ -50,7 +50,8 @@ ${text.slice(0, 4000)}
   "character_states": [{"name":"이름","location":"위치","physical":"신체상태","emotional":"감정","knows":["알고있는것"],"companions":["함께있는인물"],"relationships":[{"with":"상대","status":"관계"}]}],
   "summary": "1-2문장 요약",
   "key_dialogues": [{"speaker":"화자이름","line":"실제 대사 원문","context":"상황 설명"}],
-  "key_actions": [{"character":"캐릭터이름","action":"핵심 행동 설명"}]
+  "key_actions": [{"character":"캐릭터이름","action":"핵심 행동 설명"}],
+  "pending_situations": [{"characters":["관련인물"],"situation":"무슨 상황인지","location":"어디서","unresolved":"해결 안 된 것"}]
 }
 
 규칙:
@@ -61,6 +62,7 @@ ${text.slice(0, 4000)}
 - **location 필수**: 화 마지막 시점 기준 위치. 이동했으면 마지막 위치.
 - 이 화에서 가장 인상적인 대사 3-5개를 key_dialogues에 추출하세요 (실제 대사 원문 그대로)
 - 이 화에서 핵심 행동 3-5개를 key_actions에 추출하세요 (캐릭터의 중요한 물리적/감정적 행동)
+- **pending_situations 필수**: 화 마지막에 해결되지 않은 열린 상황을 추출하세요. 예: 대치 중, 갇힘, 추격 중, 함께 이동 중, 대화 도중 끊김 등. 다음 화에서 반드시 이어받아야 할 상황입니다. 없으면 빈 배열 [].
 - JSON만 출력`;
 
   try {
@@ -97,7 +99,7 @@ ${text.slice(0, 4000)}
           }))
         : [];
       return {
-        chapter: parsed.chapter ?? chapterNumber,
+        chapter: typeof parsed.chapter === "number" ? parsed.chapter : chapterNumber,
         facts: Array.isArray(parsed.facts)
           ? (parsed.facts as Record<string, unknown>[]).map((f) => ({
               subject: String(f.subject ?? ""),
@@ -112,6 +114,7 @@ ${text.slice(0, 4000)}
         summary: typeof parsed.summary === "string" ? parsed.summary : `${chapterNumber}화`,
         key_dialogues: Array.isArray(parsed.key_dialogues) ? parsed.key_dialogues : undefined,
         key_actions: Array.isArray(parsed.key_actions) ? parsed.key_actions : undefined,
+        pending_situations: Array.isArray(parsed.pending_situations) ? parsed.pending_situations : undefined,
       };
     }
 

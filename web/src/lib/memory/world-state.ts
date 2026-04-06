@@ -33,6 +33,13 @@ export const KeyActionSchema = z.object({
   action: z.string(),            // e.g. "테오가 리에나 옷자락을 붙잡음"
 });
 
+export const PendingSituationSchema = z.object({
+  characters: z.array(z.string()),   // involved character names
+  situation: z.string(),             // "라시드가 문을 닫고 세레나를 가둠"
+  location: z.string(),             // where it's happening
+  unresolved: z.string(),           // what's unresolved: "세레나가 어떻게 빠져나가는지"
+});
+
 export const ChapterWorldStateSchema = z.object({
   chapter: z.number(),
   facts: z.array(WorldFactSchema),
@@ -40,10 +47,12 @@ export const ChapterWorldStateSchema = z.object({
   summary: z.string(),          // 1-2 sentence chapter summary
   key_dialogues: z.array(KeyDialogueSchema).optional(),
   key_actions: z.array(KeyActionSchema).optional(),
+  pending_situations: z.array(PendingSituationSchema).optional(),
 });
 
 export type WorldFact = z.infer<typeof WorldFactSchema>;
 export type CharacterState = z.infer<typeof CharacterStateSchema>;
 export type KeyDialogue = z.infer<typeof KeyDialogueSchema>;
 export type KeyAction = z.infer<typeof KeyActionSchema>;
+export type PendingSituation = z.infer<typeof PendingSituationSchema>;
 export type ChapterWorldState = z.infer<typeof ChapterWorldStateSchema>;

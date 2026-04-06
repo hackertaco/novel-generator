@@ -716,6 +716,18 @@ export class ChapterStateMachine {
       `재생성 시도 #${this.smCtx.regenerationCount}: ${reason}`
     );
 
+    // Add specific companion discontinuity details for targeted correction
+    if (verdict?.ruleIssues) {
+      const companionDetails = verdict.ruleIssues
+        .filter((ri) => ri.type === "companion_discontinuity")
+        .map((ri) => ri.detail);
+      if (companionDetails.length > 0) {
+        this.correctionContext.push(
+          `⚠️ 동선 불연속 오류:\n${companionDetails.join("\n")}\n→ 이전 화 종료 시점의 인물 배치를 반드시 이어받아 시작하세요. 함께 있던 인물이 분리되려면 분리 장면을 먼저 보여주세요.`
+        );
+      }
+    }
+
     // Reset text (writer will produce new text)
     this.smCtx.chapter.text = "";
     this.smCtx.chapter.ruleIssues = [];

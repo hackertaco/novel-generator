@@ -794,7 +794,7 @@ export class RuleGuardAgent implements PipelineAgent {
         type: "companion_discontinuity" as const,
         position: issue.position ?? 0,
         detail: `[동선 불연속] ${issue.description}`,
-        severity: "error" as const,
+        severity: "critical" as const,
       }));
 
     ctx.ruleIssues = [

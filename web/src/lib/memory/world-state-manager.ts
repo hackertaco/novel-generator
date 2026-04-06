@@ -5,7 +5,7 @@
  * supports contradiction detection, and formats state for the Writer prompt.
  */
 
-import type { ChapterWorldState, WorldFact, CharacterState, KeyDialogue, KeyAction } from "./world-state";
+import type { ChapterWorldState, WorldFact, CharacterState, KeyDialogue, KeyAction, PendingSituation } from "./world-state";
 
 export interface Contradiction {
   existing: WorldFact;
@@ -187,11 +187,24 @@ export class WorldStateManager {
       const names = chars.map((c) => c.name).join(", ");
       parts.push(`- **${location}**: ${names}`);
     }
+
+    // Add pending situations from previous chapter
+    const pendingSituations = prevChapter.pending_situations;
+    if (pendingSituations && pendingSituations.length > 0) {
+      parts.push("");
+      parts.push(`## 이전 화 미해결 상황 (${prevChapter.chapter}화 끝)`);
+      for (const ps of pendingSituations) {
+        parts.push(`- **${ps.characters.join(", ")}** @ ${ps.location}: ${ps.situation}`);
+        parts.push(`  → 미해결: ${ps.unresolved}`);
+      }
+    }
+
     parts.push("");
-    parts.push("⚠️ 위 배치를 반드시 이어받으세요:");
+    parts.push("⚠️ 위 배치와 미해결 상황을 반드시 이어받으세요:");
     parts.push("- 같은 장소에 있던 인물들은 함께 등장해야 합니다.");
     parts.push("- 누군가 자리를 떠나려면 떠나는 장면을 묘사하세요.");
     parts.push("- 다른 장소에 있던 인물이 합류하려면 이동 과정을 보여주세요.");
+    parts.push("- 미해결 상황은 이번 화 초반에 반드시 이어서 처리하세요 (갑자기 해결된 채 시작 금지).");
 
     return parts.join("\n");
   }
