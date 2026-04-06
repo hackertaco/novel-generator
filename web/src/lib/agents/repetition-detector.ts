@@ -348,3 +348,49 @@ export function detectChapterRepetition(sceneTexts: string[]): RepetitionResult 
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// detectCrossChapterInfoRepeat
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect when the current chapter re-explains information already established
+ * in previous chapters. Uses fact triples (subject-action-object) from
+ * WorldStateManager to find redundant exposition.
+ *
+ * Returns sentences that closely match previously established facts,
+ * indicating the writer is re-explaining instead of building on them.
+ */
+export function detectCrossChapterInfoRepeat(
+  currentText: string,
+  previousFacts: Array<{ subject: string; action: string; object: string; chapter: number }>,
+): { repeatedCount: number; details: string[] } {
+  if (previousFacts.length === 0) return { repeatedCount: 0, details: [] };
+
+  const details: string[] = [];
+  const sentences = currentText.split(/[.!?\n]/).map((s) => s.trim()).filter((s) => s.length > 10);
+
+  for (const fact of previousFacts) {
+    // Build keywords from the fact triple
+    const keywords = [fact.subject, fact.object]
+      .filter((w) => w.length >= 2)
+      .map((w) => w.replace(/[을를이가은는의에서로]/g, "").trim())
+      .filter((w) => w.length >= 2);
+
+    if (keywords.length < 2) continue;
+
+    // Check if multiple sentences in current text explain this same fact
+    const matchingSentences = sentences.filter((sent) =>
+      keywords.every((kw) => sent.includes(kw))
+    );
+
+    // 2+ sentences explaining the same previously-established fact = redundant
+    if (matchingSentences.length >= 2) {
+      details.push(
+        `${fact.chapter}화에서 이미 확립된 "${fact.subject} ${fact.action} ${fact.object}"이(가) ${matchingSentences.length}문장에 걸쳐 다시 설명됨`
+      );
+    }
+  }
+
+  return { repeatedCount: details.length, details };
+}

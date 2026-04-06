@@ -3,6 +3,7 @@ import { enforceLength, DEFAULT_TARGET_CHARS, DEFAULT_TOLERANCE } from "./length
 import { enforceSpeechLevels } from "../evaluators/speech-level-enforcer";
 import { evaluateConsistencyGate } from "../evaluators/consistency-gate";
 import { computeDeterministicScores } from "../evaluators/deterministic-scorer";
+import { detectCrossChapterInfoRepeat } from "./repetition-detector";
 
 // ---------------------------------------------------------------------------
 // Sanitize — remove LLM meta markers from generated text
@@ -797,6 +798,20 @@ export class RuleGuardAgent implements PipelineAgent {
         severity: "critical" as const,
       }));
 
+    // Cross-chapter info repeat detection
+    const infoRepeatIssues: RuleIssue[] = [];
+    if (ctx.previousFacts && ctx.previousFacts.length > 0) {
+      const infoRepeat = detectCrossChapterInfoRepeat(ctx.text, ctx.previousFacts);
+      for (const detail of infoRepeat.details) {
+        infoRepeatIssues.push({
+          type: "info_repeat" as const,
+          position: 0,
+          detail: `[정보 반복] ${detail}`,
+          severity: "warning" as const,
+        });
+      }
+    }
+
     ctx.ruleIssues = [
       ...detectEndingRepeat(ctx.text),
       ...detectSentenceStartRepeat(ctx.text),
@@ -810,6 +825,7 @@ export class RuleGuardAgent implements PipelineAgent {
       })),
       ...povIssues,
       ...companionIssues,
+      ...infoRepeatIssues,
     ];
 
     // Compute deterministic score so bestScore is always populated,

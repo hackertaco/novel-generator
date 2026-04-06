@@ -23,7 +23,7 @@ export interface TrackingInjection {
 // --- Issue types ---
 
 export interface RuleIssue {
-  type: "ending_repeat" | "sentence_start_repeat" | "banned_expression" | "consistency" | "short_dialogue_sequence" | "speech_level_violation" | "pov_inconsistency" | "companion_discontinuity";
+  type: "ending_repeat" | "sentence_start_repeat" | "banned_expression" | "consistency" | "short_dialogue_sequence" | "speech_level_violation" | "pov_inconsistency" | "companion_discontinuity" | "info_repeat";
   severity?: "warning" | "error" | "critical";
   message?: string;
   position: number; // paragraph index (0-based)
@@ -84,6 +84,8 @@ export interface ChapterContext {
   antiRepeatContext?: string;
   /** Previous chapter's character states for companion continuity checking */
   previousCharacterStates?: CharacterState[];
+  /** Previous chapters' established facts for cross-chapter info repeat detection */
+  previousFacts?: Array<{ subject: string; action: string; object: string; chapter: number }>;
 }
 
 // --- LifecycleEvent (defined here to avoid circular imports; chapter-lifecycle.ts re-exports from here) ---

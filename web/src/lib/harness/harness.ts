@@ -465,6 +465,10 @@ export class NovelHarness {
       previousCharacterStates: this.worldStateManager
         ? this.worldStateManager.getPreviousCharacterStates(chapterNumber)
         : undefined,
+      previousFacts: this.worldStateManager && this.worldStateManager.size > 0
+        ? this.worldStateManager.getCurrentFacts()
+            .filter((f) => f.chapter < chapterNumber)
+        : undefined,
     };
 
     // Run pipeline
