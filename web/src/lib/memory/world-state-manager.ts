@@ -153,6 +153,19 @@ export class WorldStateManager {
       parts.push(`  → 변주하세요: 말 대신 행동, 다른 어휘, 침묵 등`);
     }
 
+    // Add already-explained facts/settings to prevent re-explanation
+    const explainedFacts = this.getCurrentFacts()
+      .filter((f) => f.chapter < chapterNumber)
+      .slice(-15);
+    if (explainedFacts.length > 0) {
+      parts.push("");
+      parts.push("## 이미 설명된 설정 (다시 설명하지 마세요)");
+      parts.push("독자는 아래 정보를 이미 알고 있습니다. 언급은 가능하지만, 같은 내용을 다시 풀어서 설명하면 지루합니다.");
+      for (const f of explainedFacts) {
+        parts.push(`  - ${f.chapter}화: ${f.subject} ${f.action} ${f.object}`);
+      }
+    }
+
     return parts.join("\n");
   }
 
