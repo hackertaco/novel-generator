@@ -107,7 +107,7 @@ async function fetchJson(url: string, body: unknown): Promise<unknown> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(300_000), // 5 min
+    signal: AbortSignal.timeout(1_200_000), // 20 min (LLM API can be slow)
   });
   if (!res.ok) {
     const err = await res.text().catch(() => "unknown error");
