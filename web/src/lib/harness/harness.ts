@@ -452,6 +452,7 @@ export class NovelHarness {
       previousChapterEnding,
       fastMode: this.config.fastMode,
       parallelMode: this.config.parallelMode,
+      simpleMode: this.config.simpleMode,
       directionDesign: this._directionDesign,
       worldStateContext: this.worldStateManager && this.worldStateManager.size > 0
         ? [

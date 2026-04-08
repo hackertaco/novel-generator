@@ -76,6 +76,8 @@ export interface ChapterContext {
   fastMode?: boolean;
   /** Generate scenes in parallel + bridge stitching (fastest) */
   parallelMode?: boolean;
+  /** Simple mode: minimal context to Writer for more natural prose */
+  simpleMode?: boolean;
   /** Direction design metadata (address matrix, info budget, emotion curve, hook strategy) */
   directionDesign?: DirectionDesign;
   /** Formatted world state context from WorldStateManager (facts + character states) */

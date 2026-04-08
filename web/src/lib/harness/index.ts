@@ -4,6 +4,7 @@ export {
   getDefaultConfig,
   getBudgetConfig,
   getFastConfig,
+  getSimpleConfig,
   getTestNoPolisherConfig,
   getTestNoQualityLoopConfig,
   getTestNoQualityNoPolisherConfig,

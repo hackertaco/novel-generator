@@ -43,6 +43,8 @@ export interface SceneWriterOptions {
   fastMode?: boolean;
   /** Generate scenes in parallel + bridge stitching (fastest) */
   parallelMode?: boolean;
+  /** Simple mode: minimal context for more natural writing */
+  simpleMode?: boolean;
 }
 
 export interface SceneWriterResult {
@@ -386,6 +388,100 @@ function extractSceneState(
   return { timeOfDay, location, characters };
 }
 
+/**
+ * Build a minimal prompt for "simple mode" — strips away most constraints
+ * to let the LLM write more naturally. Only provides:
+ * - Novel title/genre/chapter goal
+ * - Previous chapter ending (raw text for continuity)
+ * - Previous chapter 1-line summary (long-term memory)
+ * - Foreshadowing actions (cross-chapter thread continuity)
+ * - Character names + voice (compact)
+ * - Scene purpose (1 line) + target length
+ */
+export function buildSimpleScenePrompt(
+  seed: NovelSeed,
+  chapterNumber: number,
+  blueprint: ChapterBlueprint,
+  scene: SceneSpec,
+  sceneIndex: number,
+  previousSceneTexts: string[],
+  previousSummaries: Array<{ chapter: number; summary: string }>,
+  previousChapterEnding?: string,
+): string {
+  const parts: string[] = [];
+
+  // Minimal novel context
+  parts.push(`# ${seed.title} — ${seed.world.genre}
+${chapterNumber}화: ${blueprint.one_liner}
+`);
+
+  // Previous chapter summaries — 1 line each, last 2 only
+  if (sceneIndex === 0 && previousSummaries.length > 0) {
+    const recent = previousSummaries.slice(-2);
+    parts.push("# 이전 내용");
+    for (const s of recent) {
+      parts.push(`- ${s.chapter}화: ${s.summary.slice(0, 200)}`);
+    }
+    parts.push("");
+  }
+
+  // Previous chapter ending (raw text — the most effective continuity tool)
+  if (sceneIndex === 0 && chapterNumber > 1 && previousChapterEnding) {
+    parts.push(`# 직전 화 마지막 장면 (이 직후부터 이어서 쓰세요)
+---
+${previousChapterEnding}
+---
+위 내용은 이미 독자가 읽었습니다. 반복하지 마세요.
+`);
+  }
+
+  // Previous scene in this chapter (for continuity between scenes)
+  if (previousSceneTexts.length > 0) {
+    const lastScene = previousSceneTexts[previousSceneTexts.length - 1];
+    parts.push(`# 직전 씬 (이어서 쓰세요)
+${lastScene.slice(-600)}
+`);
+  }
+
+  // Characters — compact: name + voice only
+  const sceneChars = scene.characters
+    .map((id) => seed.characters.find((c) => c.id === id))
+    .filter(Boolean);
+
+  if (sceneChars.length > 0) {
+    parts.push("# 캐릭터");
+    for (const char of sceneChars) {
+      if (!char) continue;
+      const gender = char.gender === "female" ? "여" : char.gender === "male" ? "남" : "";
+      const dialogues = char.voice.sample_dialogues.slice(0, 2);
+      parts.push(`**${char.name}** (${char.role}${gender ? `, ${gender}` : ""}) — ${char.voice.tone}
+대사 예시: ${dialogues.map((d) => `"${d}"`).join(" / ") || "(없음)"}
+`);
+    }
+  }
+
+  // Foreshadowing actions — essential for cross-chapter thread continuity
+  const fsActions = getForeshadowingActions(seed, chapterNumber);
+  if (fsActions.length > 0) {
+    parts.push("# 복선");
+    for (const { foreshadowing: fs, action } of fsActions) {
+      const label = action === "plant" ? "심기" : action === "hint" ? "암시" : "공개";
+      parts.push(`- [${label}] ${fs.name}: ${fs.description}`);
+    }
+    parts.push("");
+  }
+
+  // Scene instruction — minimal
+  const isLastScene = sceneIndex === blueprint.scenes.length - 1;
+  parts.push(`# 씬 ${sceneIndex + 1}/${blueprint.scenes.length}
+${scene.purpose}
+분량: ${scene.estimated_chars}자
+${isLastScene ? "⚠️ 마지막 씬 — 다음 화가 궁금해지는 엔딩으로 끝내세요." : ""}
+출력: 소설 본문만`);
+
+  return parts.join("\n");
+}
+
 const ZERO_USAGE: TokenUsage = {
   prompt_tokens: 0,
   completion_tokens: 0,
@@ -422,6 +518,7 @@ export async function writeChapterByScenes(
     correctionContext,
     previousChapterEnding,
     fastMode,
+    simpleMode,
   } = options;
 
   const agent = getAgent();
@@ -458,12 +555,18 @@ export async function writeChapterByScenes(
     let sceneText: string;
 
     if (fastMode) {
-      // Fast mode: generate entire scene in one LLM call (no beats)
-      const scenePrompt = buildScenePrompt(
-        seed, chapterNumber, blueprint, scene, i,
-        sceneTexts, previousSummaries,
-        { memoryContext, toneGuidance, progressContext, threadReminders, correctionContext, previousChapterEnding },
-      );
+      // Simple mode: minimal context for natural prose
+      // Full mode: all context sections
+      const scenePrompt = simpleMode
+        ? buildSimpleScenePrompt(
+            seed, chapterNumber, blueprint, scene, i,
+            sceneTexts, previousSummaries, previousChapterEnding,
+          )
+        : buildScenePrompt(
+            seed, chapterNumber, blueprint, scene, i,
+            sceneTexts, previousSummaries,
+            { memoryContext, toneGuidance, progressContext, threadReminders, correctionContext, previousChapterEnding },
+          );
       const result = await agent.call({
         prompt: scenePrompt,
         system: systemPrompt,
@@ -588,6 +691,7 @@ export async function writeChapterParallel(
     threadReminders,
     correctionContext,
     previousChapterEnding,
+    simpleMode,
   } = options;
 
   const agent = getAgent();
@@ -622,19 +726,25 @@ export async function writeChapterParallel(
         ).join("\n") + "\n자연스럽게 이어서 시작하세요. 위 씬에서 이미 묘사한 행동/장면/감정을 다시 쓰지 마세요."
       : undefined;
 
-    const scenePrompt = buildScenePrompt(
-      seed, chapterNumber, blueprint, scene, i,
-      [], // no previous scene texts in parallel mode
-      previousSummaries,
-      {
-        memoryContext,
-        toneGuidance,
-        progressContext,
-        threadReminders: i >= blueprint.scenes.length - 2 ? threadReminders : undefined,
-        correctionContext,
-        previousChapterEnding: previousChapterEnding,
-      },
-    );
+    const scenePrompt = simpleMode
+      ? buildSimpleScenePrompt(
+          seed, chapterNumber, blueprint, scene, i,
+          [], // no previous scene texts in parallel mode
+          previousSummaries, previousChapterEnding,
+        )
+      : buildScenePrompt(
+          seed, chapterNumber, blueprint, scene, i,
+          [], // no previous scene texts in parallel mode
+          previousSummaries,
+          {
+            memoryContext,
+            toneGuidance,
+            progressContext,
+            threadReminders: i >= blueprint.scenes.length - 2 ? threadReminders : undefined,
+            correctionContext,
+            previousChapterEnding: previousChapterEnding,
+          },
+        );
 
     return agent.call({
       prompt: scenePrompt,

@@ -19,7 +19,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { NovelHarness, getDefaultConfig, getBudgetConfig, getFastConfig } from "../src/lib/harness";
+import { NovelHarness, getDefaultConfig, getBudgetConfig, getFastConfig, getSimpleConfig } from "../src/lib/harness";
 import type { HarnessConfig } from "../src/lib/harness";
 
 // ---------------------------------------------------------------------------
@@ -108,6 +108,9 @@ async function main() {
       break;
     case "fast":
       config = getFastConfig();
+      break;
+    case "simple":
+      config = getSimpleConfig();
       break;
     default:
       config = getDefaultConfig();

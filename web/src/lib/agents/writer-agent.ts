@@ -34,7 +34,7 @@ export class WriterAgent implements PipelineAgent {
   name = "writer";
 
   async *run(ctx: ChapterContext): AsyncGenerator<LifecycleEvent> {
-    const { seed, chapterNumber, previousSummaries, blueprint, previousChapterEnding, fastMode, parallelMode, directionDesign } = ctx;
+    const { seed, chapterNumber, previousSummaries, blueprint, previousChapterEnding, fastMode, parallelMode, directionDesign, simpleMode } = ctx;
     const agent = getAgent();
     const tier = selectModelTier(seed, chapterNumber);
     const model = getModelForTier(tier);
@@ -57,16 +57,14 @@ export class WriterAgent implements PipelineAgent {
         })),
         previousChapterEnding,
         fastMode,
-        // Pass tracking context to scene writer if available
-        ...(ctx.trackingContext ? {
+        simpleMode,
+        // Pass tracking context to scene writer if available (skipped in simple mode)
+        ...(!simpleMode && ctx.trackingContext ? {
           memoryContext: ctx.trackingContext.memoryContext,
           toneGuidance: ctx.trackingContext.toneGuidance,
           progressContext: ctx.trackingContext.progressContext,
           correctionContext: ctx.trackingContext.correctionContext,
         } : {}),
-        directionDesign,
-        worldStateContext: ctx.worldStateContext,
-        antiRepeatContext: ctx.antiRepeatContext,
       });
 
       ctx.sceneTexts = sceneResult.sceneTexts;

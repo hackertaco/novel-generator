@@ -157,6 +157,8 @@ export interface HarnessConfig {
   fastMode: boolean;
   /** Generate scenes in parallel + bridge stitching (fastest) */
   parallelMode: boolean;
+  /** Simple mode: minimal context to Writer for more natural prose (A/B experiment) */
+  simpleMode: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -213,6 +215,7 @@ export function getDefaultConfig(name = "default"): HarnessConfig {
     chapterLength: { min: 3000, max: 4000 },
     fastMode: false,
     parallelMode: false,
+    simpleMode: false,
   };
 }
 
@@ -244,6 +247,19 @@ export function getTestNoQualityNoPolisherConfig(): HarnessConfig {
   pipeline[4].enabled = false; // QualityLoop off
   pipeline[5].enabled = false; // Polisher off
   return { ...getDefaultConfig("test-no-quality-polisher"), pipeline };
+}
+
+/**
+ * Simple mode: minimal context to Writer for more natural prose.
+ * A/B experiment — hypothesis: less context = more creative, natural writing.
+ */
+export function getSimpleConfig(name = "simple"): HarnessConfig {
+  return {
+    ...getDefaultConfig(name),
+    name,
+    simpleMode: true,
+    fastMode: true, // simple mode uses fast (one-call-per-scene) for cleaner experiment
+  };
 }
 
 export function getFastConfig(name = "fast"): HarnessConfig {
