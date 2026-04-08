@@ -410,28 +410,20 @@ function scoreNarrative(
   const paragraphs = text.split("\n\n").filter((p) => p.trim().length > 0);
   if (paragraphs.length < 3) return { score: 0.5, details: { reason: "문단 수 부족" } };
 
-  // a) Information density curve — new named entities per paragraph
+  // a) Entity engagement — characters/locations mentioned across the chapter
+  // (not "new" entities, which penalizes later chapters unfairly)
   const knownNames = seed.characters.map((c) => c.name);
+  const firstNames = seed.characters.map((c) => c.name.split(/\s+/)[0]).filter((n) => n.length >= 2);
   const knownLocations = Object.keys(seed.world.key_locations || {});
-  const allEntities = [...knownNames, ...knownLocations];
+  const allEntities = [...new Set([...knownNames, ...firstNames, ...knownLocations])];
 
-  const entityDensity: number[] = [];
-  const seenEntities = new Set<string>();
-  for (const para of paragraphs) {
-    let newEntities = 0;
-    for (const entity of allEntities) {
-      if (para.includes(entity) && !seenEntities.has(entity)) {
-        seenEntities.add(entity);
-        newEntities++;
-      }
-    }
-    entityDensity.push(newEntities);
-  }
-
-  // Optimal: 1-2 new entities in first 30%, then tapering off
-  const firstThird = entityDensity.slice(0, Math.ceil(paragraphs.length / 3));
-  const avgFirstThird = firstThird.reduce((a, b) => a + b, 0) / firstThird.length;
-  const entityScore = avgFirstThird > 0 && avgFirstThird <= 3 ? 1 : avgFirstThird === 0 ? 0.3 : 0.5;
+  // Count how many unique entities appear in the text
+  const activeEntities = allEntities.filter((e) => text.includes(e));
+  // Optimal: at least 2 characters active, ideally 3-5
+  const entityScore = activeEntities.length >= 3 ? 1.0
+    : activeEntities.length === 2 ? 0.8
+    : activeEntities.length === 1 ? 0.5
+    : 0.3;
 
   // b) Causal connectors — story events are linked, not just listed
   const causalCount = CAUSAL_CONNECTORS.reduce(
@@ -439,9 +431,9 @@ function scoreNarrative(
     0,
   );
   const causalDensity = causalCount / paragraphs.length;
-  // Optimal: 0.5-2 causal connectors per paragraph
-  const causalScore = causalDensity >= 0.3 && causalDensity <= 2.5 ? 1 :
-    causalDensity < 0.3 ? causalDensity / 0.3 : 0.7;
+  // Optimal: 0.2+ causal connectors per paragraph (lowered from 0.3)
+  const causalScore = causalDensity >= 0.2 && causalDensity <= 3.0 ? 1 :
+    causalDensity < 0.2 ? Math.max(0.5, causalDensity / 0.2) : 0.7;
 
   // c) Tension escalation — negative/tense words should increase toward the end
   const halfPoint = Math.floor(paragraphs.length / 2);
@@ -464,7 +456,7 @@ function scoreNarrative(
   return {
     score: Math.min(score, 1),
     details: {
-      entityDensity: entityDensity.slice(0, 5),
+      activeEntities: activeEntities.length,
       causalDensity: Math.round(causalDensity * 100) / 100,
       tensionFirst,
       tensionSecond,

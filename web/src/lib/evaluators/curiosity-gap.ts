@@ -43,18 +43,18 @@ interface GapPattern {
 }
 
 const GAP_PATTERNS: GapPattern[] = [
-  // Direct questions: sentences ending with "?"
-  { type: "direct_question", regex: /[^.!?\n]*\?/g },
+  // Direct questions: narration-level questions only (not dialogue)
+  // Excludes lines starting with " (dialogue) — dialogue questions are
+  // conversational, not reader-facing curiosity gaps.
+  { type: "direct_question", regex: /^(?!\s*[""])([^.!?\n]*\?)/gm },
   // Mystery markers
-  { type: "mystery", regex: /사실은|아무도 몰랐다|비밀|숨기고|감추고/g },
-  // Incomplete information: sentences ending with "..." or "—"
-  { type: "incomplete", regex: /[가-힣a-zA-Z][.]{3}|[가-힣a-zA-Z]…|[가-힣a-zA-Z]—\s*$/gm },
+  { type: "mystery", regex: /사실은|아무도 몰랐다|비밀이|숨기고|감추고|정체/g },
+  // Incomplete information: sentences ending with "..." or "—" (narration only)
+  { type: "incomplete", regex: /(?<!["""])[가-힣][.]{3}|(?<!["""])[가-힣]…/gm },
   // Foreshadowing
-  { type: "foreshadowing", regex: /그때는 몰랐다|나중에야|후회할 줄/g },
-  // Suspense markers
-  { type: "suspense", regex: /그 순간|갑자기|예상치 못한/g },
+  { type: "foreshadowing", regex: /그때는 몰랐다|나중에야|후회할 줄|알 리 없었다/g },
   // Unfinished actions
-  { type: "unfinished_action", regex: /하려던 참에|말하려는 순간/g },
+  { type: "unfinished_action", regex: /하려던 참에|말하려는 순간|말이 끊겼다/g },
 ];
 
 // ---------------------------------------------------------------------------
@@ -178,18 +178,18 @@ export function measureCuriosityGap(text: string): CuriosityGapResult {
   let score: number;
 
   if (details.length === 0) {
-    score = 0.3; // too boring, no hooks
+    score = 0.4; // no hooks at all — slightly boring but not terrible
   } else if (openQuestions === 0) {
-    // All resolved — base from total gaps but slightly lower since no tension remains
-    score = 0.3;
+    // All resolved — decent but no lingering tension
+    score = 0.5;
   } else if (openQuestions === 1) {
-    score = 0.6;
-  } else if (openQuestions >= 2 && openQuestions <= 4) {
-    score = 1.0; // sweet spot
-  } else if (openQuestions >= 5 && openQuestions <= 6) {
-    score = 0.7; // getting crowded
+    score = 0.7;
+  } else if (openQuestions >= 2 && openQuestions <= 5) {
+    score = 1.0; // sweet spot — enough threads to keep reading
+  } else if (openQuestions >= 6 && openQuestions <= 8) {
+    score = 0.7; // getting crowded but manageable
   } else {
-    score = 0.4; // 7+ = too many threads, confusing
+    score = 0.5; // 9+ = confusing but not a dealbreaker
   }
 
   // Bonus for resolved questions: +0.1 per resolution, capped at +0.3
