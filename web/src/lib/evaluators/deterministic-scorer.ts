@@ -646,27 +646,34 @@ function scoreEngagement(
 // ---------------------------------------------------------------------------
 
 const WEIGHTS = {
-  // --- 7 core dimensions (sum = 1.0) ---
-  narrative: 0.15,           // 서사 진행
-  characterVoice: 0.15,      // 캐릭터 일관성
-  readabilityPacing: 0.15,   // 이해도/가독성
-  engagement: 0.10,          // 갈등 텐션, 고구마-사이다
-  dialogueQuality: 0.10,     // 대사
-  pageTurner: 0.15,          // 절단신공
-  originality: 0.15,         // 독창성
+  // Priority: 정확성(40%) > 개연성(35%) > 창의력(25%)
+  //
+  // 정확성 — 기본이 안 되면 나머지는 의미 없음 (40%)
+  characterVoice: 0.12,      // 캐릭터 음성 — 대사가 사람마다 다른지
+  readabilityPacing: 0.10,   // 가독성 — 읽기 쉬운지
+  loopAvoidance: 0.08,       // 루프 회피 — 같은 말 반복 안 하는지
+  dialogueQuality: 0.05,     // 대사 정보량 — 빈 대사 아닌지
+  dialogueRatio: 0.05,       // 대사 비율 — 적정 범위인지
+
+  // 개연성 — 이야기가 말이 되는지 (35%)
+  narrative: 0.12,           // 서사 진행 — 이야기가 진전되는지
+  engagement: 0.10,          // 갈등/텐션 — 고구마-사이다 밸런스
+  emotionalImpact: 0.08,     // 감정 임팩트 — 감정이입 되는지
+  sentimentArc: 0.05,        // 감정 곡선 — 자연스러운 흐름인지
+
+  // 창의력 — 다음 화 보고 싶은지 (25%)
+  pageTurner: 0.10,          // 절단신공 — 끊기는 지점이 좋은지
+  curiosityGap: 0.08,        // 호기심 갭 — 열린 질문이 있는지
+  originality: 0.07,         // 독창성 — 뻔하지 않은지
+
   // --- zeroed (still computed, available in details) ---
   rhythm: 0,
   hookEnding: 0,
-  dialogueRatio: 0.05,
   lengthScore: 0,
   antiRepetition: 0,
   sensoryDiversity: 0,
   narrativeInformation: 0,
   immersion: 0,
-  loopAvoidance: 0,
-  sentimentArc: 0,
-  curiosityGap: 0,
-  emotionalImpact: 0,
 };
 
 export function computeDeterministicScores(

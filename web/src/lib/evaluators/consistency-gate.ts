@@ -658,8 +658,11 @@ function checkNameConsistency(
       // Skip common non-surname words (verbs, common nouns)
       if (/[었했했된된는]$/.test(followingWord)) continue;
 
-      // Check if it looks like a surname (2-4 syllable Korean word after stripping)
-      if (strippedWord.length >= 2 && strippedWord.length <= 4) {
+      // Only flag as name inconsistency if the stripped word looks like a plausible
+      // alternate surname — must be 2-3 syllables AND contain no common Korean noun
+      // suffixes that indicate it's a regular word, not a name.
+      const COMMON_NOUN_INDICATORS = /[과와도에서로의를은는이가만까지부터처럼마다]$/;
+      if (strippedWord.length >= 2 && strippedWord.length <= 3 && !COMMON_NOUN_INDICATORS.test(strippedWord)) {
         wrongSurnames.add(followingWord);
       }
     }
@@ -729,12 +732,18 @@ export function evaluateConsistencyGate(
   }
 
   // Each issue contributes its own rule-specific penalty (not severity-based)
+  // Apply penalty per issue TYPE (not per instance) to avoid false-positive cascades.
+  // e.g., 4 name_inconsistency issues from the same character = one penalty, not 4x.
+  const seenTypes = new Set<string>();
   let gate = 1.0;
   for (const issue of issues) {
-    gate -= ISSUE_TYPE_PENALTY[issue.type];
+    if (!seenTypes.has(issue.type)) {
+      seenTypes.add(issue.type);
+      gate -= ISSUE_TYPE_PENALTY[issue.type];
+    }
   }
-  // Floor at 0.3 so score is never zero
-  gate = Math.max(0.3, gate);
+  // Floor at 0.5 so consistency issues dampen but don't destroy the score
+  gate = Math.max(0.5, gate);
 
   return {
     score: gate,

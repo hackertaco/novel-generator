@@ -32,6 +32,7 @@ import { sanitize, fixEndingRepeat, detectEndingRepeat, detectSentenceStartRepea
 import { runMathematicalChecks, type MathematicalCheckResults } from "../src/lib/evaluators/mathematical-checks";
 import { evaluateStyle } from "../src/lib/evaluators/style";
 import { evaluatePacing } from "../src/lib/evaluators/pacing";
+import { computeDeterministicScores, type DeterministicScores } from "../src/lib/evaluators/deterministic-scorer";
 import type { NovelSeed } from "../src/lib/schema/novel";
 import type { ChapterSummary } from "../src/lib/schema/chapter";
 
@@ -227,6 +228,7 @@ interface ChapterEval {
   pacing: Record<string, unknown> | null;
   style: Record<string, unknown> | null;
   mathChecks: MathematicalCheckResults | null;
+  deterministicScores: DeterministicScores | null;
   overallScore: number;
   verdict: "PASS" | "WARN" | "FAIL";
 }
@@ -258,12 +260,26 @@ function validateChapter(text: string, chapterNumber: number, seed: NovelSeed): 
     mathChecks = runMathematicalChecks(sanitized);
   } catch { /* evaluator may throw */ }
 
-  // Score (now includes math checks)
+  // Deterministic scores (19 dimensions + consistency gate)
+  let deterministicScores: DeterministicScores | null = null;
+  try {
+    deterministicScores = computeDeterministicScores(sanitized, seed, chapterNumber);
+  } catch { /* evaluator may throw */ }
+
+  // Score: use deterministic scorer as primary (includes fun metrics)
+  // Fall back to legacy calculation if deterministic scorer fails
   const ruleGuardPenalty = Math.max(0, 1.0 - allIssues.length * 0.1);
-  const pacingScore = (pacingResult as { overall?: number })?.overall ?? 0.7;
-  const styleScore = (styleResult as { overall_score?: number })?.overall_score ?? 0.7;
-  const mathScore = mathChecks?.overallScore ?? 0.7;
-  const overallScore = ruleGuardPenalty * 0.2 + pacingScore * 0.25 + styleScore * 0.25 + mathScore * 0.3;
+  let overallScore: number;
+  if (deterministicScores) {
+    // Deterministic scorer already applies consistency gate
+    // Blend with ruleGuard penalty (10%) for mechanical issues
+    overallScore = deterministicScores.overall * 0.9 + ruleGuardPenalty * 0.1;
+  } else {
+    const pacingScore = (pacingResult as { overall?: number })?.overall ?? 0.7;
+    const styleScore = (styleResult as { overall_score?: number })?.overall_score ?? 0.7;
+    const mathScore = mathChecks?.overallScore ?? 0.7;
+    overallScore = ruleGuardPenalty * 0.2 + pacingScore * 0.25 + styleScore * 0.25 + mathScore * 0.3;
+  }
 
   const criticalCount = allIssues.filter((i) => (i as { severity?: string }).severity === "critical").length;
   const verdict = criticalCount > 0 || overallScore < 0.5 ? "FAIL"
@@ -283,6 +299,7 @@ function validateChapter(text: string, chapterNumber: number, seed: NovelSeed): 
     pacing: pacingResult,
     style: styleResult,
     mathChecks,
+    deterministicScores,
     overallScore: Math.round(overallScore * 100) / 100,
     verdict,
   };
@@ -348,28 +365,49 @@ function generateReport(
     console.log(`    RuleGuard:  ending=${ev.ruleGuard.endingRepeat} start=${ev.ruleGuard.sentenceStartRepeat} dialogue=${ev.ruleGuard.shortDialogueSequence}`);
     if (ev.ruleGuard.sanitizedDiff > 0) console.log(`    Sanitized:  ${ev.ruleGuard.sanitizedDiff}자 제거됨`);
     if (ch) console.log(`    Cost:       $${ch.usage.cost_usd.toFixed(4)}, ${(ch.durationMs / 1000).toFixed(1)}s`);
-    if (ev.mathChecks) {
+    // Show deterministic scores breakdown (fun/engagement metrics)
+    if (ev.deterministicScores) {
+      const ds = ev.deterministicScores;
+      console.log(`    Score:      narrative=${ds.narrative.toFixed(2)} voice=${ds.characterVoice.toFixed(2)} pacing=${ds.readabilityPacing.toFixed(2)} engage=${ds.engagement.toFixed(2)}`);
+      console.log(`    Fun:        pageTurn=${ds.pageTurner.toFixed(2)} curiosity=${ds.curiosityGap.toFixed(2)} emotion=${ds.emotionalImpact.toFixed(2)} original=${ds.originality.toFixed(2)}`);
+      console.log(`    Gate:       consistency=${ds.consistencyGate.toFixed(2)}`);
+    } else if (ev.mathChecks) {
       const mc = ev.mathChecks;
-      console.log(`    Math:       info=${mc.informationDensity.score.toFixed(2)}(tell:${mc.informationDensity.tellMarkerCount}) loop=${mc.loopDetection.score.toFixed(2)}(${mc.loopDetection.loopPairs.length}) dialogue=${mc.dialogueInfo.score.toFixed(2)}(${mc.dialogueInfo.informativeLines}/${mc.dialogueInfo.totalLines}) H=${mc.sentimentArc.hurstExponent}(${mc.sentimentArc.hurstScore.toFixed(2)})`);
+      console.log(`    Math:       info=${mc.informationDensity.score.toFixed(2)} loop=${mc.loopDetection.score.toFixed(2)} dialogue=${mc.dialogueInfo.score.toFixed(2)} H=${mc.sentimentArc.hurstExponent}(${mc.sentimentArc.hurstScore.toFixed(2)})`);
     }
     for (const issue of ev.ruleGuard.issues) {
       console.log(`    [${issue.type}] ${issue.detail}`);
     }
   }
 
-  // Cross-chapter: continuity check
-  if (chapterResults.length >= 2) {
-    console.log("\n--- Cross-Chapter ---");
-    const ch1End = chapterResults[0].fullText.slice(-200);
-    const ch2Start = chapterResults[1].fullText.slice(0, 200);
+  // Cross-chapter: continuity check (enhanced — 500 chars, all pairs, first-name matching)
+  // Helper: check if a character appears in text by full name OR first name
+  const charInText = (c: { name: string }, text: string): boolean => {
+    if (text.includes(c.name)) return true;
+    const firstName = c.name.split(/\s+/)[0];
+    return firstName.length >= 2 && text.includes(firstName);
+  };
+  const charLabel = (c: { name: string }): string => c.name.split(/\s+/)[0];
 
-    // Check if any character names from ch1 ending appear in ch2 opening
-    const ch1Chars = seed.characters.filter((c) => ch1End.includes(c.name)).map((c) => c.name);
-    const ch2Chars = seed.characters.filter((c) => ch2Start.includes(c.name)).map((c) => c.name);
-    const continuity = ch1Chars.filter((c) => ch2Chars.includes(c));
-    console.log(`  Ch1 ending chars: ${ch1Chars.join(", ") || "none"}`);
-    console.log(`  Ch2 opening chars: ${ch2Chars.join(", ") || "none"}`);
-    console.log(`  Continuity:  ${continuity.length}/${ch1Chars.length} characters carry over`);
+  if (chapterResults.length >= 2) {
+    console.log("\n--- Cross-Chapter Continuity ---");
+    let totalCarryOver = 0;
+    let totalExpected = 0;
+    for (let ci = 0; ci < chapterResults.length - 1; ci++) {
+      const chEnd = chapterResults[ci].fullText.slice(-500);
+      const chStart = chapterResults[ci + 1].fullText.slice(0, 500);
+
+      const endChars = seed.characters.filter((c) => charInText(c, chEnd));
+      const startChars = seed.characters.filter((c) => charInText(c, chStart));
+      const carryOver = endChars.filter((c) => startChars.some((sc) => sc.name === c.name));
+
+      totalCarryOver += carryOver.length;
+      totalExpected += Math.max(endChars.length, 1);
+
+      console.log(`  ${ci + 1}→${ci + 2}화: ${carryOver.length}/${endChars.length} chars (${endChars.map(charLabel).join(",") || "none"} → ${startChars.map(charLabel).join(",") || "none"})`);
+    }
+    const continuityScore = totalExpected > 0 ? (totalCarryOver / totalExpected) : 0;
+    console.log(`  Overall:  ${(continuityScore * 100).toFixed(0)}% character continuity`);
   }
 
   console.log(`\n--- Overall ---`);
