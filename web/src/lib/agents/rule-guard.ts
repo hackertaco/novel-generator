@@ -605,6 +605,67 @@ export function detectShortDialogueSequence(text: string): RuleIssue[] {
 }
 
 // ---------------------------------------------------------------------------
+// Dialogue-heavy detection: too many dialogue exchanges without POV insight
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect long stretches of dialogue exchanges with only action beats
+ * (행동 비트) but no POV character's judgment/interpretation.
+ *
+ * "Action beat" = short narration like "시선이 멈췄다", "고개를 저었다"
+ * "Judgment" = narrator/POV character's interpretation: "이건 함정이었다", "뜻밖이었다"
+ *
+ * Threshold: 8+ dialogue lines with only action beats → warning
+ */
+const JUDGMENT_PATTERNS = /이었다|뜻이었다|셈이었다|것이다|수밖에|때문이|결국|즉|다시 말해|의미|판단|계산|확신|의심|경계|눈치|직감|느낌|생각|깨달|알아차|이해/;
+
+export function detectDialogueHeavy(text: string): RuleIssue[] {
+  const lines = text.split("\n").filter((l) => l.trim());
+  const issues: RuleIssue[] = [];
+  const dPattern = /[""\u201C]([^""\u201D]*?)[""\u201D]/;
+
+  let dialogueExchanges = 0;
+  let hasJudgment = false;
+  let stretchStart = -1;
+
+  const flushStretch = (endLine: number) => {
+    if (dialogueExchanges >= 8 && !hasJudgment) {
+      issues.push({
+        type: "dialogue_heavy",
+        position: stretchStart,
+        detail: `${stretchStart + 1}~${endLine}행: 대사 ${dialogueExchanges}회 교환에 주인공 판단/해석이 없습니다. 대사 사이에 "이건 ~라는 뜻이다", "~일 수밖에 없었다" 같은 판단 문장을 추가하세요.`,
+        severity: "warning" as const,
+      });
+    }
+    dialogueExchanges = 0;
+    hasJudgment = false;
+    stretchStart = -1;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    const isDialogue = dPattern.test(line);
+
+    if (isDialogue) {
+      if (stretchStart === -1) stretchStart = i;
+      dialogueExchanges++;
+    } else {
+      // Narration line — check if it's judgment or just action beat
+      if (JUDGMENT_PATTERNS.test(line)) {
+        hasJudgment = true;
+      }
+      // Paragraph break (empty line) with 10+ exchanges = flush
+      if (line === "" && dialogueExchanges >= 10) {
+        flushStretch(i);
+      }
+    }
+  }
+
+  flushStretch(lines.length);
+  return issues;
+}
+
+// ---------------------------------------------------------------------------
 // TrimPostHookPadding — remove weak mood-summary paragraphs after a hook line
 // ---------------------------------------------------------------------------
 
@@ -816,6 +877,7 @@ export class RuleGuardAgent implements PipelineAgent {
       ...detectEndingRepeat(ctx.text),
       ...detectSentenceStartRepeat(ctx.text),
       ...detectShortDialogueSequence(ctx.text),
+      ...detectDialogueHeavy(ctx.text),
       ...detectMissingInformation(ctx.text, ctx.blueprint),
       ...speechResult.violations.map((v) => ({
         type: "speech_level_violation" as const,
