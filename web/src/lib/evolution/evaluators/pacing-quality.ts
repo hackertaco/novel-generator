@@ -53,12 +53,25 @@ export interface EarlyTensionDetail {
   pass: boolean;
 }
 
+export interface ActionRepeatViolation {
+  chapter_a: number;
+  chapter_b: number;
+  shared_actions: string[];
+}
+
+export interface ActionRepeatDetail {
+  violations: ActionRepeatViolation[];
+  score: number;
+  pass: boolean;
+}
+
 export interface PacingQualityResult {
   /** Weighted overall score 0-1 */
   overall_score: number;
   pass: boolean;
   ch1_key_points: Ch1KeyPointsDetail;
   early_tension: EarlyTensionDetail;
+  action_repeat: ActionRepeatDetail;
   issues: string[];
 }
 
@@ -75,9 +88,10 @@ export function evaluatePacingQuality(seed: NovelSeed): PacingQualityResult {
 
   const ch1Result = checkCh1KeyPoints(outlines);
   const earlyTensionResult = checkEarlyTension(outlines);
+  const actionRepeatResult = checkActionRepeat(outlines);
 
   const overallScore =
-    ch1Result.score * 0.4 + earlyTensionResult.score * 0.6;
+    ch1Result.score * 0.3 + earlyTensionResult.score * 0.4 + actionRepeatResult.score * 0.3;
 
   const issues: string[] = [];
   if (!ch1Result.pass) {
@@ -90,12 +104,18 @@ export function evaluatePacingQuality(seed: NovelSeed): PacingQualityResult {
       `${v.chapter_number}화 tension ${v.tension_level} (1~3화 최대 ${EARLY_CHAPTER_MAX_TENSION} 권장) — 초반 긴장 과도`,
     );
   }
+  for (const v of actionRepeatResult.violations) {
+    issues.push(
+      `${v.chapter_a}화→${v.chapter_b}화 행위 반복: ${v.shared_actions.join(", ")} — 연속 2화가 같은 행위`,
+    );
+  }
 
   return {
     overall_score: Math.round(overallScore * 1000) / 1000,
-    pass: ch1Result.pass && earlyTensionResult.pass,
+    pass: ch1Result.pass && earlyTensionResult.pass && actionRepeatResult.pass,
     ch1_key_points: ch1Result,
     early_tension: earlyTensionResult,
+    action_repeat: actionRepeatResult,
     issues,
   };
 }
@@ -138,6 +158,89 @@ function checkCh1KeyPoints(outlines: ChapterOutline[]): Ch1KeyPointsDetail {
     max_allowed: CH1_MAX_KEY_POINTS,
     score: Math.round(score * 1000) / 1000,
     pass,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Action repeat detection — consecutive chapters with same activity
+// ---------------------------------------------------------------------------
+
+/**
+ * Action keywords grouped by category.
+ * If two consecutive chapters share keywords from the same category,
+ * it means they're doing the "same thing" twice.
+ */
+const ACTION_CATEGORIES: Record<string, string[]> = {
+  준비: ["준비", "점검", "확인", "계획", "배치", "맞추", "외우", "정리", "검토", "대조"],
+  조사: ["조사", "추적", "탐문", "수색", "탐색", "찾", "캐묻", "심문"],
+  대면: ["만남", "대면", "마주", "재회", "방문", "찾아"],
+  협상: ["협상", "거래", "교환", "조건", "제안", "계약", "흥정"],
+  전투: ["전투", "싸움", "대결", "공격", "방어", "추격", "도주"],
+  은닉: ["숨기", "은닉", "위장", "감추", "몰래"],
+};
+
+/**
+ * Extract action category tags from a key_point's "what" text.
+ */
+function getActionTags(text: string): string[] {
+  const tags: string[] = [];
+  for (const [category, keywords] of Object.entries(ACTION_CATEGORIES)) {
+    if (keywords.some((kw) => text.includes(kw))) {
+      tags.push(category);
+    }
+  }
+  return tags;
+}
+
+/**
+ * Check that consecutive chapters don't repeat the same action category.
+ * E.g., ch1="준비" and ch2="준비" → violation.
+ */
+function checkActionRepeat(outlines: ChapterOutline[]): ActionRepeatDetail {
+  const sorted = [...outlines].sort((a, b) => a.chapter_number - b.chapter_number);
+  const violations: ActionRepeatViolation[] = [];
+
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const chA = sorted[i];
+    const chB = sorted[i + 1];
+    // Only check truly consecutive chapters
+    if (chB.chapter_number !== chA.chapter_number + 1) continue;
+
+    const tagsA = new Set<string>();
+    const tagsB = new Set<string>();
+
+    for (const kp of chA.key_points) {
+      const text = typeof kp === "string" ? kp : kp.what;
+      for (const tag of getActionTags(text)) tagsA.add(tag);
+    }
+    // Also check one_liner
+    for (const tag of getActionTags(chA.one_liner)) tagsA.add(tag);
+
+    for (const kp of chB.key_points) {
+      const text = typeof kp === "string" ? kp : kp.what;
+      for (const tag of getActionTags(text)) tagsB.add(tag);
+    }
+    for (const tag of getActionTags(chB.one_liner)) tagsB.add(tag);
+
+    const shared = [...tagsA].filter((t) => tagsB.has(t));
+    if (shared.length > 0) {
+      violations.push({
+        chapter_a: chA.chapter_number,
+        chapter_b: chB.chapter_number,
+        shared_actions: shared,
+      });
+    }
+  }
+
+  // Score: each violation costs 0.4, floored at 0.1
+  const score = violations.length === 0
+    ? 1.0
+    : Math.max(0.1, 1.0 - violations.length * 0.4);
+
+  return {
+    violations,
+    score: Math.round(score * 1000) / 1000,
+    pass: violations.length === 0,
   };
 }
 

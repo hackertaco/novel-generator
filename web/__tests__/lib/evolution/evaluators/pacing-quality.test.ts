@@ -300,7 +300,8 @@ describe("overall_score", () => {
       { chapter_number: 3, tension_level: 7 },
     ]);
     const result = evaluatePacingQuality(seed);
-    const expected = 0.7 * 0.4 + 0.0 * 0.6; // = 0.28
+    // ch1_key_points=0.7, early_tension=0.0, action_repeat=1.0 (no repeat)
+    const expected = 0.7 * 0.3 + 0.0 * 0.4 + 1.0 * 0.3; // = 0.51
     expect(result.overall_score).toBeCloseTo(expected, 2);
   });
 
