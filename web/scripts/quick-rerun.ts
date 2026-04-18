@@ -48,7 +48,7 @@ async function main() {
       if (pe.type === "stage_change") process.stdout.write(`[${pe.stage}] `);
     } else if (event.type === "chapter_complete") {
       const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-      const text = event.text || "";
+      const text = (event as { result?: { text?: string } }).result?.text || "";
       texts.push(text);
       const scores = computeDeterministicScores(text, seed, currentCh);
       console.log(`\n  ✓ ${currentCh}화: ${text.length}자, ${elapsed}초, 점수=${scores.overall.toFixed(2)}`);
