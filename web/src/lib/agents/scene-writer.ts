@@ -430,15 +430,13 @@ ${chapterNumber}화: ${blueprint.one_liner}
 
   // Previous chapter ending (raw text — the most effective continuity tool)
   if (sceneIndex === 0 && chapterNumber > 1 && previousChapterEnding) {
-    parts.push(`# 직전 화 마지막 장면 (최우선 — 이 직후부터 이어서 쓰세요)
+    parts.push(`# 직전 화 마지막 장면
 ---
 ${previousChapterEnding}
 ---
-⚠️ 필수 규칙:
-- 위 장면의 **직후** 시점에서 시작하세요. 시간이나 장소가 갑자기 바뀌면 안 됩니다.
-- 위 장면에서 대화 중이었다면 그 대화의 여파/반응부터 시작하세요.
-- 위 장면의 긴장감이나 미해결 사안을 첫 문단에서 반드시 언급하세요.
-- 위 내용 자체를 반복하지는 마세요 (독자가 이미 읽었습니다).
+- 위 내용은 독자가 이미 읽었습니다. 반복하지 마세요.
+- 위 장면에서 벌어진 미해결 사안이 이번 화의 플롯과 관련 있다면 자연스럽게 이어받으세요.
+- 다른 시점/시간/장소로 시작해도 됩니다 — 단, 플롯상 그래야 하는 이유가 있어야 합니다.
 `);
   }
 
