@@ -33,7 +33,8 @@ export interface ConsistencyIssue {
     | "low_comprehensibility"
     | "rank_inconsistency"
     | "name_inconsistency"
-    | "companion_discontinuity";
+    | "companion_discontinuity"
+    | "title_inconsistency";
   severity: "critical" | "major" | "minor";
   description: string;
   /** Short machine-readable detail string for downstream consumers (critic, state-machine) */
@@ -557,6 +558,106 @@ function checkRankConsistency(
 }
 
 // ---------------------------------------------------------------------------
+// Title consistency check (칭호 일관성)
+// ---------------------------------------------------------------------------
+
+/**
+ * Mapping from social_rank to the set of CORRECT title words for that rank.
+ * Any title from another rank group found near a character name in narration
+ * is flagged as a title inconsistency.
+ */
+const RANK_CORRECT_TITLES: Record<string, Set<string>> = {
+  royal: new Set(["황제", "황후", "황태자", "황녀", "왕", "왕비", "왕자", "공주", "폐하", "전하", "마마"]),
+  noble: new Set(["공작", "후작", "백작", "자작", "남작", "귀족", "영주", "영애", "공녀"]),
+  gentry: new Set(["사대부", "기사", "기사단장", "향사"]),
+  commoner: new Set(["평민", "상인", "농부"]),
+  servant: new Set(["시녀", "하녀", "시종", "하인"]),
+  slave: new Set(["노예", "종"]),
+  outcast: new Set(["추방자", "유랑자"]),
+};
+
+/**
+ * All title words across all ranks — used to quickly check if a word is a title.
+ */
+const ALL_TITLE_WORDS: Set<string> = new Set();
+for (const titles of Object.values(RANK_CORRECT_TITLES)) {
+  for (const t of titles) ALL_TITLE_WORDS.add(t);
+}
+
+/**
+ * Strip dialogue from text so we only check narration.
+ * Handles both straight quotes ("...") and smart quotes (\u201C...\u201D).
+ */
+function stripDialogue(text: string): string {
+  return text
+    .replace(/\u201C[^\u201D]*\u201D/g, "")  // smart quotes
+    .replace(/"[^"]*"/g, "");                   // straight quotes
+}
+
+/**
+ * Check that title words near a character's name in narration match
+ * that character's social_rank from the seed.
+ *
+ * For each character with a social_rank:
+ *   1. Find every occurrence of the character's name in narration (dialogue stripped)
+ *   2. Look at the ±30 character window around the name
+ *   3. If a title word from a DIFFERENT rank appears in that window, flag it
+ */
+function checkTitleConsistency(
+  text: string,
+  characters: Array<{ name: string; social_rank?: string; [key: string]: unknown }>,
+): ConsistencyIssue[] {
+  const issues: ConsistencyIssue[] = [];
+  const narration = stripDialogue(text);
+
+  for (const character of characters) {
+    const rank = character.social_rank;
+    if (!rank) continue;
+    // commoner is the default — skip, same reasoning as checkRankConsistency
+    if (rank === "commoner") continue;
+
+    const correctTitles = RANK_CORRECT_TITLES[rank];
+    if (!correctTitles) continue;
+
+    // Find all occurrences of the character name in narration
+    const namePattern = new RegExp(character.name, "g");
+    let nameMatch;
+    const flaggedTitles = new Set<string>();
+
+    while ((nameMatch = namePattern.exec(narration)) !== null) {
+      const nameStart = nameMatch.index;
+      const nameEnd = nameStart + character.name.length;
+
+      // Extract ±30 char window around the name
+      const windowStart = Math.max(0, nameStart - 30);
+      const windowEnd = Math.min(narration.length, nameEnd + 30);
+      const window = narration.slice(windowStart, windowEnd);
+
+      // Check every known title word against this window
+      for (const title of ALL_TITLE_WORDS) {
+        if (correctTitles.has(title)) continue; // correct title for this rank — skip
+        if (!window.includes(title)) continue;
+
+        // Found a wrong-rank title near this character's name
+        flaggedTitles.add(title);
+      }
+    }
+
+    for (const wrongTitle of flaggedTitles) {
+      const wrongRank = TITLE_TO_RANK.get(wrongTitle) || "unknown";
+      issues.push({
+        type: "title_inconsistency",
+        severity: "critical",
+        description: `캐릭터 "${character.name}"(${rank})의 나레이션에서 "${wrongTitle}" 칭호 사용됨 (${wrongRank} 칭호). 올바른 칭호: [${[...correctTitles].join(", ")}]`,
+        detail: `"${character.name}" 신분 "${rank}" — 나레이션에서 잘못된 칭호 "${wrongTitle}"(${wrongRank}) 사용`,
+      });
+    }
+  }
+
+  return issues;
+}
+
+// ---------------------------------------------------------------------------
 // Name/surname consistency check
 // ---------------------------------------------------------------------------
 
@@ -692,6 +793,7 @@ function checkNameConsistency(
 const ISSUE_TYPE_PENALTY: Record<ConsistencyIssue["type"], number> = {
   pov_inconsistency: getRulePenalty("povConsistency"),         // 0.3
   rank_inconsistency: getRulePenalty("rankConsistency"),       // 0.3
+  title_inconsistency: getRulePenalty("titleConsistency"),     // 0.25
   name_inconsistency: getRulePenalty("nameConsistency"),       // 0.15
   unnamed_scene_start: getRulePenalty("cameraScanPattern"),    // 0.05 (default)
   character_existence: getRulePenalty("nameConsistency"),      // 0.15
@@ -717,6 +819,7 @@ export function evaluateConsistencyGate(
     ...checkLocationDiscontinuity(paragraphs),
     ...checkCompanionContinuity(text, paragraphs, characters, previousCharacterStates),
     ...checkRankConsistency(text, characters),
+    ...checkTitleConsistency(text, characters),
     ...checkNameConsistency(text, characters),
   ];
 

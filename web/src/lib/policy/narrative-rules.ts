@@ -187,6 +187,14 @@ export const NARRATIVE_RULES = {
     penalty: 0.3,
     repairInstruction: "캐릭터의 신분(공작/황제/시녀 등)이 seed 설정과 다릅니다. seed에 정의된 신분으로 수정하세요.",
   },
+  titleConsistency: {
+    id: "title_consistency",
+    description: "칭호 일관성 — 나레이션에서 캐릭터 칭호 혼용 금지",
+    promptText: "나레이션에서 캐릭터 칭호를 혼용하지 마세요. 황녀를 공녀로 부르면 안 됩니다.",
+    evaluatorKey: "titleConsistency",
+    penalty: 0.25,
+    repairInstruction: "나레이션에서 캐릭터 칭호가 seed의 social_rank와 불일치합니다. 예: 황녀인 캐릭터를 공녀로 칭함. seed에 정의된 신분에 맞는 칭호로 수정하세요.",
+  },
   povConsistency: {
     id: "pov_consistency",
     description: "시점 일관성",

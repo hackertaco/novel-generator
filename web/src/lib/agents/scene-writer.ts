@@ -430,11 +430,15 @@ ${chapterNumber}화: ${blueprint.one_liner}
 
   // Previous chapter ending (raw text — the most effective continuity tool)
   if (sceneIndex === 0 && chapterNumber > 1 && previousChapterEnding) {
-    parts.push(`# 직전 화 마지막 장면 (이 직후부터 이어서 쓰세요)
+    parts.push(`# 직전 화 마지막 장면 (최우선 — 이 직후부터 이어서 쓰세요)
 ---
 ${previousChapterEnding}
 ---
-위 내용은 이미 독자가 읽었습니다. 반복하지 마세요.
+⚠️ 필수 규칙:
+- 위 장면의 **직후** 시점에서 시작하세요. 시간이나 장소가 갑자기 바뀌면 안 됩니다.
+- 위 장면에서 대화 중이었다면 그 대화의 여파/반응부터 시작하세요.
+- 위 장면의 긴장감이나 미해결 사안을 첫 문단에서 반드시 언급하세요.
+- 위 내용 자체를 반복하지는 마세요 (독자가 이미 읽었습니다).
 `);
   }
 
@@ -446,18 +450,31 @@ ${lastScene.slice(-600)}
 `);
   }
 
-  // Characters — compact: name + voice only
+  // Characters — compact: name + voice + title
   const sceneChars = scene.characters
     .map((id) => seed.characters.find((c) => c.id === id))
     .filter(Boolean);
+
+  const socialRankLabel: Record<string, string> = {
+    royal: "왕족",
+    noble: "귀족",
+    gentry: "사대부/기사",
+    commoner: "평민",
+    servant: "하인/시녀",
+    slave: "노예",
+    outcast: "추방자",
+  };
 
   if (sceneChars.length > 0) {
     parts.push("# 캐릭터");
     for (const char of sceneChars) {
       if (!char) continue;
       const gender = char.gender === "female" ? "여" : char.gender === "male" ? "남" : "";
+      const rank = char.social_rank ?? "commoner";
+      const rankKo = socialRankLabel[rank] || rank;
       const dialogues = char.voice.sample_dialogues.slice(0, 2);
-      parts.push(`**${char.name}** (${char.role}${gender ? `, ${gender}` : ""}) — ${char.voice.tone}
+      const rankSuffix = rank !== "commoner" ? `, 칭호: ${rankKo}` : "";
+      parts.push(`**${char.name}** (${char.role}${gender ? `, ${gender}` : ""}${rankSuffix}) — ${char.voice.tone}${rank !== "commoner" ? `\n⚠️ 칭호는 반드시 "${rankKo}"로 통일. 다른 표현 사용 금지.` : ""}
 대사 예시: ${dialogues.map((d) => `"${d}"`).join(" / ") || "(없음)"}
 `);
     }
