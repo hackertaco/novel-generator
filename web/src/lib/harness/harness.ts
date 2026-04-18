@@ -470,6 +470,7 @@ export class NovelHarness {
         ? this.worldStateManager.getCurrentFacts()
             .filter((f) => f.chapter < chapterNumber)
         : undefined,
+      worldStateManager: this.worldStateManager,
     };
 
     // Run pipeline

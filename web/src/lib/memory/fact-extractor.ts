@@ -51,7 +51,9 @@ ${text.slice(0, 4000)}
   "summary": "1-2문장 요약",
   "key_dialogues": [{"speaker":"화자이름","line":"실제 대사 원문","context":"상황 설명"}],
   "key_actions": [{"character":"캐릭터이름","action":"핵심 행동 설명"}],
-  "pending_situations": [{"characters":["관련인물"],"situation":"무슨 상황인지","location":"어디서","unresolved":"해결 안 된 것"}]
+  "pending_situations": [{"characters":["관련인물"],"situation":"무슨 상황인지","location":"어디서","unresolved":"해결 안 된 것"}],
+  "revealed_facts": [{"content":"독자에게 공개된 정보","revealedInChapter":${chapterNumber},"type":"evidence|secret|backstory|relationship|worldbuilding","revealedTo":["알게 된 캐릭터"]}],
+  "relationship_updates": [{"a":"인물A","b":"인물B","firstMetChapter":${chapterNumber},"trust":0,"status":"관계 설명","aKnowsAboutB":["A가 B에 대해 아는 것"],"bKnowsAboutA":["B가 A에 대해 아는 것"],"tension":"현재 긴장 요소"}]
 }
 
 규칙:
@@ -63,6 +65,8 @@ ${text.slice(0, 4000)}
 - 이 화에서 가장 인상적인 대사 3-5개를 key_dialogues에 추출하세요 (실제 대사 원문 그대로)
 - 이 화에서 핵심 행동 3-5개를 key_actions에 추출하세요 (캐릭터의 중요한 물리적/감정적 행동)
 - **pending_situations 필수**: 화 마지막에 해결되지 않은 열린 상황을 추출하세요. 예: 대치 중, 갇힘, 추격 중, 함께 이동 중, 대화 도중 끊김 등. 다음 화에서 반드시 이어받아야 할 상황입니다. 없으면 빈 배열 [].
+- **revealed_facts 필수**: 이 화에서 독자에게 새로 공개된 정보를 추출하세요. "독자가 이 화를 읽고 나면 알게 되는 것"입니다. 이전 화에서 이미 공개된 정보는 제외. type: evidence(증거), secret(비밀), backstory(배경), relationship(관계 변화), worldbuilding(세계관).
+- **relationship_updates 필수**: 이 화에서 만나거나 상호작용한 인물 쌍의 관계를 추출하세요. firstMetChapter: 이 화에서 처음 만났으면 ${chapterNumber}, 이전에 만났으면 그 화 번호. trust: -2(적대)~+2(신뢰). aKnowsAboutB/bKnowsAboutA: 서로에 대해 아는 정보의 비대칭.
 - JSON만 출력`;
 
   try {
@@ -115,6 +119,8 @@ ${text.slice(0, 4000)}
         key_dialogues: Array.isArray(parsed.key_dialogues) ? parsed.key_dialogues : undefined,
         key_actions: Array.isArray(parsed.key_actions) ? parsed.key_actions : undefined,
         pending_situations: Array.isArray(parsed.pending_situations) ? parsed.pending_situations : undefined,
+        revealed_facts: Array.isArray(parsed.revealed_facts) ? parsed.revealed_facts : undefined,
+        relationship_updates: Array.isArray(parsed.relationship_updates) ? parsed.relationship_updates : undefined,
       };
     }
 

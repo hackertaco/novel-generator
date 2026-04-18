@@ -9,6 +9,32 @@ export const WorldFactSchema = z.object({
   negated_by: z.string().optional(),  // fact ID that invalidated this
 });
 
+// ---------------------------------------------------------------------------
+// Relationship — enriched with first-met, trust, knowledge asymmetry
+// ---------------------------------------------------------------------------
+
+export const RelationshipDetailSchema = z.object({
+  a: z.string(),                 // "세아"
+  b: z.string(),                 // "에드윈"
+  firstMetChapter: z.number(),   // 처음 만난 화 번호
+  trust: z.number().min(-2).max(2), // -2 적대 ~ +2 신뢰 (한 화당 ±1 제약)
+  status: z.string(),            // "감사관-피조사인", "비즈니스 파트너"
+  aKnowsAboutB: z.array(z.string()), // A가 B에 대해 아는 것
+  bKnowsAboutA: z.array(z.string()), // B가 A에 대해 아는 것
+  tension: z.string().optional(), // 현재 긴장 요소: "에드윈이 세아를 조사 중"
+});
+
+// ---------------------------------------------------------------------------
+// Audience-revealed fact — prevents info repetition across chapters
+// ---------------------------------------------------------------------------
+
+export const RevealedFactSchema = z.object({
+  content: z.string(),           // "창고 하단이 비 올 때마다 젖어 반복 손실 발생"
+  revealedInChapter: z.number(), // 독자에게 공개된 화 번호
+  type: z.enum(["evidence", "secret", "backstory", "relationship", "worldbuilding"]),
+  revealedTo: z.array(z.string()).optional(), // 어떤 캐릭터에게 공개됐는지 (없으면 독자만)
+});
+
 export const CharacterStateSchema = z.object({
   name: z.string(),
   location: z.string(),
@@ -48,6 +74,8 @@ export const ChapterWorldStateSchema = z.object({
   key_dialogues: z.array(KeyDialogueSchema).optional(),
   key_actions: z.array(KeyActionSchema).optional(),
   pending_situations: z.array(PendingSituationSchema).optional(),
+  revealed_facts: z.array(RevealedFactSchema).optional(),
+  relationship_updates: z.array(RelationshipDetailSchema).optional(),
 });
 
 export type WorldFact = z.infer<typeof WorldFactSchema>;
@@ -55,4 +83,6 @@ export type CharacterState = z.infer<typeof CharacterStateSchema>;
 export type KeyDialogue = z.infer<typeof KeyDialogueSchema>;
 export type KeyAction = z.infer<typeof KeyActionSchema>;
 export type PendingSituation = z.infer<typeof PendingSituationSchema>;
+export type RevealedFact = z.infer<typeof RevealedFactSchema>;
+export type RelationshipDetail = z.infer<typeof RelationshipDetailSchema>;
 export type ChapterWorldState = z.infer<typeof ChapterWorldStateSchema>;

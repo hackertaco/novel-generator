@@ -4,6 +4,7 @@ import type { ChapterBlueprint } from "@/lib/schema/planning";
 import type { DirectionDesign } from "@/lib/schema/direction";
 import type { TokenUsage } from "@/lib/agents/types";
 import type { CharacterState } from "@/lib/memory/world-state";
+import type { WorldStateManager } from "@/lib/memory/world-state-manager";
 
 /** Lightweight summary passed between pipeline stages (not the full ChapterSummary). */
 export type PreviousChapterSummary = { chapter: number; title: string; summary: string };
@@ -88,6 +89,8 @@ export interface ChapterContext {
   previousCharacterStates?: CharacterState[];
   /** Previous chapters' established facts for cross-chapter info repeat detection */
   previousFacts?: Array<{ subject: string; action: string; object: string; chapter: number }>;
+  /** WorldStateManager instance for audience knowledge + relationship context */
+  worldStateManager?: WorldStateManager;
 }
 
 // --- LifecycleEvent (defined here to avoid circular imports; chapter-lifecycle.ts re-exports from here) ---

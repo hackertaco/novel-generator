@@ -45,6 +45,8 @@ export interface SceneWriterOptions {
   parallelMode?: boolean;
   /** Simple mode: minimal context for more natural writing */
   simpleMode?: boolean;
+  /** World state manager for audience knowledge + relationship context */
+  worldStateManager?: import("@/lib/memory/world-state-manager").WorldStateManager;
 }
 
 export interface SceneWriterResult {
@@ -407,6 +409,7 @@ export function buildSimpleScenePrompt(
   previousSceneTexts: string[],
   previousSummaries: Array<{ chapter: number; summary: string }>,
   previousChapterEnding?: string,
+  worldStateManager?: import("@/lib/memory/world-state-manager").WorldStateManager,
 ): string {
   const parts: string[] = [];
 
@@ -471,6 +474,22 @@ ${lastScene.slice(-600)}
     parts.push("");
   }
 
+  // Audience knowledge + relationship context (anti-repetition + depth)
+  if (worldStateManager && sceneIndex === 0 && chapterNumber > 1) {
+    const audienceBlock = worldStateManager.formatAudienceKnowledge(chapterNumber);
+    if (audienceBlock) {
+      parts.push(audienceBlock);
+      parts.push("");
+    }
+
+    const sceneCharNames = sceneChars.map((c) => c!.name);
+    const relBlock = worldStateManager.formatRelationshipContext(chapterNumber, sceneCharNames);
+    if (relBlock) {
+      parts.push(relBlock);
+      parts.push("");
+    }
+  }
+
   // Scene instruction — minimal
   const isLastScene = sceneIndex === blueprint.scenes.length - 1;
   parts.push(`# 씬 ${sceneIndex + 1}/${blueprint.scenes.length}
@@ -519,6 +538,7 @@ export async function writeChapterByScenes(
     previousChapterEnding,
     fastMode,
     simpleMode,
+    worldStateManager,
   } = options;
 
   const agent = getAgent();
@@ -561,6 +581,7 @@ export async function writeChapterByScenes(
         ? buildSimpleScenePrompt(
             seed, chapterNumber, blueprint, scene, i,
             sceneTexts, previousSummaries, previousChapterEnding,
+            worldStateManager,
           )
         : buildScenePrompt(
             seed, chapterNumber, blueprint, scene, i,
@@ -692,6 +713,7 @@ export async function writeChapterParallel(
     correctionContext,
     previousChapterEnding,
     simpleMode,
+    worldStateManager,
   } = options;
 
   const agent = getAgent();
@@ -731,6 +753,7 @@ export async function writeChapterParallel(
           seed, chapterNumber, blueprint, scene, i,
           [], // no previous scene texts in parallel mode
           previousSummaries, previousChapterEnding,
+          worldStateManager,
         )
       : buildScenePrompt(
           seed, chapterNumber, blueprint, scene, i,

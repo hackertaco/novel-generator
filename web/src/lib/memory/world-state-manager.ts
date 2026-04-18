@@ -5,7 +5,7 @@
  * supports contradiction detection, and formats state for the Writer prompt.
  */
 
-import type { ChapterWorldState, WorldFact, CharacterState, KeyDialogue, KeyAction, PendingSituation } from "./world-state";
+import type { ChapterWorldState, WorldFact, CharacterState, KeyDialogue, KeyAction, PendingSituation, RevealedFact, RelationshipDetail } from "./world-state";
 
 export interface Contradiction {
   existing: WorldFact;
@@ -284,6 +284,151 @@ export class WorldStateManager {
     parts.push(
       `\n⚠️ 위 사실과 모순되는 내용을 쓰지 마세요. ${chapterNumber}화를 이어서 작성하세요.`,
     );
+
+    return parts.join("\n");
+  }
+
+  // =========================================================================
+  // FactLedger — audience-revealed facts for anti-repetition
+  // =========================================================================
+
+  /** Get all facts revealed to the audience up to (but not including) chapterNumber. */
+  getAudienceKnownFacts(chapterNumber: number): RevealedFact[] {
+    const facts: RevealedFact[] = [];
+    for (const ch of this.history) {
+      if (ch.chapter >= chapterNumber) continue;
+      if (ch.revealed_facts) {
+        facts.push(...ch.revealed_facts);
+      }
+    }
+    return facts;
+  }
+
+  /**
+   * Format audience knowledge as a Writer constraint block.
+   * "이 사실들은 독자가 이미 안다 — 재발견 장면 금지, 참조 문장만 허용."
+   */
+  formatAudienceKnowledge(chapterNumber: number): string {
+    const known = this.getAudienceKnownFacts(chapterNumber);
+    if (known.length === 0) return "";
+
+    const parts: string[] = [];
+    parts.push("## 독자가 이미 아는 사실 (재발견/재설명 금지)");
+    parts.push("아래 정보는 이전 화에서 독자에게 공개되었습니다.");
+    parts.push("- 같은 내용을 다시 발견하는 장면을 쓰지 마세요.");
+    parts.push("- 새 인물에게 설명해야 할 때는 1문장 요약으로만 처리하세요.");
+    parts.push("- 대신 이 사실의 **결과, 파장, 새로운 단서**를 보여주세요.");
+    parts.push("");
+
+    // Group by type for readability
+    const byType = new Map<string, RevealedFact[]>();
+    for (const f of known) {
+      const list = byType.get(f.type) || [];
+      list.push(f);
+      byType.set(f.type, list);
+    }
+
+    const typeLabels: Record<string, string> = {
+      evidence: "증거",
+      secret: "비밀",
+      backstory: "배경",
+      relationship: "관계",
+      worldbuilding: "세계관",
+    };
+
+    for (const [type, facts] of byType) {
+      parts.push(`**${typeLabels[type] || type}:**`);
+      for (const f of facts.slice(-10)) { // cap at 10 per type
+        const charStr = f.revealedTo?.length ? ` → ${f.revealedTo.join(", ")}도 알게 됨` : "";
+        parts.push(`- ${f.revealedInChapter}화: ${f.content}${charStr}`);
+      }
+    }
+
+    return parts.join("\n");
+  }
+
+  // =========================================================================
+  // Relationship Graph — enriched relationship tracking
+  // =========================================================================
+
+  /** Get the latest relationship detail for a pair (order-independent). */
+  getRelationship(a: string, b: string): RelationshipDetail | undefined {
+    for (let i = this.history.length - 1; i >= 0; i--) {
+      const updates = this.history[i].relationship_updates;
+      if (!updates) continue;
+      const rel = updates.find(
+        (r) => (r.a === a && r.b === b) || (r.a === b && r.b === a),
+      );
+      if (rel) return rel;
+    }
+    return undefined;
+  }
+
+  /** Get all relationship details, latest version per pair. */
+  getAllRelationships(): RelationshipDetail[] {
+    const seen = new Set<string>();
+    const result: RelationshipDetail[] = [];
+
+    for (let i = this.history.length - 1; i >= 0; i--) {
+      const updates = this.history[i].relationship_updates;
+      if (!updates) continue;
+      for (const rel of updates) {
+        const key = [rel.a, rel.b].sort().join("↔");
+        if (seen.has(key)) continue;
+        seen.add(key);
+        result.push(rel);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Format relationship context for the Writer.
+   * Shows who knows whom, trust level, and knowledge asymmetry.
+   */
+  formatRelationshipContext(chapterNumber: number, sceneCharacterNames: string[]): string {
+    const rels = this.getAllRelationships();
+    if (rels.length === 0) return "";
+
+    // Filter to relationships involving scene characters
+    const relevant = rels.filter(
+      (r) => sceneCharacterNames.includes(r.a) || sceneCharacterNames.includes(r.b),
+    );
+    if (relevant.length === 0) return "";
+
+    const trustLabels: Record<number, string> = {
+      [-2]: "적대",
+      [-1]: "경계",
+      0: "중립",
+      1: "호의",
+      2: "신뢰",
+    };
+
+    const parts: string[] = [];
+    parts.push("## 인물 관계 (이번 씬 등장인물)");
+    parts.push("⚠️ trust ±1/화 제약: 한 화에서 관계가 급변하지 않도록 하세요.");
+    parts.push("");
+
+    for (const rel of relevant) {
+      const trustLabel = trustLabels[rel.trust] || `${rel.trust}`;
+      const metLabel = rel.firstMetChapter < chapterNumber
+        ? `${rel.firstMetChapter}화에서 처음 만남`
+        : "이번 화에서 첫 만남";
+
+      parts.push(`**${rel.a} ↔ ${rel.b}** [${trustLabel}] — ${rel.status}`);
+      parts.push(`  ${metLabel}`);
+
+      if (rel.aKnowsAboutB.length > 0) {
+        parts.push(`  ${rel.a}가 아는 것: ${rel.aKnowsAboutB.slice(-3).join(", ")}`);
+      }
+      if (rel.bKnowsAboutA.length > 0) {
+        parts.push(`  ${rel.b}가 아는 것: ${rel.bKnowsAboutA.slice(-3).join(", ")}`);
+      }
+      if (rel.tension) {
+        parts.push(`  긴장: ${rel.tension}`);
+      }
+      parts.push("");
+    }
 
     return parts.join("\n");
   }
