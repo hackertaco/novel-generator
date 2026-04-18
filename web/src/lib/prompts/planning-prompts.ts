@@ -258,11 +258,15 @@ ${(() => {
         if (p.caused_by) parts.push(`원인: ${p.caused_by}`);
         if (p.consequence) parts.push(`결과: ${p.consequence}`);
         if (p.prerequisite) parts.push(`전제: ${p.prerequisite}`);
+        if (p.requires_items?.length) parts.push(`소품: ${p.requires_items.join(", ")}`);
+        if (p.returning_character) parts.push(`재등장: ${p.returning_character}`);
         if (p.reveal === "delayed") parts.push("[서스펜스 — 아직 밝히지 않음]");
         return parts.join(" | ");
       }).join("; ");
       const threads = (o.advances_thread || []).join(", ");
-      return `- ${o.chapter_number}화: ${o.one_liner}${threads ? ` [${threads}]` : ""}${points ? ` | ${points}` : ""}`;
+      const infoStr = o.new_info_for_reader ? ` 📌 ${o.new_info_for_reader}` : "";
+      const itemsStr = o.recurring_items?.length ? ` 🔄 ${o.recurring_items.join(", ")}` : "";
+      return `- ${o.chapter_number}화: ${o.one_liner}${threads ? ` [${threads}]` : ""}${points ? ` | ${points}` : ""}${infoStr}${itemsStr}`;
     });
   // Extended outlines (lightweight, for chapters beyond the detailed set)
   const detailedChapters = new Set(seed.chapter_outlines.map((o) => o.chapter_number));
@@ -349,6 +353,10 @@ ${targetChapter ?? arc.start_chapter}화의 블루프린트를 1개만 작성하
 7. **캐릭터 도입 페이싱**:
    - 아크 첫 화: 주인공 + 최대 1~2명만
    - 새 캐릭터는 한 화에 1명씩만. characters_involved에 3명 이하로 제한
+   - **재등장 의무**: 3~4화마다 기존 인물이 재등장하여 관계가 깊어져야 합니다. 매 화가 "새 인물 만남"으로만 이루어지면 안 됩니다.
+   - outline의 returning_character 필드가 있으면 해당 인물을 반드시 씬에 배치하세요.
+   - outline의 recurring_items 필드가 있으면 해당 소품이 씬에서 사용되어야 합니다.
+   - outline의 new_info_for_reader 필드가 있으면 그 정보를 이 화의 must_reveal로 변환하세요. 그 외 정보는 보류.
 8. **시점(POV) 지정**:
    - **pov**: "first" (1인칭) 또는 "third" (3인칭). 미지정 시 "third"로 간주
    - **pov_character**: 시점 인물의 이름. 1인칭이면 화자, 3인칭이면 초점 인물

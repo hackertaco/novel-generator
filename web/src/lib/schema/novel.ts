@@ -74,6 +74,8 @@ export const PlotPointSchema = z.union([
     reveal_at: z.number().int().optional().describe("delayed일 때, 몇 화에서 밝히는지"),
     prerequisite: z.string().optional().describe("이 사건이 일어나려면 독자가 미리 알아야 할 전제 (예: '에단에게 마력이 있다')"),
     different_from_prev: z.string().optional().describe("이전 화와 비슷한 상황이 반복될 때, 어떻게 달라야 하는지 (예: '3화에서는 울며 매달렸지만, 이번에는 말없이 손만 잡는다')"),
+    requires_items: z.array(z.string()).optional().describe("이 사건에 필요한 소품/물건 (예: ['자수 조각', '봉인 장부']). 이전 화에서 등장한 물건이면 반드시 재활용."),
+    returning_character: z.string().optional().describe("이 사건에서 재등장하는 기존 인물과 이유 (예: '마르타 — 세탁실 인맥을 통해 명단 루트 제공')"),
   }),
 ]);
 
@@ -93,6 +95,8 @@ export const ChapterOutlineSchema = z.object({
     .max(10)
     .default(5)
     .describe("Tension level 1-10"),
+  new_info_for_reader: z.string().optional().describe("이 화에서 독자에게 새로 주는 핵심 정보 1~2개 (예: '자수 조각의 숫자가 장부 좌표임을 알게 됨'). 이것 외의 정보는 보류."),
+  recurring_items: z.array(z.string()).optional().describe("이전 화에서 등장했고 이번 화에서 다시 쓰이는 소품 (예: ['자수 조각', '봉인 열쇠'])"),
 });
 
 export type ChapterOutline = z.infer<typeof ChapterOutlineSchema>;
