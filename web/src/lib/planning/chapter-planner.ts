@@ -30,9 +30,10 @@ export async function generateChapterBlueprints(
   } | null,
   targetChapter?: number,
   directionDesign?: DirectionDesign,
+  previousRevealedFacts?: Array<{ chapter: number; content: string; type: string }>,
 ): Promise<{ data: ChapterBlueprint[]; usage: TokenUsage }> {
   const agent = getAgent();
-  const prompt = getChapterBlueprintPrompt(seed, arc, previousChapterSummaries, previousChapterEnding, endingSceneState, targetChapter, directionDesign);
+  const prompt = getChapterBlueprintPrompt(seed, arc, previousChapterSummaries, previousChapterEnding, endingSceneState, targetChapter, directionDesign, previousRevealedFacts);
 
   const result = await agent.callStructured({
     prompt,

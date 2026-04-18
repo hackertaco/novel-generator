@@ -193,6 +193,8 @@ export function getChapterBlueprintPrompt(
   } | null,
   targetChapter?: number,
   directionDesign?: DirectionDesign,
+  /** Key events/facts revealed in previous chapters — for priority adjustment */
+  previousRevealedFacts?: Array<{ chapter: number; content: string; type: string }>,
 ): string {
   const recentSummaries = previousChapterSummaries.slice(-5);
 
@@ -289,26 +291,31 @@ ${seed.foreshadowing
   .join("\n") || "없음"}
 
 ${recentSummaries.length > 0 ? `## 이전 내용 요약\n${recentSummaries.map((s) => `- ${s.chapter}화: ${s.summary}`).join("\n")}` : ""}
+${previousRevealedFacts && previousRevealedFacts.length > 0 ? `## 이전 화에서 터진 사건 (이번 화 우선순위에 영향!)
+${previousRevealedFacts.slice(-8).map((f) => `- ${f.chapter}화 [${f.type}]: ${f.content}`).join("\n")}
+
+⚠️ 위 사건 중 긴급한 것이 있다면, 이번 화의 key_points 순서를 재조정하세요.
+예: 이전 화 끝에 "장부 화재 + 누명"이 터졌는데 이번 화가 "혼약서 조항 분석"이면 우선순위가 맞지 않습니다.` : ""}
 ${directionSection}
-${endingSceneState ? `## ⚠️ 직전 화 종료 시점 상태 (다음 화는 반드시 이 상태에서 이어져야 합니다!)
+${endingSceneState ? `## 직전 화 종료 시점 상태
 - 시간: ${endingSceneState.time_of_day}
 - 장소: ${endingSceneState.location}
 - 그 자리에 있던 인물: ${endingSceneState.characters_present.join(", ") || "불명"}
 - 진행 중이던 상황: ${endingSceneState.ongoing_action}
 - 미해결 긴장: ${endingSceneState.unresolved_tension}
 
-### 연속성 규칙 (위반 시 치명적 결함!)
-1. 다음 화 첫 씬은 위 상황의 **직후**여야 합니다. 시간을 건너뛰지 마세요.
-2. 첫 씬 캐릭터는 위 인물만 포함하세요. 새 인물은 반드시 "등장하는 순간" 씬을 별도로 만드세요.
-3. 이미 다룬 사건을 반복하지 마세요. 위 상황에서 이어서 전개하세요.
-4. 시간대가 바뀌려면 시간 경과를 명시하는 씬이 필요합니다.` : ""}
+### 플롯 우선순위 조정 (핵심!)
+- 위 "미해결 긴장"이 이번 화 아웃라인의 key_points보다 긴급하다면, **key_points 순서를 바꾸거나 뒤로 미루세요.**
+- 이전 화에서 큰 사건이 터졌는데 이번 화가 느긋한 내용이면, 독자가 "왜 갑자기?" 느낍니다.
+- 반드시 직후부터 시작할 필요는 없습니다 — 다른 시점, 시간 점프, POV 전환도 OK. 단, 플롯상 합당해야 합니다.
+- 이미 다룬 관계/논의 주제를 반복하지 마세요. 같은 인물 사이의 같은 주제 대화는 한 번이면 충분합니다.` : ""}
 
-${previousChapterEnding && !endingSceneState ? `## ⚠️ 직전 화 마지막 장면 (연속성 필수!)
+${previousChapterEnding && !endingSceneState ? `## 직전 화 마지막 장면
 ${previousChapterEnding}
 
-위 장면에 등장한 인물만 다음 화 첫 씬에 포함하세요.
-새 인물이 등장하려면 반드시 "도착/등장하는 순간"을 씬으로 만들어야 합니다.
-이미 그 자리에 있던 것처럼 배치하면 안 됩니다.` : ""}
+- 위 장면의 미해결 사안이 이번 화 key_points보다 긴급하다면, 우선순위를 조정하세요.
+- 다른 시점/시간으로 시작해도 됩니다 — 플롯상 합당하면.
+- 이미 다룬 관계 논의를 반복하지 마세요.` : ""}
 
 ## 1화 구성 원칙 (매우 중요)
 1화는 독자가 이 소설을 계속 읽을지 결정하는 화입니다.

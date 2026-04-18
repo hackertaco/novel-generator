@@ -362,7 +362,15 @@ export class NovelHarness {
       }
       if (arc && scheduler.needsChapterBlueprint(chapterNumber)) {
         try {
-          const bpResult = await generateChapterBlueprints(seed, arc, previousSummaries, previousChapterEnding, endingSceneState, chapterNumber, this._directionDesign);
+          // Collect revealed facts from previous chapters for priority adjustment
+          const prevRevealed = this.worldStateManager
+            ? this.worldStateManager.getAudienceKnownFacts(chapterNumber).map((f) => ({
+                chapter: f.revealedInChapter,
+                content: f.content,
+                type: f.type,
+              }))
+            : undefined;
+          const bpResult = await generateChapterBlueprints(seed, arc, previousSummaries, previousChapterEnding, endingSceneState, chapterNumber, this._directionDesign, prevRevealed);
           arc.chapter_blueprints = [...(arc.chapter_blueprints || []).filter(bp => bp.chapter_number !== chapterNumber), ...bpResult.data];
         } catch (err) {
           console.warn(`[harness] 블루프린트 생성 실패, 최소 블루프린트 생성: ${err instanceof Error ? err.message : err}`);
