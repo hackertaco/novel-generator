@@ -22,6 +22,8 @@ export const SceneSpecSchema = z.object({
   estimated_chars: z.number().int().default(1000).describe("Estimated character count"),
   emotional_tone: z.string().default("neutral").describe("Emotional tone of scene"),
   must_reveal: z.array(z.string()).default([]).describe("독자가 이 씬에서 반드시 알게 되어야 할 구체적 팩트 (예: '사형 서류에 서명이 누락됨', '범인은 북회랑에 있었음')"),
+  triggered_by: z.string().optional().describe("이 씬이 시작되는 원인 — 직전 씬의 어떤 결과가 이 씬을 일으켰는가 (예: '조항 분석에서 루시안 없이는 못 버틴다는 결론')"),
+  leads_to: z.string().optional().describe("이 씬의 결과가 다음 씬에 어떤 영향을 주는가 (예: '거래 조건 합의 → 장부 수거 계획')"),
   // 5W1H (육하원칙) fields for scene context
   who: z.string().optional().describe("주체 → 상대 (예: '레오나 → 카시안')"),
   when: z.string().optional().describe("시간적 맥락 (예: '계약 종료일 오후, 해가 지기 직전')"),

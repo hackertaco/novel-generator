@@ -507,10 +507,19 @@ ${lastScene.slice(-600)}
 
   // Scene instruction — minimal
   const isLastScene = sceneIndex === blueprint.scenes.length - 1;
+  const triggeredBy = (scene as Record<string, unknown>).triggered_by as string | undefined;
+  const leadsTo = (scene as Record<string, unknown>).leads_to as string | undefined;
+  const causalContext = [
+    triggeredBy ? `원인: ${triggeredBy}` : "",
+    leadsTo ? `결과 → ${leadsTo}` : "",
+  ].filter(Boolean).join("\n");
+
   parts.push(`# 씬 ${sceneIndex + 1}/${blueprint.scenes.length}
 ${scene.purpose}
+${causalContext}
 분량: ${scene.estimated_chars}자
 ${isLastScene ? "⚠️ 마지막 씬 — 다음 화가 궁금해지는 엔딩으로 끝내세요." : ""}
+${sceneIndex > 0 ? "⚠️ 직전 씬에서 이어지는 전환을 묘사하세요 (문 소리, 발소리, 시간 경과 등). 갑자기 장면이 바뀌면 안 됩니다." : ""}
 출력: 소설 본문만`);
 
   return parts.join("\n");
