@@ -208,7 +208,10 @@ async function generateNovel(config: E2EConfig) {
       cliffhanger: ch.summary!.cliffhanger,
     }));
 
-  return { seed, plots, selectedPlot, chapterResults, summaries, masterPlan: undefined };
+  // Dump world state for verification of new extraction fields
+  const worldState = harness.getWorldStateSnapshot();
+
+  return { seed, plots, selectedPlot, chapterResults, summaries, masterPlan: undefined, worldState };
 }
 
 // ---------------------------------------------------------------------------
@@ -334,6 +337,14 @@ function generateReport(
     fs.writeFileSync(
       path.join(outputDir, "chapters", `ch${String(ev.chapterNumber).padStart(2, "0")}-eval.json`),
       JSON.stringify(ev, null, 2),
+    );
+  }
+
+  // Dump world state extraction for verification
+  if (genResult.worldState && genResult.worldState.length > 0) {
+    fs.writeFileSync(
+      path.join(outputDir, "world-state.json"),
+      JSON.stringify(genResult.worldState, null, 2),
     );
   }
 

@@ -111,6 +111,11 @@ export class NovelHarness {
   private pendingCorrectionContext?: string;
   private worldStateManager?: WorldStateManager;
 
+  /** Expose world state for debugging/testing (read-only snapshot). */
+  getWorldStateSnapshot() {
+    return this.worldStateManager?.toJSON() ?? [];
+  }
+
   constructor(config?: Partial<HarnessConfig>) {
     this.config = { ...getDefaultConfig(), ...config };
   }
