@@ -35,6 +35,14 @@ export const RevealedFactSchema = z.object({
   revealedTo: z.array(z.string()).optional(), // 어떤 캐릭터에게 공개됐는지 (없으면 독자만)
 });
 
+// Per-character knowledge about another character's last observed state
+export const CharacterKnowledgeSchema = z.object({
+  about: z.string(),              // 대상 캐릭터 이름
+  lastSeen: z.string(),           // "서약 끝내고 떠남" — 마지막으로 목격한 행동
+  lastSeenChapter: z.number(),    // 목격한 화 번호
+  knowsCurrentLocation: z.boolean(), // 대상의 현재 위치를 아는지
+});
+
 export const CharacterStateSchema = z.object({
   name: z.string(),
   location: z.string(),
@@ -46,6 +54,10 @@ export const CharacterStateSchema = z.object({
     with: z.string(),
     status: z.string(),         // "경계+의존", "적대", "신뢰"
   })),
+  // 소설 표현 추적 — 설정 vs 독자에게 보인 것
+  lastShownAction: z.string().optional(),  // 소설에서 묘사된 마지막 행동
+  onScreen: z.boolean().optional(),         // 화 끝에 독자 시야에 있었는지
+  knownBy: z.array(CharacterKnowledgeSchema).optional(), // 다른 인물이 이 캐릭터에 대해 아는 것
 });
 
 export const KeyDialogueSchema = z.object({
@@ -85,4 +97,5 @@ export type KeyAction = z.infer<typeof KeyActionSchema>;
 export type PendingSituation = z.infer<typeof PendingSituationSchema>;
 export type RevealedFact = z.infer<typeof RevealedFactSchema>;
 export type RelationshipDetail = z.infer<typeof RelationshipDetailSchema>;
+export type CharacterKnowledge = z.infer<typeof CharacterKnowledgeSchema>;
 export type ChapterWorldState = z.infer<typeof ChapterWorldStateSchema>;

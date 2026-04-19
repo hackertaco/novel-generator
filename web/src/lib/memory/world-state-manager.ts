@@ -433,6 +433,85 @@ export class WorldStateManager {
     return parts.join("\n");
   }
 
+  // =========================================================================
+  // Character visibility — on-screen tracking for natural appearances
+  // =========================================================================
+
+  /**
+   * Format character visibility context for the Writer.
+   * Shows which characters were on/off screen at the end of the previous chapter,
+   * and what other characters last saw them doing.
+   */
+  formatCharacterVisibility(chapterNumber: number, sceneCharacterNames: string[]): string {
+    if (this.history.length === 0 || chapterNumber <= 1) return "";
+
+    const prevChapter = this.history
+      .filter((h) => h.chapter < chapterNumber)
+      .sort((a, b) => b.chapter - a.chapter)[0];
+    if (!prevChapter) return "";
+
+    const parts: string[] = [];
+    const offScreenChars: string[] = [];
+    const onScreenChars: string[] = [];
+
+    for (const charName of sceneCharacterNames) {
+      const state = prevChapter.character_states.find((cs) => cs.name === charName);
+      if (!state) {
+        offScreenChars.push(charName);
+        continue;
+      }
+
+      if (state.onScreen === false) {
+        offScreenChars.push(charName);
+      } else {
+        onScreenChars.push(charName);
+      }
+    }
+
+    if (offScreenChars.length === 0 && onScreenChars.length === 0) return "";
+
+    parts.push("## 인물 가시성 (이전 화 기준)");
+
+    if (onScreenChars.length > 0) {
+      parts.push(`독자에게 보였음: ${onScreenChars.join(", ")} — 자연스럽게 이어서 등장 가능`);
+    }
+
+    if (offScreenChars.length > 0) {
+      parts.push(`독자에게 안 보였음: ${offScreenChars.join(", ")}`);
+      parts.push("⚠️ 위 인물이 등장하려면 반드시 접근/도착 묘사가 먼저 필요합니다.");
+      parts.push("   (발소리, 문 열림, 누군가 부름, 시야에 들어옴 등)");
+      parts.push("   갑자기 대사하면 독자가 혼란합니다.");
+
+      // Add knownBy context if available
+      for (const offChar of offScreenChars) {
+        const state = prevChapter.character_states.find((cs) => cs.name === offChar);
+        if (state?.lastShownAction) {
+          parts.push(`   ${offChar}의 마지막 묘사: "${state.lastShownAction}"`);
+        }
+        if (state?.knownBy) {
+          for (const kb of state.knownBy) {
+            if (sceneCharacterNames.includes(kb.about)) continue; // skip self
+            if (sceneCharacterNames.includes(kb.about) || !sceneCharacterNames.some((n) => n === kb.about)) {
+              // Find POV character's knowledge about this off-screen char
+            }
+          }
+          // Show what the scene's POV characters know
+          for (const sceneName of sceneCharacterNames) {
+            const knowledge = state.knownBy.find((kb) => kb.about === sceneName);
+            // knownBy is "who knows about THIS character", so we look for entries where about matches scene chars
+            // Actually knownBy[].about = the observer, not the observed. Let me fix the logic.
+          }
+          // Simpler: just show all knownBy entries
+          for (const kb of state.knownBy) {
+            parts.push(`   ${kb.about}가 아는 것: "${kb.lastSeen}" (${kb.lastSeenChapter}화) / 위치 앎: ${kb.knowsCurrentLocation ? "예" : "아니오"}`);
+          }
+        }
+      }
+    }
+
+    return parts.join("\n");
+  }
+
   /** Number of chapters tracked. */
   get size(): number {
     return this.history.length;

@@ -503,6 +503,12 @@ ${lastScene.slice(-600)}
       parts.push(relBlock);
       parts.push("");
     }
+
+    const visBlock = worldStateManager.formatCharacterVisibility(chapterNumber, sceneCharNames);
+    if (visBlock) {
+      parts.push(visBlock);
+      parts.push("");
+    }
   }
 
   // Scene instruction — minimal

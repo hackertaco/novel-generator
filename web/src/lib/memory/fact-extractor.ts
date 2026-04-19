@@ -47,7 +47,7 @@ ${text.slice(0, 4000)}
 {
   "chapter": ${chapterNumber},
   "facts": [{"subject":"주어","action":"행동","object":"대상","chapter":${chapterNumber}}],
-  "character_states": [{"name":"이름","location":"위치","physical":"신체상태","emotional":"감정","knows":["알고있는것"],"companions":["함께있는인물"],"relationships":[{"with":"상대","status":"관계"}]}],
+  "character_states": [{"name":"이름","location":"위치","physical":"신체상태","emotional":"감정","knows":["알고있는것"],"companions":["함께있는인물"],"relationships":[{"with":"상대","status":"관계"}],"lastShownAction":"소설에 묘사된 마지막 행동","onScreen":true,"knownBy":[{"about":"다른캐릭터이름","lastSeen":"마지막 목격 행동","lastSeenChapter":${chapterNumber},"knowsCurrentLocation":true}]}],
   "summary": "1-2문장 요약",
   "key_dialogues": [{"speaker":"화자이름","line":"실제 대사 원문","context":"상황 설명"}],
   "key_actions": [{"character":"캐릭터이름","action":"핵심 행동 설명"}],
@@ -67,6 +67,10 @@ ${text.slice(0, 4000)}
 - **pending_situations 필수**: 화 마지막에 해결되지 않은 열린 상황을 추출하세요. 예: 대치 중, 갇힘, 추격 중, 함께 이동 중, 대화 도중 끊김 등. 다음 화에서 반드시 이어받아야 할 상황입니다. 없으면 빈 배열 [].
 - **revealed_facts 필수**: 이 화에서 독자에게 새로 공개된 정보를 추출하세요. "독자가 이 화를 읽고 나면 알게 되는 것"입니다. 이전 화에서 이미 공개된 정보는 제외. type: evidence(증거), secret(비밀), backstory(배경), relationship(관계 변화), worldbuilding(세계관).
 - **relationship_updates 필수**: 이 화에서 만나거나 상호작용한 인물 쌍의 관계를 추출하세요. firstMetChapter: 이 화에서 처음 만났으면 ${chapterNumber}, 이전에 만났으면 그 화 번호. trust: -2(적대)~+2(신뢰). aKnowsAboutB/bKnowsAboutA: 서로에 대해 아는 정보의 비대칭.
+- **소설 표현 추적 (character_states 내)**:
+  - **lastShownAction**: 이 캐릭터가 소설에서 **묘사된** 마지막 행동. 설정이 아니라 독자가 읽은 것. (예: "서약서에 서명 후 일어남", "마차를 타고 떠남")
+  - **onScreen**: 화 마지막 시점에 이 캐릭터가 독자 시야에 있었는지. 퇴장했으면 false.
+  - **knownBy**: 다른 캐릭터가 이 캐릭터에 대해 아는 것. 예: 리에트는 카셀이 "서약 끝내고 떠난 것"은 알지만 "지금 대예배당에 있는 것"은 모름 → knowsCurrentLocation: false.
 - JSON만 출력`;
 
   try {
