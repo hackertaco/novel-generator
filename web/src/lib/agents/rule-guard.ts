@@ -605,6 +605,59 @@ export function detectShortDialogueSequence(text: string): RuleIssue[] {
 }
 
 // ---------------------------------------------------------------------------
+// Sudden character appearance: character speaks without prior mention
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect when a character appears in a dialogue tag ("X가 말했다")
+ * but wasn't mentioned in the preceding ~30 lines. This catches
+ * "갑자기 카셀이 문을 붙잡은 채 말했다" without any prior presence.
+ */
+export function detectSuddenAppearance(text: string, characterNames: string[]): RuleIssue[] {
+  if (characterNames.length === 0) return [];
+
+  const lines = text.split("\n");
+  const issues: RuleIssue[] = [];
+  const LOOKBACK = 30; // lines to check for prior mention
+
+  // Dialogue tag pattern: "이름 + 동사(말/물/답/외/속삭/중얼/불)"
+  const speechVerbs = /(?:말했|물었|답했|외쳤|속삭|중얼|불렀|잘랐|받았|이었|덧붙|쏘아)/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    for (const name of characterNames) {
+      if (!line.includes(name)) continue;
+
+      // Check if this line is a dialogue tag for this character
+      const nameIdx = line.indexOf(name);
+      const after = line.slice(nameIdx + name.length, nameIdx + name.length + 15);
+      if (!speechVerbs.test(after) && !after.match(/^(이|가|은|는|의|도)\s/)) continue;
+
+      // Check if character was mentioned in the lookback window
+      const lookbackStart = Math.max(0, i - LOOKBACK);
+      let found = false;
+      for (let j = lookbackStart; j < i; j++) {
+        if (lines[j].includes(name)) {
+          found = true;
+          break;
+        }
+      }
+
+      if (!found && i > LOOKBACK) {
+        issues.push({
+          type: "sudden_appearance" as const,
+          position: i,
+          detail: `${i + 1}행: ${name}(이)가 이전 ${LOOKBACK}줄에 언급 없이 갑자기 대사합니다. 등장/접근 묘사를 먼저 넣으세요.`,
+          severity: "warning" as const,
+        });
+      }
+    }
+  }
+
+  return issues;
+}
+
+// ---------------------------------------------------------------------------
 // Untagged dialogue sequence: who's speaking?
 // ---------------------------------------------------------------------------
 
@@ -938,6 +991,7 @@ export class RuleGuardAgent implements PipelineAgent {
       ...detectShortDialogueSequence(ctx.text),
       ...detectDialogueHeavy(ctx.text),
       ...detectUntaggedDialogue(ctx.text),
+      ...detectSuddenAppearance(ctx.text, ctx.seed.characters.map((c) => c.name)),
       ...detectMissingInformation(ctx.text, ctx.blueprint),
       ...speechResult.violations.map((v) => ({
         type: "speech_level_violation" as const,
