@@ -605,6 +605,65 @@ export function detectShortDialogueSequence(text: string): RuleIssue[] {
 }
 
 // ---------------------------------------------------------------------------
+// Untagged dialogue sequence: who's speaking?
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect dialogue-only lines without speaker identification.
+ * A "dialogue-only line" starts with a quote and has no narration/action.
+ * 3+ consecutive dialogue-only lines = reader can't tell who's speaking.
+ */
+export function detectUntaggedDialogue(text: string): RuleIssue[] {
+  const lines = text.split("\n");
+  const issues: RuleIssue[] = [];
+  const quoteStart = /^[""\u201C]/;
+  // A line that has narration with character action/name (not just dialogue)
+  const hasTag = /[가-힣]{2,}(이|가|은|는|의|도|만|께서)/;
+
+  let untaggedStart = -1;
+  let untaggedCount = 0;
+
+  const flush = (endLine: number) => {
+    if (untaggedCount >= 3) {
+      issues.push({
+        type: "untagged_dialogue" as const,
+        position: untaggedStart,
+        detail: `${untaggedStart + 1}~${endLine}행: 대사 ${untaggedCount}줄이 화자 표시 없이 연속됩니다. 누가 말하는지 알 수 없습니다. 대사 사이에 "~가 말했다" 또는 행동 묘사를 넣으세요.`,
+        severity: "warning" as const,
+      });
+    }
+    untaggedCount = 0;
+    untaggedStart = -1;
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    if (quoteStart.test(line)) {
+      // Check if this line also has a speaker tag (narration after dialogue)
+      const afterQuote = line.replace(/[""\u201C][^""\u201D]*[""\u201D]/g, "").trim();
+      if (afterQuote.length < 4 || !hasTag.test(afterQuote)) {
+        // Dialogue-only line, no speaker tag
+        if (untaggedStart === -1) untaggedStart = i;
+        untaggedCount++;
+      } else {
+        flush(i);
+      }
+    } else {
+      // Narration line — if it has a character name, it identifies the speaker
+      if (hasTag.test(line) && line.length >= 6) {
+        flush(i);
+      }
+      // Short narration without name doesn't help identify speaker
+    }
+  }
+
+  flush(lines.length);
+  return issues;
+}
+
+// ---------------------------------------------------------------------------
 // Dialogue-heavy detection: too many dialogue exchanges without POV insight
 // ---------------------------------------------------------------------------
 
@@ -878,6 +937,7 @@ export class RuleGuardAgent implements PipelineAgent {
       ...detectSentenceStartRepeat(ctx.text),
       ...detectShortDialogueSequence(ctx.text),
       ...detectDialogueHeavy(ctx.text),
+      ...detectUntaggedDialogue(ctx.text),
       ...detectMissingInformation(ctx.text, ctx.blueprint),
       ...speechResult.violations.map((v) => ({
         type: "speech_level_violation" as const,
