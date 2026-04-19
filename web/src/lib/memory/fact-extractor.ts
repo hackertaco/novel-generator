@@ -92,7 +92,7 @@ ${text.slice(0, 4000)}
       // Validate with schema, but use parsed data even if validation is loose
       const validated = ChapterWorldStateSchema.safeParse(parsed);
       if (validated.success) {
-        return validated.data;
+        return enrichCharacterVisibility(validated.data, text, seed, chapterNumber);
       }
       // Schema validation failed but we have parsed JSON — use it with defaults
       const charStates = Array.isArray(parsed.character_states)
@@ -126,6 +126,7 @@ ${text.slice(0, 4000)}
         revealed_facts: Array.isArray(parsed.revealed_facts) ? parsed.revealed_facts : undefined,
         relationship_updates: Array.isArray(parsed.relationship_updates) ? parsed.relationship_updates : undefined,
       };
+      return enrichCharacterVisibility(fallbackResult, text, seed, chapterNumber);
     }
 
     // JSON parsing failed entirely — extract a simple summary only
@@ -152,6 +153,77 @@ ${text.slice(0, 4000)}
       summary: `${chapterNumber}화`,
     };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic visibility enrichment — fills onScreen, lastShownAction, knownBy
+// ---------------------------------------------------------------------------
+
+/**
+ * Enrich character_states with visibility info derived from the actual text.
+ * Does NOT rely on LLM — uses text position analysis.
+ *
+ * - onScreen: character name appears in last 200 chars of text
+ * - lastShownAction: last sentence containing the character's name
+ * - knownBy: which other characters were in the same scene (co-occurrence)
+ */
+function enrichCharacterVisibility(
+  state: ChapterWorldState,
+  text: string,
+  seed: NovelSeed,
+  chapterNumber: number,
+): ChapterWorldState {
+  const tail = text.slice(-200);
+  const charNames = seed.characters.map((c) => c.name);
+  // First names for matching (first word of full name)
+  const firstNames = seed.characters.map((c) => c.name.split(/\s/)[0]);
+
+  for (const cs of state.character_states) {
+    const name = cs.name;
+    const firstName = name.split(/\s/)[0];
+
+    // onScreen: name in last 200 chars
+    cs.onScreen = tail.includes(name) || tail.includes(firstName);
+
+    // lastShownAction: find last sentence containing name
+    if (!cs.lastShownAction) {
+      const sentences = text.split(/[.!?]\s*/).filter((s) => s.trim());
+      for (let i = sentences.length - 1; i >= 0; i--) {
+        if (sentences[i].includes(name) || sentences[i].includes(firstName)) {
+          // Clean up and truncate
+          const action = sentences[i].trim().slice(-80);
+          cs.lastShownAction = action;
+          break;
+        }
+      }
+    }
+
+    // knownBy: other characters who appeared in the same "zone" (±500 chars)
+    if (!cs.knownBy || cs.knownBy.length === 0) {
+      const knownBy: Array<{ about: string; lastSeen: string; lastSeenChapter: number; knowsCurrentLocation: boolean }> = [];
+      const lastIdx = Math.max(text.lastIndexOf(name), text.lastIndexOf(firstName));
+
+      if (lastIdx >= 0) {
+        // Look for other characters near this character's last mention
+        const zone = text.slice(Math.max(0, lastIdx - 500), Math.min(text.length, lastIdx + 500));
+        for (let ci = 0; ci < charNames.length; ci++) {
+          const otherName = charNames[ci];
+          if (otherName === name) continue;
+          if (zone.includes(otherName) || zone.includes(firstNames[ci])) {
+            knownBy.push({
+              about: otherName,
+              lastSeen: cs.lastShownAction || "함께 있었음",
+              lastSeenChapter: chapterNumber,
+              knowsCurrentLocation: tail.includes(otherName) || tail.includes(firstNames[ci]),
+            });
+          }
+        }
+      }
+      if (knownBy.length > 0) cs.knownBy = knownBy;
+    }
+  }
+
+  return state;
 }
 
 /**

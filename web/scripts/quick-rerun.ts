@@ -56,6 +56,13 @@ async function main() {
     }
   }
 
+  // Dump world state for extraction verification
+  const worldState = harness.getWorldStateSnapshot();
+  if (worldState.length > 0) {
+    fs.writeFileSync(path.join(outDir, "world-state.json"), JSON.stringify(worldState, null, 2));
+    console.log(`[rerun] world-state.json 저장 (${worldState.length}화 추출)`);
+  }
+
   console.log(`\n[rerun] 완료! 출력: ${outDir}`);
 }
 
