@@ -25,6 +25,7 @@ import { measureOriginality } from "../src/lib/evaluators/originality";
 import { evaluateConsistencyGate } from "../src/lib/evaluators/consistency-gate";
 import { computeDeterministicScores } from "../src/lib/evaluators/deterministic-scorer";
 import type { NovelSeed } from "../src/lib/schema/novel";
+import type { PlotOption } from "../src/lib/schema/plot";
 
 // Parse args
 let genre = "로맨스 판타지";
@@ -41,7 +42,7 @@ async function main() {
 
   // Phase 1: Plots
   console.log("📋 플롯 생성 중...");
-  let plots: Array<{ id: string; title: string; logline: string }> = [];
+  let plots: PlotOption[] = [];
   for await (const event of harness.stepPlots(genre)) {
     if (event.type === "plots_generated") {
       plots = event.plots;
@@ -49,6 +50,7 @@ async function main() {
   }
   console.log(`✓ 플롯 ${plots.length}개: ${plots.map(p => p.title).join(", ")}`);
   const selectedPlot = plots[0];
+  if (!selectedPlot) throw new Error("플롯 생성 실패");
   console.log(`  → 선택: "${selectedPlot.title}"`);
 
   // Phase 2: Seed

@@ -4,6 +4,8 @@ import {
   CharacterVoiceSchema,
   CharacterStateSchema,
   CharacterSchema,
+  getCharacterReferenceVariants,
+  resolveCharacterReference,
 } from "@/lib/schema/character";
 
 describe("CharacterVoiceSchema", () => {
@@ -156,5 +158,37 @@ describe("CharacterSchema", () => {
       const result = CharacterSchema.parse(data);
       expect(result.introduction_chapter).toBe(1);
     });
+  });
+});
+
+describe("character reference helpers", () => {
+  const characters = [
+    {
+      id: "mc",
+      name: "세라핀 에델",
+    },
+    {
+      id: "leon",
+      name: "레온 발테르 크레바스",
+    },
+  ];
+
+  it("builds full-name and short-name variants", () => {
+    expect(getCharacterReferenceVariants(characters[0])).toEqual([
+      "세라핀 에델",
+      "세라핀에델",
+      "세라핀",
+      "mc",
+    ]);
+  });
+
+  it("resolves first-token references back to the canonical character", () => {
+    expect(resolveCharacterReference("세라핀", characters)?.id).toBe("mc");
+    expect(resolveCharacterReference("레온", characters)?.id).toBe("leon");
+  });
+
+  it("resolves full names and ids as well", () => {
+    expect(resolveCharacterReference("세라핀 에델", characters)?.id).toBe("mc");
+    expect(resolveCharacterReference("leon", characters)?.id).toBe("leon");
   });
 });

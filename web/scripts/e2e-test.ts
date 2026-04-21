@@ -318,6 +318,7 @@ function generateReport(
   chapterResults: ChapterResult[],
   evals: ChapterEval[],
   outputDir: string,
+  worldState: unknown[],
 ) {
   // Save artifacts
   fs.mkdirSync(path.join(outputDir, "chapters"), { recursive: true });
@@ -341,10 +342,10 @@ function generateReport(
   }
 
   // Dump world state extraction for verification
-  if (genResult.worldState && genResult.worldState.length > 0) {
+  if (worldState.length > 0) {
     fs.writeFileSync(
       path.join(outputDir, "world-state.json"),
-      JSON.stringify(genResult.worldState, null, 2),
+      JSON.stringify(worldState, null, 2),
     );
   }
 
@@ -457,7 +458,7 @@ async function main() {
 
   try {
     // Phase 1: Generate
-    const { seed, chapterResults } = await generateNovel(config);
+    const { seed, chapterResults, worldState } = await generateNovel(config);
 
     // Phase 2: Validate
     log("\n검증 중...");
@@ -468,7 +469,7 @@ async function main() {
     }
 
     // Phase 3: Report
-    const verdict = generateReport(config, seed, chapterResults, evals, outputDir);
+    const verdict = generateReport(config, seed, chapterResults, evals, outputDir, worldState);
 
     // Exit code
     process.exit(verdict === "FAIL" ? 1 : 0);

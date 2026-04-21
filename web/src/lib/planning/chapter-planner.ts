@@ -4,6 +4,7 @@ import { ChapterBlueprintSchema, type ChapterBlueprint, type ArcPlan } from "@/l
 import type { NovelSeed } from "@/lib/schema/novel";
 import type { DirectionDesign } from "@/lib/schema/direction";
 import type { TokenUsage } from "@/lib/agents/types";
+import { resolveCharacterReference } from "@/lib/schema/character";
 import { z } from "zod";
 
 const ChapterBlueprintResponseSchema = z.object({
@@ -15,6 +16,27 @@ const ChapterBlueprintResponseSchema = z.object({
  * (2+ Hangul chars followed by a particle). Used as a non-blocking quality check.
  */
 const KOREAN_NAME_PATTERN = /[가-힣]{2,}[이가은는을를에의과와]/;
+
+function normalizeCharacterRefs(
+  refs: string[] | undefined,
+  seed: NovelSeed,
+  contextLabel: string,
+): string[] {
+  if (!refs || refs.length === 0) return [];
+
+  const normalized: string[] = [];
+  for (const ref of refs) {
+    const resolved = resolveCharacterReference(ref, seed.characters);
+    if (!resolved) {
+      console.warn(`[chapter-planner] ${contextLabel}: 알 수 없는 캐릭터 참조 "${ref}" 제거`);
+      continue;
+    }
+    if (!normalized.includes(resolved.id)) {
+      normalized.push(resolved.id);
+    }
+  }
+  return normalized;
+}
 
 export async function generateChapterBlueprints(
   seed: NovelSeed,
@@ -49,6 +71,22 @@ export async function generateChapterBlueprints(
   for (const bp of result.data.chapter_blueprints) {
     // Warn if scene purposes lack Korean names
     for (const scene of bp.scenes) {
+      scene.characters = normalizeCharacterRefs(
+        scene.characters,
+        seed,
+        `${bp.chapter_number}화 scene.characters`,
+      );
+
+      const dialogueTurns = (scene as { dialogue_turns?: Array<{ speaker: string; intent: string }> }).dialogue_turns;
+      if (dialogueTurns) {
+        for (const turn of dialogueTurns) {
+          const resolvedSpeaker = resolveCharacterReference(turn.speaker, seed.characters);
+          if (resolvedSpeaker) {
+            turn.speaker = resolvedSpeaker.name;
+          }
+        }
+      }
+
       if (!KOREAN_NAME_PATTERN.test(scene.purpose)) {
         console.warn(
           `[chapter-planner] 경고: ${bp.chapter_number}화 씬 purpose에 한국어 인물명이 없습니다: "${scene.purpose.slice(0, 60)}..."`,
@@ -75,7 +113,11 @@ export async function generateChapterBlueprints(
     }
 
     // Also filter characters_involved at chapter level
-    bp.characters_involved = bp.characters_involved.filter((charId) => {
+    bp.characters_involved = normalizeCharacterRefs(
+      bp.characters_involved,
+      seed,
+      `${bp.chapter_number}화 characters_involved`,
+    ).filter((charId) => {
       const seedChar = seed.characters.find((c) => c.id === charId);
       return !seedChar || bp.chapter_number >= seedChar.introduction_chapter;
     });

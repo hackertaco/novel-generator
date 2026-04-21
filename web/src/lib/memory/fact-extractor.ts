@@ -106,7 +106,7 @@ ${text.slice(0, 4000)}
             relationships: Array.isArray(cs.relationships) ? cs.relationships : [],
           }))
         : [];
-      return {
+      const fallbackResult = {
         chapter: typeof parsed.chapter === "number" ? parsed.chapter : chapterNumber,
         facts: Array.isArray(parsed.facts)
           ? (parsed.facts as Record<string, unknown>[]).map((f) => ({

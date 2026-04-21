@@ -7,6 +7,7 @@
  */
 
 import type { NovelSeed } from "../schema/novel";
+import { getCharacterReferenceVariants, resolveCharacterReference } from "../schema/character";
 
 // ---------------------------------------------------------------------------
 // Constraint violation types
@@ -260,56 +261,50 @@ export class ConstraintChecker {
   ): ConstraintViolation[] {
     const violations: ConstraintViolation[] = [];
 
-    // Find all seed characters that appear in the text (by name)
-    const appearsInText: string[] = [];
-    for (const char of seed.characters) {
-      if (text.includes(char.name)) {
-        appearsInText.push(char.id);
-      }
-    }
+    const activeCharacterIds = seed.characters
+      .filter((char) => this.hasActiveCharacterPresence(text, char))
+      .map((char) => char.id);
+
+    const allowedBlueprintCharacterIds = blueprintCharacters
+      ? [...new Set(
+          blueprintCharacters
+            .map((ref) => resolveCharacterReference(ref, seed.characters)?.id)
+            .filter((charId): charId is string => Boolean(charId))
+        )]
+      : [];
+
+    const allowedBlueprintNames = allowedBlueprintCharacterIds.map((charId) =>
+      seed.characters.find((c) => c.id === charId)?.name || charId
+    );
 
     // Check 1: Characters in text but not in blueprint
-    if (blueprintCharacters && blueprintCharacters.length > 0) {
-      for (const charId of appearsInText) {
-        if (!blueprintCharacters.includes(charId)) {
+    if (allowedBlueprintCharacterIds.length > 0) {
+      for (const charId of activeCharacterIds) {
+        if (!allowedBlueprintCharacterIds.includes(charId)) {
           const char = seed.characters.find((c) => c.id === charId);
           const charName = char?.name || charId;
-
-          // Skip if character was in a previous chapter (might be referenced in dialogue/memory)
-          // Only flag if character has dialogue or action (not just mentioned)
-          const charNamePattern = new RegExp(
-            `${charName}[은는이가을를의에]|"[^"]*"[^"]*${charName}|${charName}[^\n]{0,10}(말했|물었|대답|외치|속삭|웃|소리)`,
-          );
-          if (charNamePattern.test(text)) {
-            violations.push({
-              type: "missing_character" as ConstraintViolation["type"],
-              severity: "warning",
-              message: `${charName}(이)가 ${chapterNumber}화에 등장하지만 블루프린트에 포함되지 않음 (예정: ${blueprintCharacters.join(", ")})`,
-              chapter: chapterNumber,
-              characterId: charId,
-            });
-          }
+          violations.push({
+            type: "missing_character" as ConstraintViolation["type"],
+            severity: "warning",
+            message: `${charName}(이)가 ${chapterNumber}화에 등장하지만 블루프린트에 포함되지 않음 (예정: ${allowedBlueprintNames.join(", ")})`,
+            chapter: chapterNumber,
+            characterId: charId,
+          });
         }
       }
     }
 
     // Check 2: Characters not yet introduced appearing in text
-    for (const charId of appearsInText) {
+    for (const charId of activeCharacterIds) {
       const seedChar = seed.characters.find((c) => c.id === charId);
       if (seedChar && chapterNumber < seedChar.introduction_chapter) {
-        // Check if they have dialogue or action (not just name-dropped)
-        const hasAction = new RegExp(
-          `${seedChar.name}[은는이가]\\s|"[^"]*"[^\\n]*${seedChar.name}`,
-        ).test(text);
-        if (hasAction) {
-          violations.push({
-            type: "premature_introduction",
-            severity: "error",
-            message: `${seedChar.name}(은)는 ${seedChar.introduction_chapter}화 등장 예정이지만 ${chapterNumber}화에서 대사/행동이 있음`,
-            chapter: chapterNumber,
-            characterId: charId,
-          });
-        }
+        violations.push({
+          type: "premature_introduction",
+          severity: "error",
+          message: `${seedChar.name}(은)는 ${seedChar.introduction_chapter}화 등장 예정이지만 ${chapterNumber}화에서 대사/행동이 있음`,
+          chapter: chapterNumber,
+          characterId: charId,
+        });
       }
     }
 
@@ -327,5 +322,33 @@ export class ConstraintChecker {
       }
     }
     return latest;
+  }
+
+  private hasActiveCharacterPresence(
+    text: string,
+    character: NovelSeed["characters"][number],
+  ): boolean {
+    const escapedVariants = getCharacterReferenceVariants(character)
+      .filter((variant) => /[가-힣]/.test(variant))
+      .map((variant) => variant.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+
+    if (escapedVariants.length === 0) return false;
+
+    const refGroup = `(?:${escapedVariants.join("|")})`;
+    const subjectOrTopicPattern = new RegExp(
+      `${refGroup}(?:은|는|이|가|도|만|께서)`,
+    );
+    const speechOrActionPattern = new RegExp(
+      `${refGroup}[^\\n]{0,14}(?:말했|물었|대답|외치|속삭|중얼|웃|소리|다가왔|다가섰|들어왔|걸어왔|고개를|손을|발을|몸을|시선을|눈을)`,
+    );
+    const quotedDialoguePattern = new RegExp(
+      `["“”][^"“”\\n]{0,80}${refGroup}|${refGroup}[^\\n]{0,12}["“”]`,
+    );
+
+    return (
+      subjectOrTopicPattern.test(text) ||
+      speechOrActionPattern.test(text) ||
+      quotedDialoguePattern.test(text)
+    );
   }
 }

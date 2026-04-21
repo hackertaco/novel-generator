@@ -24,7 +24,19 @@ export interface TrackingInjection {
 // --- Issue types ---
 
 export interface RuleIssue {
-  type: "ending_repeat" | "sentence_start_repeat" | "banned_expression" | "consistency" | "short_dialogue_sequence" | "speech_level_violation" | "pov_inconsistency" | "companion_discontinuity" | "info_repeat";
+  type:
+    | "ending_repeat"
+    | "sentence_start_repeat"
+    | "banned_expression"
+    | "consistency"
+    | "short_dialogue_sequence"
+    | "speech_level_violation"
+    | "pov_inconsistency"
+    | "companion_discontinuity"
+    | "info_repeat"
+    | "sudden_appearance"
+    | "untagged_dialogue"
+    | "dialogue_heavy";
   severity?: "warning" | "error" | "critical";
   message?: string;
   position: number; // paragraph index (0-based)
@@ -52,6 +64,14 @@ export interface Snapshot {
   text: string;
   score: number;
   iteration: number;
+}
+
+export interface FutureCharacterDebateRecord {
+  decisionId: string;
+  characterId: string;
+  chapter: number;
+  decision: "keep_original" | "revise_blueprint" | "revise_seed_and_blueprint";
+  rationale: string;
 }
 
 // --- Chapter context ---
@@ -91,6 +111,10 @@ export interface ChapterContext {
   previousFacts?: Array<{ subject: string; action: string; object: string; chapter: number }>;
   /** WorldStateManager instance for audience knowledge + relationship context */
   worldStateManager?: WorldStateManager;
+  /** Structured records of future-character exception debates applied during this chapter */
+  debateHistory?: FutureCharacterDebateRecord[];
+  /** Deduplication keys for already-applied debate decisions */
+  appliedDebateDecisionIds?: string[];
 }
 
 // --- LifecycleEvent (defined here to avoid circular imports; chapter-lifecycle.ts re-exports from here) ---

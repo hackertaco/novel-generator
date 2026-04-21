@@ -38,7 +38,7 @@ export const RevealTimelineEntrySchema = z.object({
     "reader/protagonist/love_interest/public/specific"
   ),
   to_name: z.string().optional().describe("to가 'specific'일 때, 어떤 캐릭터에게 공개되는지"),
-  level: z.string().default("hidden").describe(
+  level: z.enum(["hidden", "hinted", "partial", "revealed"]).default("hidden").describe(
     "hidden/hinted/partial/revealed"
   ),
   method: z.string().describe("공개 방법 (예: '독백', '문서 발견', '대화 중 실수', '목격')"),

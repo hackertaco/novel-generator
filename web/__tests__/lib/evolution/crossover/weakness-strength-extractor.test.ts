@@ -58,6 +58,11 @@ function makeEvalResult(scores: {
         score: pq,
         pass: pq >= 1.0,
       },
+      action_repeat: {
+        violations: [],
+        score: pq,
+        pass: pq >= 1.0,
+      },
       issues: pq < 1.0 ? [`페이싱 문제: score=${pq}`] : [],
     },
 

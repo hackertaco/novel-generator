@@ -66,6 +66,17 @@ export const CharacterStateSchema = z.object({
     .array(z.string())
     .default([])
     .describe("Secrets this character knows"),
+  realization_stage: z
+    .number()
+    .int()
+    .min(1)
+    .max(5)
+    .optional()
+    .describe(
+      "내면 깨달음 단계. 1=모름, 2=의심, 3=단서 포착, 4=거의 확신, 5=완전 자각. " +
+      "internal_arc.misbelief를 뒤집는 과정을 추적. " +
+      "이미 높은 단계에 도달했으면 Writer가 재서술/재발견 금지.",
+    ),
 });
 
 export type CharacterState = z.infer<typeof CharacterStateSchema>;
@@ -99,6 +110,38 @@ export const CharacterSchema = z.object({
   arc_summary: z
     .string()
     .describe("Character's growth arc throughout the story"),
+  internal_arc: z
+    .object({
+      want: z
+        .string()
+        .describe(
+          "외부 목표. 캐릭터가 명시적으로 원한다고 말하는 것 (예: '황위 탈환', '북부로 도주', '복수'). " +
+          "플롯의 엔진이 되는 외부 goal.",
+        ),
+      need: z
+        .string()
+        .describe(
+          "내면 진실. 캐릭터가 진짜 성장하려면 받아들여야 할 것 (예: '약함을 인정하기', '타인에게 의지해도 됨'). " +
+          "want와 보통 충돌.",
+        ),
+      misbelief: z
+        .string()
+        .describe(
+          "캐릭터가 붙잡은 잘못된 믿음. 이게 want를 낳고, 클라이맥스에서 깨져야 need가 드러남 " +
+          "(예: '혼자 버텨야만 살아남는다', '도움은 늘 대가를 요구한다').",
+        ),
+      aha_chapter: z
+        .number()
+        .int()
+        .optional()
+        .describe("misbelief가 완전히 뒤집히는 목표 회차. 없어도 됨."),
+    })
+    .optional()
+    .describe(
+      "Character Arc의 내면 구조. Want vs Need + Misbelief. " +
+      "Lisa Cron의 Story Genius 방식. 매 씬은 misbelief를 한 번씩 흔들거나 강화해야 함. " +
+      "없어도 됨(주연만 권장).",
+    ),
 
   // Mutable - updated each chapter
   state: CharacterStateSchema.default({
@@ -108,7 +151,56 @@ export const CharacterSchema = z.object({
     relationships: {},
     inventory: [],
     secrets_known: [],
+    realization_stage: 1,
   }),
 });
 
 export type Character = z.infer<typeof CharacterSchema>;
+
+function normalizeCharacterRef(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeCharacterRefNoSpace(value: string): string {
+  return value.replace(/\s+/g, "");
+}
+
+/**
+ * Character references in prompts/blueprints are not consistently emitted as IDs.
+ * Accept common human-facing variants such as full name and first token.
+ */
+export function getCharacterReferenceVariants(
+  character: Pick<Character, "id" | "name">,
+): string[] {
+  const variants = new Set<string>();
+  const fullName = normalizeCharacterRef(character.name);
+
+  variants.add(normalizeCharacterRef(character.id));
+  variants.add(fullName);
+
+  const compactName = normalizeCharacterRefNoSpace(fullName);
+  if (compactName && compactName !== fullName) {
+    variants.add(compactName);
+  }
+
+  const firstToken = fullName.split(/\s+/)[0];
+  if (firstToken && firstToken.length >= 2) {
+    variants.add(firstToken);
+  }
+
+  return [...variants].filter(Boolean).sort((a, b) => b.length - a.length);
+}
+
+export function resolveCharacterReference<T extends Pick<Character, "id" | "name">>(
+  reference: string,
+  characters: T[],
+): T | undefined {
+  const normalized = normalizeCharacterRef(reference);
+  const compact = normalizeCharacterRefNoSpace(reference);
+
+  return characters.find((character) =>
+    getCharacterReferenceVariants(character).some((variant) =>
+      variant === normalized || normalizeCharacterRefNoSpace(variant) === compact
+    )
+  );
+}

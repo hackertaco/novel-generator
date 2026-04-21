@@ -157,12 +157,24 @@ ${chapterOutline.one_liner}${keyPtsStr}
       }
       const stateBlock = stateLines.length > 0 ? `\n${stateLines.join("\n")}` : "";
 
+      // Internal arc (Want/Need/Misbelief) — drives character depth
+      const arc = (char as { internal_arc?: { want: string; need: string; misbelief: string; aha_chapter?: number } }).internal_arc;
+      const arcBlock = arc
+        ? `\n🧭 내면 아크:
+  - want (표면 욕망): ${arc.want}
+  - misbelief (붙잡은 잘못된 믿음): ${arc.misbelief}
+  - need (진짜 필요한 진실): ${arc.need}${arc.aha_chapter ? ` — 깨달음 예상 ${arc.aha_chapter}화` : ""}
+  ⚠️ 현재 회차 (${chapterNumber}화)는 ${arc.aha_chapter && chapterNumber < arc.aha_chapter ? "아직 misbelief를 붙잡고 있는 단계" : "깨달음을 향해 흔들리는 단계"}.
+  → ${char.name}의 내면 독백/행동은 misbelief에서 출발하되, 이 씬의 사건이 그 믿음을 '한 번 흔들거나 강화'하도록.
+  → 한 회차에 misbelief를 완전히 뒤집지 말 것. 점진적 흔들림만.`
+        : "";
+
       parts.push(`**${char.name}** (${char.role}, ${genderLabel}) — 대명사: "${pronoun}"
 성격: ${char.voice.personality_core}
 말투: ${char.voice.tone}
 ${speechPatterns.length > 0 ? `말투 특징: ${speechPatterns.join(", ")}` : ""}
 대사 예시:
-${dialogues.map((d) => `  "${d}"`).join("\n") || '  (없음)'}${stateBlock}
+${dialogues.map((d) => `  "${d}"`).join("\n") || '  (없음)'}${stateBlock}${arcBlock}
 ⚠️ ${char.name}은(는) ${genderLabel}입니다. 반드시 "${pronoun}"로 지칭하세요. 대사는 위 말투를 따라야 합니다.
 `);
     }
@@ -171,6 +183,20 @@ ${dialogues.map((d) => `  "${d}"`).join("\n") || '  (없음)'}${stateBlock}
 - 이름을 가리고 대사만 읽어도 누가 말하는지 알 수 있어야 합니다
 - 각 캐릭터의 어휘 수준, 존댓말/반말, 감정 표현 방식이 달라야 합니다
 - 같은 상황에서도 캐릭터마다 다르게 반응해야 합니다
+`);
+    }
+
+    const futureCharacters = seed.characters
+      .filter((char) => char.introduction_chapter > chapterNumber)
+      .slice(0, 8);
+    if (futureCharacters.length > 0) {
+      parts.push(`## 아직 직접 등장 금지 인물
+${futureCharacters.map((char) => `- ${char.name} (${char.introduction_chapter}화 등장 예정)`).join("\n")}
+
+**규칙:**
+- 위 인물은 이 화에서 이름이 언급되거나 회상되는 것까지만 허용됩니다.
+- 위 인물에게 직접 대사시키거나, 같은 공간에 등장시키거나, 행동하게 만들면 안 됩니다.
+- 꼭 등장시켜야 한다고 느껴지면 블루프린트가 잘못된 것이므로, 임의로 끌어오지 말고 현재 씬의 인물만으로 해결하세요.
 `);
     }
 
@@ -309,17 +335,35 @@ ${lastSummary.summary.slice(0, 300)}
     ? `\n**⚠️ 반드시 전달할 정보** (이 팩트들이 독자에게 명확히 전달되어야 합니다):\n${scene.must_reveal.map((r: string) => `- ${r}`).join("\n")}\n→ 감각 묘사로 암시하지 말고, 서술이나 대사로 명확하게 전달하세요.\n`
     : "";
 
+  // Dialogue turns — explicit speaker order to prevent untagged/ambiguous dialogue
+  const dialogueTurns = (scene as { dialogue_turns?: Array<{ speaker: string; intent: string }> }).dialogue_turns;
+  const dialogueTurnsSection = dialogueTurns && dialogueTurns.length > 0
+    ? `\n**🎭 대사 화자 순서** (반드시 이 순서로 + 각 대사에 화자 태그 필수):\n${dialogueTurns.map((t, i: number) => `  ${i + 1}. ${t.speaker} — ${t.intent}`).join("\n")}\n→ "대사" 뒤에 누가 말했는지를 서술문으로 명확히 하세요. (예: 세라핀이 말했다 / 레온이 짧게 받았다)\n→ 화자 태그 없는 대사 3줄 이상 연속 금지. 독자가 "누가 말한 거지?" 헷갈리면 실패.\n`
+    : "";
+
+  // Chapter-level: internal time span (first scene only — avoid repetition)
+  const timeSpan = (blueprint as { internal_time_span?: { start: string; end: string; duration_hours?: number } }).internal_time_span;
+  const timeSpanSection = (sceneIndex === 0 && timeSpan)
+    ? `\n# ⏱ 이 회차의 내적 시간 범위\n${timeSpan.start} → ${timeSpan.end}${timeSpan.duration_hours ? ` (약 ${timeSpan.duration_hours}시간)` : ""}\n→ 이 범위를 넘어가지 마세요. "다음날", "며칠 뒤" 같은 점프로 초과 금지.\n→ 씬 간 시간 이동은 가능하지만, 총합은 위 범위 안에서.\n`
+    : "";
+
+  // Chapter-level: already established facts (first scene only — avoid narrative loops)
+  const alreadyEstablished = (blueprint as { already_established?: string[] }).already_established;
+  const alreadyEstablishedSection = (sceneIndex === 0 && alreadyEstablished && alreadyEstablished.length > 0)
+    ? `\n# 🔒 이미 독자가 알고 있는 사실 (재서술 금지)\n${alreadyEstablished.map((f: string) => `- ${f}`).join("\n")}\n→ 위 사실은 이전 화들에서 독자가 이미 알게 되었습니다.\n→ 캐릭터가 이걸 "다시 깨닫거나" "내면에서 재확인"하는 서술 절대 금지.\n→ 이미 안 것을 전제로 깔고 다음 단계로 나아가세요.\n`
+    : "";
+
   // Removed rules now enforced by pipeline stages:
   //   rule-guard        — 어미 반복(fixEndingRepeat), 주어 반복(fixSentenceStartRepeat), 대사 태그 반복
   //   scene-validator   — 대사 비율(30% threshold), Show/Tell 패턴 감지
   //   repetition-detector — 표현/묘사 반복, 구조적 반복
-  parts.push(`# ${sceneLabel} 지시
+  parts.push(`${timeSpanSection}${alreadyEstablishedSection}# ${sceneLabel} 지시
 
 **목적**: ${scene.purpose}
 **유형**: ${scene.type}
 **감정톤**: ${scene.emotional_tone}
 **목표 분량**: ${scene.estimated_chars}자
-${mustRevealSection}${correctionRule}
+${mustRevealSection}${dialogueTurnsSection}${correctionRule}
 ## 작성 규칙
 1. 이 씬의 목적에만 집중하세요. 다른 사건을 끌어오지 마세요.
 2. 물리적 공간에 장면을 고정하세요: 장소, 시간대, 날씨/조명을 첫 2문장 안에 설정하세요.

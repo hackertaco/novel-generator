@@ -43,6 +43,7 @@ import {
   extractThreads,
 } from "../tracking";
 import { FeedbackAccumulator, postProcessChapter } from "../feedback";
+import { debateFutureCharacterIntroduction, applyFutureCharacterDebate } from "../agents/future-character-debate";
 
 // World state + progressive outliner imports
 import { WorldStateManager } from "../memory/world-state-manager";
@@ -84,7 +85,8 @@ export type HarnessEvent =
   | { type: "plots_generated"; plots: PlotOption[] }
   | { type: "plot_selected"; plot: PlotOption }
   | { type: "seed_generated"; seed: NovelSeed }
-  | { type: "causal_validated"; score: number; issues: Array<{ severity: string; description: string }> };
+  | { type: "causal_validated"; score: number; issues: Array<{ severity: string; description: string }> }
+  | { type: "blueprint_generated"; chapter: number; blueprint: ChapterBlueprint };
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -332,6 +334,7 @@ export class NovelHarness {
 
     const startTime = Date.now();
     let blueprint: ChapterBlueprint | undefined;
+    const MAX_FUTURE_CHARACTER_DEBATES = 1;
 
     // Lazy planning (with fallback — planning failure shouldn't block generation)
     if (this.masterPlan) {
@@ -377,6 +380,8 @@ export class NovelHarness {
             : undefined;
           const bpResult = await generateChapterBlueprints(seed, arc, previousSummaries, previousChapterEnding, endingSceneState, chapterNumber, this._directionDesign, prevRevealed);
           arc.chapter_blueprints = [...(arc.chapter_blueprints || []).filter(bp => bp.chapter_number !== chapterNumber), ...bpResult.data];
+          const newBp = bpResult.data.find((bp) => bp.chapter_number === chapterNumber);
+          if (newBp) yield { type: "blueprint_generated", chapter: chapterNumber, blueprint: newBp };
         } catch (err) {
           console.warn(`[harness] 블루프린트 생성 실패, 최소 블루프린트 생성: ${err instanceof Error ? err.message : err}`);
           if (err instanceof Error) console.warn(err.stack);
@@ -493,12 +498,124 @@ export class NovelHarness {
             .filter((f) => f.chapter < chapterNumber)
         : undefined,
       worldStateManager: this.worldStateManager,
+      debateHistory: [],
+      appliedDebateDecisionIds: [],
     };
 
-    // Run pipeline
-    for await (const event of this.runPipeline(ctx)) {
-      yield { type: "pipeline_event", chapter: chapterNumber, event };
-    }
+    let futureCharacterDebates = 0;
+    let rerunWithPatchedBlueprint = false;
+
+    do {
+      rerunWithPatchedBlueprint = false;
+
+      for await (const event of this.runPipeline(ctx)) {
+        yield { type: "pipeline_event", chapter: chapterNumber, event };
+      }
+
+      if (this.constraintChecker && ctx.blueprint && futureCharacterDebates < MAX_FUTURE_CHARACTER_DEBATES) {
+        const previewChecker = new ConstraintChecker(seed);
+        const previewViolations = previewChecker.validateCharacterAppearances(
+          ctx.text,
+          chapterNumber,
+          seed,
+          ctx.blueprint.characters_involved,
+        );
+        const futureViolation = previewViolations.find((violation) =>
+          violation.type === "premature_introduction" && violation.characterId
+        );
+
+        if (futureViolation?.characterId) {
+          yield {
+            type: "pipeline_event",
+            chapter: chapterNumber,
+            event: { type: "stage_change", stage: "future-character-debate" },
+          };
+
+          try {
+            const debateResult = await debateFutureCharacterIntroduction({
+              chapterNumber,
+              characterId: futureViolation.characterId,
+              seed,
+              blueprint: ctx.blueprint,
+              text: ctx.text,
+              previousSummaries,
+            });
+
+            if (debateResult && !ctx.appliedDebateDecisionIds?.includes(debateResult.decisionId)) {
+              ctx.totalUsage = {
+                prompt_tokens: ctx.totalUsage.prompt_tokens + debateResult.usage.prompt_tokens,
+                completion_tokens: ctx.totalUsage.completion_tokens + debateResult.usage.completion_tokens,
+                total_tokens: ctx.totalUsage.total_tokens + debateResult.usage.total_tokens,
+                cost_usd: ctx.totalUsage.cost_usd + debateResult.usage.cost_usd,
+              };
+
+              ctx.debateHistory = [
+                ...(ctx.debateHistory || []),
+                {
+                  decisionId: debateResult.decisionId,
+                  characterId: debateResult.characterId,
+                  chapter: chapterNumber,
+                  decision: debateResult.decision,
+                  rationale: debateResult.rationale,
+                },
+              ];
+              ctx.appliedDebateDecisionIds = [
+                ...(ctx.appliedDebateDecisionIds || []),
+                debateResult.decisionId,
+              ];
+
+              const patchResult = applyFutureCharacterDebate({
+                seed,
+                blueprint: ctx.blueprint,
+                verdict: debateResult,
+                chapterNumber,
+              });
+
+              yield {
+                type: "pipeline_event",
+                chapter: chapterNumber,
+                event: {
+                  type: "error",
+                  message: `[future-character-debate] ${debateResult.decision} — ${debateResult.rationale}`,
+                },
+              };
+
+              futureCharacterDebates++;
+              const debateInstruction = debateResult.decision === "keep_original"
+                ? `## 미래 인물 등장 거부\n- 거부 인물: ${futureViolation.characterId}\n- 이유: ${debateResult.rationale}\n- 수정 지시: ${debateResult.guidance || `${futureViolation.characterId}의 직접 대사/행동을 제거하고 현재 화의 허용 인물만으로 장면을 다시 구성하세요.`}`
+                : `## 미래 인물 예외 승인\n- 승인 인물: ${futureViolation.characterId}\n- 결론: ${debateResult.decision}\n- 이유: ${debateResult.rationale}\n- 지시: ${debateResult.guidance || patchResult.summary}`;
+              const guidanceBlock = [
+                ctx.trackingContext?.correctionContext,
+                debateInstruction,
+              ].filter(Boolean).join("\n\n");
+              ctx.trackingContext = {
+                ...(ctx.trackingContext || {}),
+                correctionContext: guidanceBlock,
+              };
+
+              if (patchResult.applied || debateResult.decision === "keep_original") {
+                ctx.text = "";
+                ctx.ruleIssues = [];
+                ctx.snapshots = [];
+                ctx.critiqueHistory = [];
+                ctx.bestScore = 0;
+                ctx.sceneTexts = undefined;
+                rerunWithPatchedBlueprint = true;
+              }
+            }
+          } catch (err) {
+            yield {
+              type: "pipeline_event",
+              chapter: chapterNumber,
+              event: {
+                type: "error",
+                message: `[future-character-debate] 실패: ${err instanceof Error ? err.message : err}`,
+              },
+            };
+          }
+        }
+      }
+    } while (rerunWithPatchedBlueprint);
 
     // Always use ctx.text as the authoritative final text.
     // Pipeline agents (including RuleGuardAgent's enforceLength) write to ctx.text
@@ -584,6 +701,7 @@ export class NovelHarness {
       masterPlan?: MasterPlan;
       previousSummaries?: Array<{ chapter: number; title: string; summary: string }>;
       previousChapterEnding?: string;
+      previousSceneState?: ChapterSummary["ending_scene_state"];
     },
   ): AsyncGenerator<HarnessEvent> {
     const totalStart = Date.now();
@@ -738,7 +856,7 @@ export class NovelHarness {
       // Pass structured scene state from the previous chapter for blueprint continuity
       const prevSceneState = chapters.length > 0
         ? chapters[chapters.length - 1].summary.ending_scene_state
-        : undefined;
+        : options?.previousSceneState;
 
       try {
         for await (const event of this.generateChapter(seed, ch, summaries, previousEnding, prevSceneState)) {
