@@ -29,6 +29,16 @@ export const SceneSpecSchema = z.object({
   when: z.string().optional().describe("시간적 맥락 (예: '계약 종료일 오후, 해가 지기 직전')"),
   where_detail: z.string().optional().describe("구체적 장소 묘사 (예: '헤르츠 공작저 서재. 벽면 전체가 장부철, 창밖으로 겨울 정원')"),
   how: z.string().optional().describe("행동 시퀀스 (예: '레오나가 서명 거부 → 청혼서를 증거로 가져감 → 연회 참석 선언')"),
+  dialogue_turns: z.array(
+    z.object({
+      speaker: z.string().describe("화자 이름 또는 character_id"),
+      intent: z.string().describe("이 턴의 의도 (예: '시간 벌기', '진실 떠보기', '결심 표명')"),
+    })
+  ).optional().describe(
+    "이 씬의 대사 순서. 등장 캐릭터가 2명 이상이면 필수. " +
+    "Writer는 이 순서대로 대사 작성하고 화자 태그를 누락해선 안 됨. " +
+    "빈 배열이면 대사 없는 씬."
+  ),
 });
 export type SceneSpec = z.infer<typeof SceneSpecSchema>;
 
@@ -105,6 +115,21 @@ export const ChapterBlueprintSchema = z
     }).describe("이 챕터의 핵심 긴장 장치") as unknown as z.ZodOptional<z.ZodType<"door_threat" | "document" | "deadline" | "witness" | "betrayal" | "discovery" | "confrontation">>,
     /** 핵심 물리적 행동 */
     action_beat: z.string().optional().describe("이 챕터의 핵심 물리적 행동 (예: '리세가 시종 통로로 도주한다')"),
+    /** 이 회차의 내적 시간 범위 */
+    internal_time_span: z.object({
+      start: z.string().describe("시작 시점 (예: '새벽 5시', '축제 전날 저녁', '2화 마지막 장면 직후')"),
+      end: z.string().describe("종료 시점 (예: '오전 10시', '자정', '다음날 새벽')"),
+      duration_hours: z.number().optional().describe("대략 시간 (단위: 시간). 하루 이상이면 24 * days"),
+    }).optional().describe(
+      "이 회차가 담는 소설 내 시간 범위. 명시하지 않으면 Writer가 시간을 끝없이 늘림. " +
+      "Part/Arc 시간 배분의 기본 단위."
+    ),
+    /** 이 화 기준 이미 확립된 사실 (서사 루프 방지용) */
+    already_established: z.array(z.string()).optional().describe(
+      "이전 화들에서 이미 독자가 알게 된 핵심 사실 리스트. " +
+      "Writer는 이 사실을 '재발견/재설명'하지 않아야 함. " +
+      "FactLedger로부터 자동 주입 가능."
+    ),
   })
   .transform((data) => ({
     ...data,
