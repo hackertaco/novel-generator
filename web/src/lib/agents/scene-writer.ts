@@ -9,6 +9,7 @@
 import { getAgent } from "./llm-agent";
 import type { NovelSeed } from "@/lib/schema/novel";
 import { getForeshadowingActions } from "@/lib/schema/novel";
+import { getCharacterReferenceVariants } from "@/lib/schema/character";
 import type { ChapterBlueprint, SceneSpec } from "@/lib/schema/planning";
 import type { TokenUsage } from "@/lib/agents/types";
 import { validateScene, buildSceneRepairPrompt } from "./scene-validator";
@@ -185,6 +186,20 @@ ${dialogues.map((d) => `  "${d}"`).join("\n") || '  (없음)'}${stateBlock}${arc
 - 같은 상황에서도 캐릭터마다 다르게 반응해야 합니다
 `);
     }
+
+    const sceneCharNames = sceneChars.map((char) => char!.name);
+    const directForbidden = seed.characters
+      .filter((char) => !sceneChars.some((sceneChar) => sceneChar?.id === char.id))
+      .slice(0, 12);
+    parts.push(`## 이 씬 직접 등장 화이트리스트 (강제 규칙)
+허용 인물: ${sceneCharNames.join(", ") || "없음"}
+
+**하드 규칙:**
+- 이 씬에서 직접 대사/행동/동선/접촉/같은 공간 존재가 허용되는 인물은 위 목록뿐입니다.
+- 위 목록 밖 인물은 **이름 언급, 회상, 소문, 편지 속 언급**까지만 허용됩니다.
+- 위 목록 밖 인물을 갑자기 등장시키거나 대사시키면 실패입니다.
+- 필요해 보여도 임의 추가 금지. 그런 필요가 보이면 블루프린트가 틀린 것이니 현재 허용 인물로 장면 목적을 달성하세요.
+${directForbidden.length > 0 ? `- 특히 다음 인물은 이 씬에 직접 등장시키지 마세요: ${directForbidden.map((char) => char.name).join(", ")}` : ""}`);
 
     const futureCharacters = seed.characters
       .filter((char) => char.introduction_chapter > chapterNumber)
@@ -640,6 +655,18 @@ export async function writeChapterByScenes(
 
   for (let i = 0; i < blueprint.scenes.length; i++) {
     const scene = blueprint.scenes[i];
+    const sceneCharIds = new Set(scene.characters || []);
+    const whitelist = {
+      allowedCharacters: seed.characters
+        .filter((character) => sceneCharIds.has(character.id))
+        .map((character) => character.name),
+      forbiddenCharacters: seed.characters
+        .filter((character) => !sceneCharIds.has(character.id))
+        .map((character) => ({
+          name: character.name,
+          variants: getCharacterReferenceVariants(character),
+        })),
+    };
 
     // 1. Generate scene
     const previousText = sceneTexts.length > 0
@@ -691,7 +718,7 @@ export async function writeChapterByScenes(
 
     // 2. Code validation + strict retry loop (up to 3 attempts)
     const MAX_REPAIR_ATTEMPTS = 3;
-    let validation = validateScene(sceneText, scene.estimated_chars, scene.type);
+    let validation = validateScene(sceneText, scene.estimated_chars, scene.type, whitelist);
     let repairAttempt = 0;
 
     while (!validation.passed && repairAttempt < MAX_REPAIR_ATTEMPTS) {
@@ -712,7 +739,7 @@ export async function writeChapterByScenes(
         sceneText = repairedText;
       }
 
-      validation = validateScene(sceneText, scene.estimated_chars, scene.type);
+      validation = validateScene(sceneText, scene.estimated_chars, scene.type, whitelist);
     }
 
     // Log remaining issues after all retry attempts
@@ -976,7 +1003,19 @@ ${startOfNext}
   // --- Phase 3: Validation (same as sequential) ---
   for (let i = 0; i < sceneTexts.length; i++) {
     const scene = blueprint.scenes[i];
-    const validation = validateScene(sceneTexts[i], scene.estimated_chars, scene.type);
+    const sceneCharIds = new Set(scene.characters || []);
+    const whitelist = {
+      allowedCharacters: seed.characters
+        .filter((character) => sceneCharIds.has(character.id))
+        .map((character) => character.name),
+      forbiddenCharacters: seed.characters
+        .filter((character) => !sceneCharIds.has(character.id))
+        .map((character) => ({
+          name: character.name,
+          variants: getCharacterReferenceVariants(character),
+        })),
+    };
+    const validation = validateScene(sceneTexts[i], scene.estimated_chars, scene.type, whitelist);
     if (!validation.passed) {
       for (const issue of validation.issues.filter((iss) => iss.severity === "error")) {
         remainingIssues.push(`[씬${i + 1}] ${issue.message}`);

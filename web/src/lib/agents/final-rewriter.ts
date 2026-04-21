@@ -3,6 +3,7 @@ import { getFinalRewriterSystemPrompt } from "@/lib/prompts/final-rewriter-promp
 import { sanitize } from "./rule-guard";
 import { accumulateUsage } from "./pipeline";
 import type { PipelineAgent, ChapterContext, LifecycleEvent } from "./pipeline";
+import { ConstraintChecker } from "../evaluators/constraint-checker";
 import {
   getAddressEntriesForCharacters,
   formatAddressMatrixForPrompt,
@@ -34,6 +35,25 @@ export function buildFinalRewriterPrompt(
       parts.push(formatAddressMatrixForPrompt(addressEntries));
       parts.push("⚠️ 호칭이 위 규칙과 다르면 수정하세요.");
     }
+  }
+
+  if (ctx?.blueprint) {
+    const allowedIds = new Set(ctx.blueprint.characters_involved || []);
+    const allowedNames = ctx.seed.characters
+      .filter((character) => allowedIds.has(character.id))
+      .map((character) => character.name);
+    const forbiddenNames = ctx.seed.characters
+      .filter((character) => !allowedIds.has(character.id))
+      .map((character) => character.name);
+
+    parts.push("");
+    parts.push("## 등장 인물 보존 규칙 (절대 위반 금지)");
+    parts.push(`허용 직접 등장 인물: ${allowedNames.join(", ") || "없음"}`);
+    if (forbiddenNames.length > 0) {
+      parts.push(`직접 등장 금지 인물: ${forbiddenNames.join(", ")}`);
+    }
+    parts.push("⚠️ 편집 중 새 캐릭터를 추가하거나, 금지 인물에게 새 대사/행동/등장을 부여하면 안 됩니다.");
+    parts.push("⚠️ 이미 있는 사건의 문체만 다듬으세요. 캐스트와 플롯은 바꾸지 마세요.");
   }
 
   parts.push("");
@@ -93,12 +113,42 @@ export class FinalRewriterAgent implements PipelineAgent {
 
     // Safety: only accept if rewritten text is within ±30% of original length
     // (looser than Polisher's 70% floor because the editor may add spatial descriptions)
+    const originalText = ctx.text;
     const cleaned = sanitize(collected);
-    const minLen = ctx.text.length * 0.7;
-    const maxLen = ctx.text.length * 1.3;
+    const minLen = originalText.length * 0.7;
+    const maxLen = originalText.length * 1.3;
     if (cleaned.length >= minLen && cleaned.length <= maxLen) {
-      ctx.text = cleaned;
-      yield { type: "replace_text", content: ctx.text };
+      let acceptRewrite = true;
+      if (ctx.blueprint) {
+        const checker = new ConstraintChecker(ctx.seed);
+        const originalViolations = checker.validateCharacterAppearances(
+          originalText,
+          ctx.chapterNumber,
+          ctx.seed,
+          ctx.blueprint.characters_involved,
+        );
+        const rewrittenViolations = checker.validateCharacterAppearances(
+          cleaned,
+          ctx.chapterNumber,
+          ctx.seed,
+          ctx.blueprint.characters_involved,
+        );
+        const originalCount = originalViolations.filter((violation) =>
+          violation.type === "missing_character" || violation.type === "premature_introduction"
+        ).length;
+        const rewrittenCount = rewrittenViolations.filter((violation) =>
+          violation.type === "missing_character" || violation.type === "premature_introduction"
+        ).length;
+
+        if (rewrittenCount > originalCount) {
+          acceptRewrite = false;
+        }
+      }
+
+      if (acceptRewrite) {
+        ctx.text = cleaned;
+        yield { type: "replace_text", content: ctx.text };
+      }
     }
   }
 }

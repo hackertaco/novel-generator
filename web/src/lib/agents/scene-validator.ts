@@ -63,7 +63,7 @@ const VAGUE_NARRATIVE = [
 // ---------------------------------------------------------------------------
 
 export interface SceneIssue {
-  type: "dialogue_ratio" | "ending_repetition" | "tell_not_show" | "vague_narrative" | "too_short" | "too_long" | "sentence_repetition";
+  type: "dialogue_ratio" | "ending_repetition" | "tell_not_show" | "vague_narrative" | "too_short" | "too_long" | "sentence_repetition" | "forbidden_character_presence";
   message: string;
   severity: "warning" | "error";
 }
@@ -78,6 +78,11 @@ export interface SceneValidationResult {
     tellNotShowCount: number;
     vagueNarrativeCount: number;
   };
+}
+
+export interface SceneWhitelistRule {
+  allowedCharacters: string[];
+  forbiddenCharacters: Array<{ name: string; variants: string[] }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +147,38 @@ function countVagueNarrative(text: string): number {
   return VAGUE_NARRATIVE.filter((p) => text.includes(p)).length;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function detectForbiddenCharacterPresence(
+  text: string,
+  whitelist?: SceneWhitelistRule,
+): string[] {
+  if (!whitelist || whitelist.forbiddenCharacters.length === 0) return [];
+
+  const violations: string[] = [];
+  const maskedText = text.replace(/["“”][^"“”\n]*["“”]/g, "\"\"");
+  for (const forbidden of whitelist.forbiddenCharacters) {
+    const variants = forbidden.variants
+      .filter((variant) => /[가-힣A-Za-z]/.test(variant))
+      .map(escapeRegExp);
+    if (variants.length === 0) continue;
+
+    const refGroup = `(?:${variants.join("|")})`;
+    const activePresencePattern = new RegExp(
+      `${refGroup}(?:은|는|이|가|도|만|께서)|${refGroup}[^\\n]{0,14}(?:말했|물었|대답|외치|속삭|중얼|웃|소리|다가왔|다가섰|들어왔|걸어왔|고개를|손을|발을|몸을|시선을|눈을)`,
+    );
+    const directSpeechPattern = new RegExp(`${refGroup}[^\\n]{0,12}["“”]`);
+
+    if (activePresencePattern.test(maskedText) || directSpeechPattern.test(text)) {
+      violations.push(forbidden.name);
+    }
+  }
+
+  return violations;
+}
+
 /**
  * Validate a single scene's text quality.
  */
@@ -149,6 +186,7 @@ export function validateScene(
   text: string,
   targetChars: number,
   sceneType: string,
+  whitelist?: SceneWhitelistRule,
 ): SceneValidationResult {
   const issues: SceneIssue[] = [];
   const charCount = text.length;
@@ -156,6 +194,7 @@ export function validateScene(
   const endingRepetitionRate = measureEndingRepetition(text);
   const tellNotShowCount = countTellNotShow(text);
   const vagueNarrativeCount = countVagueNarrative(text);
+  const forbiddenPresence = detectForbiddenCharacterPresence(text, whitelist);
 
   // Length checks
   const ABSOLUTE_MAX_CHARS = 4000; // Hard cap per chapter (all scenes combined should not exceed this)
@@ -222,6 +261,14 @@ export function validateScene(
     });
   }
 
+  if (forbiddenPresence.length > 0) {
+    issues.push({
+      type: "forbidden_character_presence",
+      message: `이 씬에 허용되지 않은 인물이 직접 등장합니다: ${forbiddenPresence.join(", ")}. 직접 대사/행동은 제거하고 허용된 인물만 남기세요.`,
+      severity: "error",
+    });
+  }
+
   const errors = issues.filter((i) => i.severity === "error");
   return {
     passed: errors.length === 0,
@@ -274,6 +321,14 @@ export function buildSceneRepairPrompt(
 "결심을 굳혔다" → 구체적으로 무엇을 했는지 (칼을 뽑았다, 편지를 찢었다, 문을 잠갔다)
 "다시 시작해야 했다" → 첫 발걸음이 무엇인지 (지도를 펼쳤다, 대장간 문을 두드렸다)
 추상적 결의를 삭제하고 행동 하나로 대체하세요.`);
+  }
+
+  if (issueTypes.has("forbidden_character_presence")) {
+    specificGuidance.push(`### 씬 직접 등장 인물 화이트리스트 준수
+- 이 씬에서 직접 대사하거나 행동할 수 있는 인물은 블루프린트 scene.characters에 있는 인물뿐입니다.
+- 허용되지 않은 인물은 이름이 언급되거나 회상되는 것까지만 가능합니다.
+- 금지 인물이 직접 등장한 문장을 삭제하거나, 허용 인물의 반응/관찰/소문 형태로 바꾸세요.
+- 장면 기능이 꼭 필요하면 허용된 인물의 행동으로 대체하세요.`);
   }
 
   if (issueTypes.has("too_short")) {
