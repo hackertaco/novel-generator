@@ -338,6 +338,7 @@ export class NovelHarness {
     const MAX_FUTURE_CHARACTER_DEBATES = 1;
     const MAX_MISSING_CHARACTER_RERUNS = 1;
     const MAX_CHAPTER_QUALITY_RERUNS = 1;
+    const MAX_FINAL_CAST_HARD_RERUNS = 1;
 
     // Lazy planning (with fallback — planning failure shouldn't block generation)
     if (this.masterPlan) {
@@ -504,10 +505,49 @@ export class NovelHarness {
       debateHistory: [],
       appliedDebateDecisionIds: [],
     };
+    const constraintChecker = this.constraintChecker;
+
+    function appendCorrectionContext(instruction: string): void {
+      const correctionContext = [
+        ctx.trackingContext?.correctionContext,
+        instruction,
+      ].filter(Boolean).join("\n\n");
+      ctx.trackingContext = {
+        ...(ctx.trackingContext || {}),
+        correctionContext,
+      };
+    }
+
+    function resetChapterContextForRerun(): void {
+      ctx.text = "";
+      ctx.ruleIssues = [];
+      ctx.snapshots = [];
+      ctx.critiqueHistory = [];
+      ctx.bestScore = 0;
+      ctx.sceneTexts = undefined;
+    }
+
+    function isBlockingCastViolationType(type: string): boolean {
+      return type === "missing_character" || type === "premature_introduction";
+    }
+
+    function getPreviewViolations(): ReturnType<ConstraintChecker["validateCharacterAppearances"]> {
+      if (!constraintChecker || !ctx.blueprint) {
+        return [];
+      }
+
+      return constraintChecker.validateCharacterAppearances(
+        ctx.text,
+        chapterNumber,
+        seed,
+        ctx.blueprint.characters_involved,
+      );
+    }
 
     let futureCharacterDebates = 0;
     let missingCharacterReruns = 0;
     let chapterQualityReruns = 0;
+    let finalCastHardReruns = 0;
     let rerunWithPatchedBlueprint = false;
 
     do {
@@ -517,14 +557,12 @@ export class NovelHarness {
         yield { type: "pipeline_event", chapter: chapterNumber, event };
       }
 
+      const previewViolations = getPreviewViolations();
+      const blockingPreviewViolations = previewViolations.filter((violation) =>
+        isBlockingCastViolationType(violation.type)
+      );
+
       if (this.constraintChecker && ctx.blueprint && futureCharacterDebates < MAX_FUTURE_CHARACTER_DEBATES) {
-        const previewChecker = new ConstraintChecker(seed);
-        const previewViolations = previewChecker.validateCharacterAppearances(
-          ctx.text,
-          chapterNumber,
-          seed,
-          ctx.blueprint.characters_involved,
-        );
         const futureViolation = previewViolations.find((violation) =>
           violation.type === "premature_introduction" && violation.characterId
         );
@@ -589,22 +627,10 @@ export class NovelHarness {
               const debateInstruction = debateResult.decision === "keep_original"
                 ? `## 미래 인물 등장 거부\n- 거부 인물: ${futureViolation.characterId}\n- 이유: ${debateResult.rationale}\n- 수정 지시: ${debateResult.guidance || `${futureViolation.characterId}의 직접 대사/행동을 제거하고 현재 화의 허용 인물만으로 장면을 다시 구성하세요.`}`
                 : `## 미래 인물 예외 승인\n- 승인 인물: ${futureViolation.characterId}\n- 결론: ${debateResult.decision}\n- 이유: ${debateResult.rationale}\n- 지시: ${debateResult.guidance || patchResult.summary}`;
-              const guidanceBlock = [
-                ctx.trackingContext?.correctionContext,
-                debateInstruction,
-              ].filter(Boolean).join("\n\n");
-              ctx.trackingContext = {
-                ...(ctx.trackingContext || {}),
-                correctionContext: guidanceBlock,
-              };
+              appendCorrectionContext(debateInstruction);
 
               if (patchResult.applied || debateResult.decision === "keep_original") {
-                ctx.text = "";
-                ctx.ruleIssues = [];
-                ctx.snapshots = [];
-                ctx.critiqueHistory = [];
-                ctx.bestScore = 0;
-                ctx.sceneTexts = undefined;
+                resetChapterContextForRerun();
                 rerunWithPatchedBlueprint = true;
               }
             }
@@ -622,13 +648,6 @@ export class NovelHarness {
       }
 
       if (!rerunWithPatchedBlueprint && this.constraintChecker && ctx.blueprint && missingCharacterReruns < MAX_MISSING_CHARACTER_RERUNS) {
-        const previewChecker = new ConstraintChecker(seed);
-        const previewViolations = previewChecker.validateCharacterAppearances(
-          ctx.text,
-          chapterNumber,
-          seed,
-          ctx.blueprint.characters_involved,
-        );
         const strayCharacters = previewViolations.filter((violation) =>
           violation.type === "missing_character" && violation.characterId
         );
@@ -648,22 +667,13 @@ export class NovelHarness {
           };
 
           missingCharacterReruns++;
-          const guidanceBlock = [
-            ctx.trackingContext?.correctionContext,
+          const missingCharacterInstruction = [
             "## 비허용 인물 직접 등장 제거",
             ...strayCharacters.map((item) => `- ${item.characterId}은(는) 이번 화 블루프린트에 없는 인물입니다. 직접 대사/행동/같은 공간 존재를 제거하고 허용 인물만 남기세요.`),
             "- 이름 언급, 소문, 회상은 가능하지만 직접 등장처럼 보이는 묘사는 금지입니다.",
-          ].filter(Boolean).join("\n");
-          ctx.trackingContext = {
-            ...(ctx.trackingContext || {}),
-            correctionContext: guidanceBlock,
-          };
-          ctx.text = "";
-          ctx.ruleIssues = [];
-          ctx.snapshots = [];
-          ctx.critiqueHistory = [];
-          ctx.bestScore = 0;
-          ctx.sceneTexts = undefined;
+          ].join("\n");
+          appendCorrectionContext(missingCharacterInstruction);
+          resetChapterContextForRerun();
           rerunWithPatchedBlueprint = true;
         }
       }
@@ -691,19 +701,36 @@ export class NovelHarness {
             formatChapterQualityIssuesForPrompt(chapterQualityIssues),
             "위 문제를 줄이는 방향으로 다시 쓰세요. 같은 사실 재설명 대신 행동/준비/위험 증가로 전진시키고, 단서 하나만으로 정답을 확신하는 문장을 늦추세요.",
           ].join("\n");
-          ctx.trackingContext = {
-            ...(ctx.trackingContext || {}),
-            correctionContext: [
-              ctx.trackingContext?.correctionContext,
-              qualityInstruction,
-            ].filter(Boolean).join("\n\n"),
+          appendCorrectionContext(qualityInstruction);
+          resetChapterContextForRerun();
+          rerunWithPatchedBlueprint = true;
+        }
+      }
+
+      if (!rerunWithPatchedBlueprint && this.constraintChecker && ctx.blueprint && finalCastHardReruns < MAX_FINAL_CAST_HARD_RERUNS) {
+        const finalCastViolations = blockingPreviewViolations;
+        if (finalCastViolations.length > 0) {
+          yield {
+            type: "pipeline_event",
+            chapter: chapterNumber,
+            event: { type: "stage_change", stage: "final-cast-hard-repair" },
           };
-          ctx.text = "";
-          ctx.ruleIssues = [];
-          ctx.snapshots = [];
-          ctx.critiqueHistory = [];
-          ctx.bestScore = 0;
-          ctx.sceneTexts = undefined;
+          yield {
+            type: "pipeline_event",
+            chapter: chapterNumber,
+            event: {
+              type: "error",
+              message: `[final-cast-hard-repair] ${finalCastViolations.map((violation) => violation.characterId || violation.type).join(", ")} — 종료 전 cast 위반 제거 재생성`,
+            },
+          };
+
+          finalCastHardReruns++;
+          const finalCastInstruction = [
+            "## 종료 전 cast 위반 제거",
+            ...finalCastViolations.map((violation) => `- ${violation.characterId || "unknown"} 관련 직접 등장 위반이 남아 있습니다. 블루프린트 허용 인물 외 직접 대사/행동/같은 공간 존재를 제거하세요.`),
+          ].join("\n");
+          appendCorrectionContext(finalCastInstruction);
+          resetChapterContextForRerun();
           rerunWithPatchedBlueprint = true;
         }
       }
@@ -723,6 +750,29 @@ export class NovelHarness {
     const title = blueprint?.title || outline?.title || extOutline?.title || `${chapterNumber}화`;
     const summary = extractSummaryRuleBased(chapterNumber, title, completedText, seed);
     summary.style_score = ctx.bestScore;
+
+    // Validate character appearances against blueprint (informational — premature
+    // introductions are now blocked at blueprint generation time in chapter-planner.ts)
+    if (this.constraintChecker && blueprint) {
+      const charViolations = this.constraintChecker.validateCharacterAppearances(
+        completedText,
+        chapterNumber,
+        seed,
+        blueprint.characters_involved,
+      );
+      for (const v of charViolations) {
+        yield { type: "pipeline_event", chapter: chapterNumber, event: {
+          type: "error",
+          message: `[${v.type}] ${v.message}`,
+        } };
+      }
+      const blockingCastViolations = charViolations.filter((violation) =>
+        isBlockingCastViolationType(violation.type)
+      );
+      if (blockingCastViolations.length > 0) {
+        throw new Error(`최종 cast 검증 실패: ${blockingCastViolations.map((violation) => `${violation.type}:${violation.characterId || "unknown"}`).join(", ")}`);
+      }
+    }
 
     // Post-chapter tracking
     await this.updateTracking(seed, chapterNumber, completedText);
@@ -745,23 +795,6 @@ export class NovelHarness {
         this.worldStateManager.addChapterState(chapterWorldState);
       } catch (err) {
         console.warn(`[harness] ${chapterNumber}화 사실 추출 실패, 건너뜀:`, err instanceof Error ? err.message : err);
-      }
-    }
-
-    // Validate character appearances against blueprint (informational — premature
-    // introductions are now blocked at blueprint generation time in chapter-planner.ts)
-    if (this.constraintChecker && blueprint) {
-      const charViolations = this.constraintChecker.validateCharacterAppearances(
-        completedText,
-        chapterNumber,
-        seed,
-        blueprint.characters_involved,
-      );
-      for (const v of charViolations) {
-        yield { type: "pipeline_event", chapter: chapterNumber, event: {
-          type: "error",
-          message: `[${v.type}] ${v.message}`,
-        } };
       }
     }
 

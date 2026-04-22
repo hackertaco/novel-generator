@@ -61,6 +61,44 @@ export interface SceneWriterResult {
   remainingIssues: string[];
 }
 
+function getCharacterGenderMetadata(gender?: string): {
+  pronoun: string;
+  label: string;
+  shortLabel: string;
+} {
+  switch (gender) {
+    case "female":
+      return {
+        pronoun: "그녀",
+        label: "여성",
+        shortLabel: "여",
+      };
+    case "male":
+      return {
+        pronoun: "그",
+        label: "남성",
+        shortLabel: "남",
+      };
+    default:
+      return {
+        pronoun: "그",
+        label: "기타",
+        shortLabel: "",
+      };
+  }
+}
+
+function getForeshadowingActionLabel(action: "plant" | "hint" | "reveal"): string {
+  switch (action) {
+    case "plant":
+      return "심기";
+    case "hint":
+      return "암시";
+    case "reveal":
+      return "공개";
+  }
+}
+
 /**
  * Build the prompt for generating a single scene.
  */
@@ -137,9 +175,7 @@ ${chapterOutline.one_liner}${keyPtsStr}
       if (!char) continue;
       const dialogues = char.voice.sample_dialogues.slice(0, 3);
       const speechPatterns = char.voice.speech_patterns?.slice(0, 3) || [];
-      const gender = char.gender || "male";
-      const pronoun = gender === "female" ? "그녀" : gender === "other" ? "그" : "그";
-      const genderLabel = gender === "female" ? "여성" : gender === "male" ? "남성" : "기타";
+      const { pronoun, label: genderLabel } = getCharacterGenderMetadata(char.gender);
 
       // Current mutable state
       const stateLines: string[] = [];
@@ -529,7 +565,7 @@ ${lastScene.slice(-600)}
     parts.push("# 캐릭터");
     for (const char of sceneChars) {
       if (!char) continue;
-      const gender = char.gender === "female" ? "여" : char.gender === "male" ? "남" : "";
+      const { shortLabel: gender } = getCharacterGenderMetadata(char.gender);
       const rank = char.social_rank ?? "commoner";
       const rankKo = socialRankLabel[rank] || rank;
       const dialogues = char.voice.sample_dialogues.slice(0, 2);
@@ -545,7 +581,7 @@ ${lastScene.slice(-600)}
   if (fsActions.length > 0) {
     parts.push("# 복선");
     for (const { foreshadowing: fs, action } of fsActions) {
-      const label = action === "plant" ? "심기" : action === "hint" ? "암시" : "공개";
+      const label = getForeshadowingActionLabel(action);
       parts.push(`- [${label}] ${fs.name}: ${fs.description}`);
     }
     parts.push("");
@@ -843,15 +879,6 @@ export async function writeChapterParallel(
 
   // --- Phase 1: Generate all scenes in parallel ---
   const scenePromises = blueprint.scenes.map((scene, i) => {
-    // For parallel mode, each scene gets the previous chapter ending (scene 0)
-    // or a brief hint from the blueprint about the previous scene's purpose
-    // Build context about ALL previous scenes so each scene knows what's already covered
-    const prevSceneHint = i > 0
-      ? blueprint.scenes.slice(0, i).map((prev, j) =>
-          `[씬 ${j + 1} "${prev.purpose}" — 감정톤: ${prev.emotional_tone}. 이 내용은 이미 독자가 읽었습니다. 절대 반복하지 마세요.]`
-        ).join("\n") + "\n자연스럽게 이어서 시작하세요. 위 씬에서 이미 묘사한 행동/장면/감정을 다시 쓰지 마세요."
-      : undefined;
-
     const scenePrompt = simpleMode
       ? buildSimpleScenePrompt(
           seed, chapterNumber, blueprint, scene, i,

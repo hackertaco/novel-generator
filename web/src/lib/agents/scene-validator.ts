@@ -147,6 +147,17 @@ function countVagueNarrative(text: string): number {
   return VAGUE_NARRATIVE.filter((p) => text.includes(p)).length;
 }
 
+function getMinDialogueRatio(sceneType: string): number {
+  switch (sceneType) {
+    case "dialogue":
+      return 0.4;
+    case "introspection":
+      return 0.1;
+    default:
+      return 0.2;
+  }
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -230,7 +241,7 @@ export function validateScene(
   }
 
   // Dialogue ratio — dialogue/action scenes should have more
-  const minDialogueRatio = sceneType === "dialogue" ? 0.4 : sceneType === "introspection" ? 0.1 : 0.2;
+  const minDialogueRatio = getMinDialogueRatio(sceneType);
   if (dialogueRatio < minDialogueRatio) {
     issues.push({
       type: "dialogue_ratio",

@@ -120,11 +120,32 @@ export class FinalRewriterAgent implements PipelineAgent {
     const usage = result.value;
     ctx.totalUsage = accumulateUsage(ctx.totalUsage, usage);
 
+    const zeroUsage = {
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0,
+      cost_usd: 0,
+    };
+    const castChecker = ctx.blueprint ? new ConstraintChecker(ctx.seed) : null;
+
+    function isBlockingCastViolationType(type: string): boolean {
+      return type === "missing_character" || type === "premature_introduction";
+    }
+
     async function runSecondPassIfNeeded(candidateText: string): Promise<{ text: string; extraUsage: typeof usage }> {
       const currentIssues = detectChapterQualityIssues(candidateText);
-      if (currentIssues.length === 0) return { text: candidateText, extraUsage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 } };
+      if (currentIssues.length === 0) {
+        return { text: candidateText, extraUsage: zeroUsage };
+      }
 
-      const retryPrompt = buildChapterQualityRepairPrompt(candidateText, currentIssues);
+      const retryPrompt = [
+        buildFinalRewriterPrompt(candidateText, genre, ctx.chapterNumber, ctx),
+        "",
+        "## 아직 남은 구조 문제 (반드시 더 줄이기)",
+        formatChapterQualityIssuesForPrompt(currentIssues),
+        "",
+        buildChapterQualityRepairPrompt(candidateText, currentIssues),
+      ].join("\n");
       const secondPass = await agent.call({
         prompt: retryPrompt,
         system,
@@ -134,6 +155,23 @@ export class FinalRewriterAgent implements PipelineAgent {
         taskId: `final-rewriter-ch${ctx.chapterNumber}-second-pass`,
       });
       return { text: sanitize(secondPass.data), extraUsage: secondPass.usage };
+    }
+
+    function getCastViolations(candidateText: string) {
+      if (!ctx.blueprint || !castChecker) return [];
+      return castChecker.validateCharacterAppearances(
+        candidateText,
+        ctx.chapterNumber,
+        ctx.seed,
+        ctx.blueprint.characters_involved,
+      ).filter((violation) => isBlockingCastViolationType(violation.type));
+    }
+
+    function getCastViolationKeys(candidateText: string): Set<string> {
+      return new Set(
+        getCastViolations(candidateText)
+          .map((violation) => `${violation.type}:${violation.characterId || "unknown"}`)
+      );
     }
 
     // Safety: only accept if rewritten text is within ±30% of original length
@@ -147,32 +185,15 @@ export class FinalRewriterAgent implements PipelineAgent {
       const originalQualityIssues = detectChapterQualityIssues(originalText);
       const rewrittenQualityIssues = detectChapterQualityIssues(cleaned);
       if (ctx.blueprint) {
-        const checker = new ConstraintChecker(ctx.seed);
-        const originalViolations = checker.validateCharacterAppearances(
-          originalText,
-          ctx.chapterNumber,
-          ctx.seed,
-          ctx.blueprint.characters_involved,
-        );
-        const rewrittenViolations = checker.validateCharacterAppearances(
-          cleaned,
-          ctx.chapterNumber,
-          ctx.seed,
-          ctx.blueprint.characters_involved,
-        );
-        const originalCount = originalViolations.filter((violation) =>
-          violation.type === "missing_character" || violation.type === "premature_introduction"
-        ).length;
-        const rewrittenCount = rewrittenViolations.filter((violation) =>
-          violation.type === "missing_character" || violation.type === "premature_introduction"
-        ).length;
+        const originalCount = getCastViolations(originalText).length;
+        const rewrittenCount = getCastViolations(cleaned).length;
 
         if (rewrittenCount > originalCount) {
           acceptRewrite = false;
         }
       }
 
-      if (acceptRewrite && detectChapterQualityIssues(cleaned).length > originalQualityIssues.length) {
+      if (acceptRewrite && rewrittenQualityIssues.length > originalQualityIssues.length) {
         acceptRewrite = false;
       }
 
@@ -186,10 +207,13 @@ export class FinalRewriterAgent implements PipelineAgent {
           const secondIssues = detectChapterQualityIssues(secondPass.text);
           const secondMinLen = originalText.length * 0.7;
           const secondMaxLen = originalText.length * 1.3;
+          const secondCastViolationKeys = getCastViolationKeys(secondPass.text);
+          const acceptedCastViolationKeys = getCastViolationKeys(acceptedText);
           if (
             secondPass.text.length >= secondMinLen &&
             secondPass.text.length <= secondMaxLen &&
-            secondIssues.length < acceptedIssues.length
+            secondIssues.length < acceptedIssues.length &&
+            [...secondCastViolationKeys].every((key) => acceptedCastViolationKeys.has(key))
           ) {
             acceptedText = secondPass.text;
             acceptedIssues = secondIssues;
