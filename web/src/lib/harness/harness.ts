@@ -44,6 +44,7 @@ import {
 } from "../tracking";
 import { FeedbackAccumulator, postProcessChapter } from "../feedback";
 import { debateFutureCharacterIntroduction, applyFutureCharacterDebate } from "../agents/future-character-debate";
+import { detectChapterQualityIssues, formatChapterQualityIssuesForPrompt } from "../agents/chapter-quality-validator";
 
 // World state + progressive outliner imports
 import { WorldStateManager } from "../memory/world-state-manager";
@@ -335,6 +336,8 @@ export class NovelHarness {
     const startTime = Date.now();
     let blueprint: ChapterBlueprint | undefined;
     const MAX_FUTURE_CHARACTER_DEBATES = 1;
+    const MAX_MISSING_CHARACTER_RERUNS = 1;
+    const MAX_CHAPTER_QUALITY_RERUNS = 1;
 
     // Lazy planning (with fallback — planning failure shouldn't block generation)
     if (this.masterPlan) {
@@ -503,6 +506,8 @@ export class NovelHarness {
     };
 
     let futureCharacterDebates = 0;
+    let missingCharacterReruns = 0;
+    let chapterQualityReruns = 0;
     let rerunWithPatchedBlueprint = false;
 
     do {
@@ -613,6 +618,93 @@ export class NovelHarness {
               },
             };
           }
+        }
+      }
+
+      if (!rerunWithPatchedBlueprint && this.constraintChecker && ctx.blueprint && missingCharacterReruns < MAX_MISSING_CHARACTER_RERUNS) {
+        const previewChecker = new ConstraintChecker(seed);
+        const previewViolations = previewChecker.validateCharacterAppearances(
+          ctx.text,
+          chapterNumber,
+          seed,
+          ctx.blueprint.characters_involved,
+        );
+        const strayCharacters = previewViolations.filter((violation) =>
+          violation.type === "missing_character" && violation.characterId
+        );
+        if (strayCharacters.length > 0) {
+          yield {
+            type: "pipeline_event",
+            chapter: chapterNumber,
+            event: { type: "stage_change", stage: "missing-character-repair" },
+          };
+          yield {
+            type: "pipeline_event",
+            chapter: chapterNumber,
+            event: {
+              type: "error",
+              message: `[missing-character-repair] ${strayCharacters.map((item) => item.characterId).join(", ")} — 비허용 인물 직접 등장 제거 재생성`,
+            },
+          };
+
+          missingCharacterReruns++;
+          const guidanceBlock = [
+            ctx.trackingContext?.correctionContext,
+            "## 비허용 인물 직접 등장 제거",
+            ...strayCharacters.map((item) => `- ${item.characterId}은(는) 이번 화 블루프린트에 없는 인물입니다. 직접 대사/행동/같은 공간 존재를 제거하고 허용 인물만 남기세요.`),
+            "- 이름 언급, 소문, 회상은 가능하지만 직접 등장처럼 보이는 묘사는 금지입니다.",
+          ].filter(Boolean).join("\n");
+          ctx.trackingContext = {
+            ...(ctx.trackingContext || {}),
+            correctionContext: guidanceBlock,
+          };
+          ctx.text = "";
+          ctx.ruleIssues = [];
+          ctx.snapshots = [];
+          ctx.critiqueHistory = [];
+          ctx.bestScore = 0;
+          ctx.sceneTexts = undefined;
+          rerunWithPatchedBlueprint = true;
+        }
+      }
+
+      if (!rerunWithPatchedBlueprint && chapterQualityReruns < MAX_CHAPTER_QUALITY_RERUNS) {
+        const chapterQualityIssues = detectChapterQualityIssues(ctx.text);
+        if (chapterQualityIssues.some((issue) => issue.severity === "error")) {
+          yield {
+            type: "pipeline_event",
+            chapter: chapterNumber,
+            event: { type: "stage_change", stage: "chapter-quality-repair" },
+          };
+          yield {
+            type: "pipeline_event",
+            chapter: chapterNumber,
+            event: {
+              type: "error",
+              message: `[chapter-quality-repair] ${chapterQualityIssues.map((issue) => issue.type).join(", ")} — 구조 문제 재생성`,
+            },
+          };
+
+          chapterQualityReruns++;
+          const qualityInstruction = [
+            "## 챕터 구조 재생성 지시",
+            formatChapterQualityIssuesForPrompt(chapterQualityIssues),
+            "위 문제를 줄이는 방향으로 다시 쓰세요. 같은 사실 재설명 대신 행동/준비/위험 증가로 전진시키고, 단서 하나만으로 정답을 확신하는 문장을 늦추세요.",
+          ].join("\n");
+          ctx.trackingContext = {
+            ...(ctx.trackingContext || {}),
+            correctionContext: [
+              ctx.trackingContext?.correctionContext,
+              qualityInstruction,
+            ].filter(Boolean).join("\n\n"),
+          };
+          ctx.text = "";
+          ctx.ruleIssues = [];
+          ctx.snapshots = [];
+          ctx.critiqueHistory = [];
+          ctx.bestScore = 0;
+          ctx.sceneTexts = undefined;
+          rerunWithPatchedBlueprint = true;
         }
       }
     } while (rerunWithPatchedBlueprint);

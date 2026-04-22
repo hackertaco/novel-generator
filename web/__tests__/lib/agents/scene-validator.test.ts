@@ -42,4 +42,32 @@ describe("validateScene whitelist enforcement", () => {
       ]),
     );
   });
+
+  it("fails when a forbidden character is directly addressed inside dialogue, implying same-scene presence", () => {
+    const text = [
+      "\"괜찮아요, 이졸데.\" 세라핀이 숨을 골랐다.",
+      "\"혼자 있고 싶어요.\"",
+    ].join("\n");
+
+    const result = validateScene(text, 120, "dialogue", whitelist);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "forbidden_character_presence", severity: "error" }),
+      ]),
+    );
+  });
+
+  it("fails when a forbidden character is present through possessive physical cues", () => {
+    const text = [
+      "문틈 너머로 이졸데의 조심스러운 목소리가 들렸다.",
+      "세라핀은 곧바로 종이를 접었다.",
+    ].join("\n");
+
+    const result = validateScene(text, 120, "dialogue", whitelist);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "forbidden_character_presence", severity: "error" }),
+      ]),
+    );
+  });
 });

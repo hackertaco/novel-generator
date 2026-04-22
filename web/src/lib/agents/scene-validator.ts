@@ -170,8 +170,19 @@ function detectForbiddenCharacterPresence(
       `${refGroup}(?:은|는|이|가|도|만|께서)|${refGroup}[^\\n]{0,14}(?:말했|물었|대답|외치|속삭|중얼|웃|소리|다가왔|다가섰|들어왔|걸어왔|고개를|손을|발을|몸을|시선을|눈을)`,
     );
     const directSpeechPattern = new RegExp(`${refGroup}[^\\n]{0,12}["“”]`);
+    const quotedDirectAddressPattern = new RegExp(
+      `["“”][^"“”\\n]{0,80}(?:,\\s*)?${refGroup}(?:[,.!?…]|$)`,
+    );
+    const possessivePresencePattern = new RegExp(
+      `${refGroup}의\\s*(?:목소리|발소리|기척|입술|숨소리|손길|체온|발걸음|그림자)`,
+    );
 
-    if (activePresencePattern.test(maskedText) || directSpeechPattern.test(text)) {
+    if (
+      activePresencePattern.test(maskedText) ||
+      directSpeechPattern.test(text) ||
+      quotedDirectAddressPattern.test(text) ||
+      possessivePresencePattern.test(maskedText)
+    ) {
       violations.push(forbidden.name);
     }
   }

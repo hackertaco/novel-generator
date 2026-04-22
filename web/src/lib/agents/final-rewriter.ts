@@ -1,6 +1,7 @@
 import { getAgent } from "./llm-agent";
 import { getFinalRewriterSystemPrompt } from "@/lib/prompts/final-rewriter-prompt";
 import { sanitize } from "./rule-guard";
+import { buildChapterQualityRepairPrompt, detectChapterQualityIssues, formatChapterQualityIssuesForPrompt } from "./chapter-quality-validator";
 import { accumulateUsage } from "./pipeline";
 import type { PipelineAgent, ChapterContext, LifecycleEvent } from "./pipeline";
 import { ConstraintChecker } from "../evaluators/constraint-checker";
@@ -35,6 +36,14 @@ export function buildFinalRewriterPrompt(
       parts.push(formatAddressMatrixForPrompt(addressEntries));
       parts.push("⚠️ 호칭이 위 규칙과 다르면 수정하세요.");
     }
+  }
+
+  const chapterQualityIssues = detectChapterQualityIssues(text);
+  if (chapterQualityIssues.length > 0) {
+    parts.push("");
+    parts.push("## 추가 구조 품질 문제 (반드시 해결)");
+    parts.push(formatChapterQualityIssuesForPrompt(chapterQualityIssues));
+    parts.push("⚠️ 위 문제는 문체가 아니라 구조 문제입니다. 같은 사실을 다시 설명하지 말고 다음 행동/위험/대치로 전진시키세요.");
   }
 
   if (ctx?.blueprint) {
@@ -111,6 +120,22 @@ export class FinalRewriterAgent implements PipelineAgent {
     const usage = result.value;
     ctx.totalUsage = accumulateUsage(ctx.totalUsage, usage);
 
+    async function runSecondPassIfNeeded(candidateText: string): Promise<{ text: string; extraUsage: typeof usage }> {
+      const currentIssues = detectChapterQualityIssues(candidateText);
+      if (currentIssues.length === 0) return { text: candidateText, extraUsage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 } };
+
+      const retryPrompt = buildChapterQualityRepairPrompt(candidateText, currentIssues);
+      const secondPass = await agent.call({
+        prompt: retryPrompt,
+        system,
+        model,
+        temperature: 0.2,
+        maxTokens: 8192,
+        taskId: `final-rewriter-ch${ctx.chapterNumber}-second-pass`,
+      });
+      return { text: sanitize(secondPass.data), extraUsage: secondPass.usage };
+    }
+
     // Safety: only accept if rewritten text is within ±30% of original length
     // (looser than Polisher's 70% floor because the editor may add spatial descriptions)
     const originalText = ctx.text;
@@ -119,6 +144,8 @@ export class FinalRewriterAgent implements PipelineAgent {
     const maxLen = originalText.length * 1.3;
     if (cleaned.length >= minLen && cleaned.length <= maxLen) {
       let acceptRewrite = true;
+      const originalQualityIssues = detectChapterQualityIssues(originalText);
+      const rewrittenQualityIssues = detectChapterQualityIssues(cleaned);
       if (ctx.blueprint) {
         const checker = new ConstraintChecker(ctx.seed);
         const originalViolations = checker.validateCharacterAppearances(
@@ -145,9 +172,34 @@ export class FinalRewriterAgent implements PipelineAgent {
         }
       }
 
+      if (acceptRewrite && detectChapterQualityIssues(cleaned).length > originalQualityIssues.length) {
+        acceptRewrite = false;
+      }
+
       if (acceptRewrite) {
-        ctx.text = cleaned;
-        yield { type: "replace_text", content: ctx.text };
+        let acceptedText = cleaned;
+        let acceptedIssues = rewrittenQualityIssues;
+
+        if (rewrittenQualityIssues.length > 0 && rewrittenQualityIssues.length >= originalQualityIssues.length) {
+          const secondPass = await runSecondPassIfNeeded(cleaned);
+          ctx.totalUsage = accumulateUsage(ctx.totalUsage, secondPass.extraUsage);
+          const secondIssues = detectChapterQualityIssues(secondPass.text);
+          const secondMinLen = originalText.length * 0.7;
+          const secondMaxLen = originalText.length * 1.3;
+          if (
+            secondPass.text.length >= secondMinLen &&
+            secondPass.text.length <= secondMaxLen &&
+            secondIssues.length < acceptedIssues.length
+          ) {
+            acceptedText = secondPass.text;
+            acceptedIssues = secondIssues;
+          }
+        }
+
+        if (acceptedIssues.length <= rewrittenQualityIssues.length) {
+          ctx.text = acceptedText;
+          yield { type: "replace_text", content: ctx.text };
+        }
       }
     }
   }
