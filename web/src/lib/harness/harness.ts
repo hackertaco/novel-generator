@@ -340,6 +340,68 @@ export class NovelHarness {
     const MAX_CHAPTER_QUALITY_RERUNS = 1;
     const MAX_FINAL_CAST_HARD_RERUNS = 1;
 
+    const buildFallbackBlueprint = (
+      arcId?: string,
+    ): ChapterBlueprint => {
+      const outline = seed.chapter_outlines.find((o) => o.chapter_number === chapterNumber);
+      const extOutline = !outline
+        ? seed.extended_outlines?.find((o) => o.chapter_number === chapterNumber)
+        : undefined;
+
+      const prevCharNames = previousChapterEnding
+        ? seed.characters.filter((c) => previousChapterEnding.includes(c.name)).map((c) => c.id)
+        : seed.characters.filter((c) => c.introduction_chapter <= chapterNumber).slice(0, 3).map((c) => c.id);
+
+      const fallbackCharacters = (outline?.characters_involved || [])
+        .filter((charId) => seed.characters.some((character) => character.id === charId))
+        .filter((charId) => {
+          const seedChar = seed.characters.find((character) => character.id === charId);
+          return !seedChar || chapterNumber >= seedChar.introduction_chapter;
+        });
+      const sceneCharacters = fallbackCharacters.length > 0 ? fallbackCharacters : prevCharNames;
+      const fallbackArcId = arcId || outline?.arc_id || `arc_ch${chapterNumber}`;
+      const fallbackOneLiner = outline?.one_liner || extOutline?.one_liner || `${chapterNumber}화에서 기존 갈등을 진전시키고 다음 화의 후킹을 남긴다.`;
+
+      return {
+        chapter_number: chapterNumber,
+        title: outline?.title || extOutline?.title || `${chapterNumber}화`,
+        arc_id: fallbackArcId,
+        one_liner: fallbackOneLiner,
+        role_in_arc: "rising_action",
+        scenes: [
+          {
+            purpose: (() => {
+              const kp = outline?.key_points?.[0];
+              return (typeof kp === "string" ? kp : kp?.what) || `${chapterNumber}화에서 현재 위기를 한 단계 밀어붙이고 핵심 인물의 선택을 드러낸다.`;
+            })(),
+            type: "dialogue",
+            characters: sceneCharacters,
+            estimated_chars: 1500,
+            emotional_tone: outline?.tension_level && outline.tension_level > 6 ? "긴장" : "일상",
+            must_reveal: [],
+          },
+          {
+            purpose: (() => {
+              const kp = outline?.key_points?.[1];
+              return (typeof kp === "string" ? kp : kp?.what) || "후반 전개에서 상황을 악화시키고 다음 화가 궁금한 후킹을 남긴다.";
+            })(),
+            type: "hook",
+            characters: sceneCharacters,
+            estimated_chars: 1500,
+            emotional_tone: "긴장",
+            must_reveal: [],
+          },
+        ],
+        emotional_arc: "",
+        key_points: (outline?.key_points || []).map((kp) => typeof kp === "string" ? kp : kp.what),
+        characters_involved: sceneCharacters,
+        tension_level: outline?.tension_level || 5,
+        target_word_count: 3000,
+        foreshadowing_actions: [],
+        dependencies: [],
+      };
+    };
+
     // Lazy planning (with fallback — planning failure shouldn't block generation)
     if (this.masterPlan) {
       const scheduler = new LazyScheduler(this.masterPlan);
@@ -390,52 +452,26 @@ export class NovelHarness {
           console.warn(`[harness] 블루프린트 생성 실패, 최소 블루프린트 생성: ${err instanceof Error ? err.message : err}`);
           if (err instanceof Error) console.warn(err.stack);
 
-          // Generate a minimal blueprint from seed data so we don't fall back to
-          // uncontrolled single-shot generation
-          const outline = seed.chapter_outlines.find((o) => o.chapter_number === chapterNumber);
-          const extOutline = !outline
-            ? seed.extended_outlines?.find((o) => o.chapter_number === chapterNumber)
-            : undefined;
-          const prevCharNames = previousChapterEnding
-            ? seed.characters.filter((c) => previousChapterEnding.includes(c.name)).map((c) => c.id)
-            : seed.characters.filter((c) => c.introduction_chapter <= chapterNumber).slice(0, 3).map((c) => c.id);
-
-          arc.chapter_blueprints = [{
-            chapter_number: chapterNumber,
-            title: outline?.title || extOutline?.title || `${chapterNumber}화`,
-            arc_id: arc.id,
-            one_liner: outline?.one_liner || extOutline?.one_liner || arc.summary,
-            role_in_arc: chapterNumber <= arc.start_chapter + 2 ? "setup" : "rising_action",
-            scenes: [
-              {
-                purpose: (() => { const kp = outline?.key_points?.[0]; return (typeof kp === "string" ? kp : kp?.what) || `${chapterNumber}화 전개`; })(),
-                type: "dialogue" as const,
-                characters: prevCharNames,
-                estimated_chars: 1500,
-                emotional_tone: outline?.tension_level && outline.tension_level > 6 ? "긴장" : "일상",
-                must_reveal: [],
-              },
-              {
-                purpose: (() => { const kp = outline?.key_points?.[1]; return (typeof kp === "string" ? kp : kp?.what) || "후반 전개 + 후킹"; })(),
-                type: "hook" as const,
-                characters: prevCharNames,
-                estimated_chars: 1500,
-                emotional_tone: "긴장",
-                must_reveal: [],
-              },
-            ],
-            emotional_arc: "",
-            key_points: (outline?.key_points || []).map((kp) => typeof kp === "string" ? kp : kp.what),
-            characters_involved: prevCharNames,
-            tension_level: outline?.tension_level || 5,
-            target_word_count: 3000,
-            foreshadowing_actions: [],
-            dependencies: [],
-          }];
+          const fallbackBlueprint = buildFallbackBlueprint(arc.id);
+          arc.chapter_blueprints = [fallbackBlueprint];
+          yield { type: "blueprint_generated", chapter: chapterNumber, blueprint: fallbackBlueprint };
         }
       }
 
       blueprint = scheduler.getBlueprint(chapterNumber);
+
+      if (!blueprint) {
+        const fallbackBlueprint = buildFallbackBlueprint();
+        const arcForChapter = scheduler.getArcForChapter(chapterNumber);
+        if (arcForChapter) {
+          arcForChapter.chapter_blueprints = [
+            ...(arcForChapter.chapter_blueprints || []).filter((bp) => bp.chapter_number !== chapterNumber),
+            fallbackBlueprint,
+          ];
+        }
+        blueprint = fallbackBlueprint;
+        yield { type: "blueprint_generated", chapter: chapterNumber, blueprint: fallbackBlueprint };
+      }
     }
 
     // Character continuity hint: prioritize characters from previous chapter
