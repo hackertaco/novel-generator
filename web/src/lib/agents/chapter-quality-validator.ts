@@ -4,21 +4,45 @@ export interface ChapterQualityIssue {
   severity: "warning" | "error";
 }
 
-const REVEAL_MARKERS = [
-  /365/, /삼백육십오/, /\b\d{2,4}\s*일\b/, /남은\s*(시간|날)/,
+const TOKEN_REGEX = /[가-힣A-Za-z0-9]{2,}/g;
+const WINDOW_SIZE = 3;
+const MIN_SHARED_TOKENS_FOR_REPEAT = 4;
+const MIN_SHARED_TOKENS_FOR_RESTART = 5;
+
+const STOPWORDS = new Set([
+  "그리고", "하지만", "그러나", "그래서", "그때", "정말", "아주", "조금", "다시", "이미", "이번", "저런",
+  "이런", "그런", "했다", "했다가", "하며", "하는", "하고", "해서", "하게", "하는데", "이었다", "였다",
+  "있다", "있었다", "없다", "없었다", "였다가", "에서", "으로", "에게", "에서만", "였다며", "라고", "이라",
+  "이라고", "이라는", "했다는", "했다고", "것을", "것이", "였다는", "정도", "바로", "조차", "마저", "처럼",
+]);
+
+const GENERIC_DECISION_MARKERS = [
+  "결심", "계획", "준비", "떠나", "도망", "숨기", "버티", "빠져나", "출발", "해야", "가야", "살아남",
 ];
 
-const DECISION_KEYWORDS = [
-  "수도", "떠", "도망", "출발", "크레바스", "혼자", "살려 달라고", "계획", "준비", "북부",
+const GENERIC_RESTART_MARKERS = [
+  "그리고 다시", "다시", "잠시 뒤", "얼마 지나지 않아", "그 직후", "바로 뒤이어", "한편 다시",
 ];
 
-const EVIDENCE_MARKERS = [
-  "기도문", "계산표", "숫자", "종이", "메모", "표", "흔적",
+const GENERIC_EVIDENCE_MARKERS = [
+  "증거", "장부", "메모", "쪽지", "편지", "기록", "서류", "숫자", "계산", "흔적", "도면", "지도",
 ];
 
-const CERTAINTY_MARKERS = [
-  "분명", "결국", "정확", "틀림없", "확실", "그뿐", "죽으러 가는 거", "잖아",
+const GENERIC_CERTAINTY_MARKERS = [
+  "분명", "틀림없", "확실", "결국", "자명", "정답", "확신", "결론", "단정",
 ];
+
+const GENERIC_HEDGE_MARKERS = [
+  "아마", "어쩌면", "일지도", "아닐지도", "가능성", "짐작", "추측", "확실하진",
+];
+
+interface WindowSignature {
+  index: number;
+  text: string;
+  tokens: Set<string>;
+  decisionCount: number;
+  hasNumericAnchor: boolean;
+}
 
 function splitParagraphs(text: string): string[] {
   return text
@@ -27,41 +51,61 @@ function splitParagraphs(text: string): string[] {
     .filter(Boolean);
 }
 
-function hasRevealMarker(text: string): boolean {
-  return REVEAL_MARKERS.some((pattern) => pattern.test(text));
+function extractContentTokens(text: string): string[] {
+  const matches = text.match(TOKEN_REGEX) || [];
+  return matches
+    .map((token) => token.toLowerCase())
+    .filter((token) => !STOPWORDS.has(token));
 }
 
-function countDecisionKeywords(text: string): number {
-  return DECISION_KEYWORDS.filter((keyword) => text.includes(keyword)).length;
+function hasAnyMarker(text: string, markers: string[]): boolean {
+  return markers.some((marker) => text.includes(marker));
 }
 
-function hasEvidenceMarker(text: string): boolean {
-  return EVIDENCE_MARKERS.some((keyword) => text.includes(keyword));
+function countMarkerMatches(text: string, markers: string[]): number {
+  return markers.filter((marker) => text.includes(marker)).length;
 }
 
-function hasCertaintyMarker(text: string): boolean {
-  return CERTAINTY_MARKERS.some((keyword) => text.includes(keyword));
+function hasNumericAnchor(text: string): boolean {
+  return /\b\d{2,4}\b/.test(text) || /(남은|기한|마지막|시한|시간표|일정|사흘|하루|며칠)/.test(text);
+}
+
+function buildWindowSignatures(paragraphs: string[]): WindowSignature[] {
+  return paragraphs.map((_, index) => {
+    const text = paragraphs.slice(index, index + WINDOW_SIZE).join("\n\n");
+    return {
+      index,
+      text,
+      tokens: new Set(extractContentTokens(text)),
+      decisionCount: countMarkerMatches(text, GENERIC_DECISION_MARKERS),
+      hasNumericAnchor: hasNumericAnchor(text),
+    };
+  });
+}
+
+function getSharedTokens(left: Set<string>, right: Set<string>): string[] {
+  return [...left].filter((token) => right.has(token));
 }
 
 function detectRepeatedRevealPayload(paragraphs: string[]): ChapterQualityIssue[] {
   const issues: ChapterQualityIssue[] = [];
-  const windows = paragraphs.map((_, index) => {
-    const windowText = paragraphs.slice(index, index + 4).join("\n\n");
-    return {
-      index,
-      text: windowText,
-      hasReveal: hasRevealMarker(windowText),
-      decisionCount: countDecisionKeywords(windowText),
-    };
-  });
+  const windows = buildWindowSignatures(paragraphs);
 
   for (let i = 0; i < windows.length; i++) {
-    for (let j = i + 3; j < windows.length; j++) {
+    for (let j = i + 2; j < windows.length; j++) {
+      const sharedTokens = getSharedTokens(windows[i]?.tokens || new Set<string>(), windows[j]?.tokens || new Set<string>());
+      const repeatedDecisionPayload =
+        sharedTokens.length >= MIN_SHARED_TOKENS_FOR_REPEAT &&
+        (windows[i]?.decisionCount || 0) >= 1 &&
+        (windows[j]?.decisionCount || 0) >= 1;
+      const repeatedTimedReveal =
+        sharedTokens.length >= MIN_SHARED_TOKENS_FOR_REPEAT &&
+        Boolean(windows[i]?.hasNumericAnchor) &&
+        Boolean(windows[j]?.hasNumericAnchor);
+
       if (
-        windows[i]?.hasReveal &&
-        windows[j]?.hasReveal &&
-        (windows[i]?.decisionCount || 0) >= 2 &&
-        (windows[j]?.decisionCount || 0) >= 2
+        repeatedDecisionPayload ||
+        repeatedTimedReveal
       ) {
         issues.push({
           type: "repeated_reveal_payload",
@@ -78,16 +122,19 @@ function detectRepeatedRevealPayload(paragraphs: string[]): ChapterQualityIssue[
 
 function detectDuplicateBeatRestart(paragraphs: string[]): ChapterQualityIssue[] {
   const issues: ChapterQualityIssue[] = [];
-  const resetMarkers = ["그리고 얼마 지나지 않은", "그리고 얼마 지나지 않아", "그리고 잠시 뒤", "그리고 다시", "다시 오후", "다시 정문 앞"];
-  const beatMarkers = ["대신전", "정문", "황궁", "칙서", "베네딕트", "레온", "세라핀"];
 
   for (let i = 0; i < paragraphs.length; i++) {
     const paragraph = paragraphs[i] || "";
-    if (!resetMarkers.some((marker) => paragraph.includes(marker))) continue;
-    const before = paragraphs.slice(Math.max(0, i - 6), i).join("\n\n");
-    const after = paragraphs.slice(i, i + 6).join("\n\n");
-    const overlappingMarkers = beatMarkers.filter((marker) => before.includes(marker) && after.includes(marker));
-    if (overlappingMarkers.length >= 4) {
+    if (!hasAnyMarker(paragraph, GENERIC_RESTART_MARKERS)) continue;
+
+    const before = paragraphs.slice(Math.max(0, i - WINDOW_SIZE), i).join("\n\n");
+    const after = paragraphs.slice(i, i + WINDOW_SIZE).join("\n\n");
+    const overlappingTokens = getSharedTokens(
+      new Set(extractContentTokens(before)),
+      new Set(extractContentTokens(after)),
+    );
+
+    if (overlappingTokens.length >= MIN_SHARED_TOKENS_FOR_RESTART) {
       issues.push({
         type: "duplicate_beat_restart",
         severity: "error",
@@ -104,9 +151,12 @@ function detectOverfastDeduction(paragraphs: string[]): ChapterQualityIssue[] {
   const issues: ChapterQualityIssue[] = [];
 
   for (let i = 0; i < paragraphs.length; i++) {
-    if (!hasEvidenceMarker(paragraphs[i] || "")) continue;
+    if (!hasAnyMarker(paragraphs[i] || "", GENERIC_EVIDENCE_MARKERS)) continue;
     const windowText = paragraphs.slice(i, i + 5).join("\n\n");
-    if (hasCertaintyMarker(windowText)) {
+    if (
+      hasAnyMarker(windowText, GENERIC_CERTAINTY_MARKERS) &&
+      !hasAnyMarker(windowText, GENERIC_HEDGE_MARKERS)
+    ) {
       issues.push({
         type: "overfast_deduction",
         severity: "warning",

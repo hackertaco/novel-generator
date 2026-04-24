@@ -64,6 +64,23 @@ class FakeHarness {
       chapter: startChapter,
       event: { type: "stage_change", stage: "write" } as never,
     };
+    if (startChapter === 2) {
+      yield {
+        type: "pipeline_event",
+        chapter: startChapter,
+        event: { type: "stage_change", stage: "future-character-debate" } as never,
+      };
+      yield {
+        type: "pipeline_event",
+        chapter: startChapter,
+        event: { type: "stage_change", stage: "final-cast-hard-repair" } as never,
+      };
+      yield {
+        type: "pipeline_event",
+        chapter: startChapter,
+        event: { type: "error", message: "[future-character-debate] keep_original — cast guard preserved" } as never,
+      };
+    }
     yield {
       type: "chapter_complete",
       result: {
@@ -85,6 +102,28 @@ class FakeHarness {
         durationMs: 25,
       },
     };
+  }
+}
+
+class ExhaustedHarness extends FakeHarness {
+  override getWorldStateSnapshot() {
+    return [];
+  }
+
+  override async *run(
+    seed: NovelSeed,
+    startChapter: number,
+    endChapter: number,
+    options?: Record<string, unknown>,
+  ): AsyncGenerator<HarnessEvent> {
+    if (startChapter === 2) {
+      this.calls.push({ chapter: startChapter, options });
+      yield { type: "chapter_start", chapter: startChapter };
+      yield { type: "error", chapter: startChapter, message: "upstream timeout" };
+      return;
+    }
+
+    yield* super.run(seed, startChapter, endChapter, options);
   }
 }
 
@@ -189,14 +228,40 @@ describe("quick-rerun", () => {
     expect(fs.existsSync(path.join(outDir, "blueprints", "ch01.json"))).toBe(true);
     expect(fs.existsSync(path.join(outDir, "blueprints", "ch02.json"))).toBe(true);
     expect(fs.existsSync(path.join(outDir, "world-state.json"))).toBe(true);
+    expect(fs.existsSync(path.join(outDir, "report.json"))).toBe(true);
 
     const progressLog = fs.readFileSync(path.join(outDir, "progress.log"), "utf-8");
     const chapterLog = fs.readFileSync(path.join(outDir, "quick-rerun.log"), "utf-8");
+    const report = JSON.parse(fs.readFileSync(path.join(outDir, "report.json"), "utf-8")) as {
+      summary: string;
+      safeguardSummary: Record<string, number>;
+      artifactVerification: { ok: boolean; checks: Array<{ kind: string; exists: boolean }> };
+      statuses: Array<{
+        chapter: number;
+        attemptDetails: Array<{ stageHistory: string[]; safeguardStages: string[]; pipelineWarnings: string[] }>;
+        safeguardStages: string[];
+        pipelineWarnings: string[];
+      }>;
+    };
     expect(progressLog).toContain("ch1 retry scheduled in 0s");
     expect(progressLog).toContain("[rerun] 2화 중 2화 성공, 없음화 실패");
+    expect(progressLog).toContain("[rerun] safeguard summary");
+    expect(progressLog).toContain("[rerun] artifact verification passed");
     expect(chapterLog).toContain("ch1 failure attempt=1 error=OpenAI Connection error");
     expect(chapterLog).toContain("ch1 success attempt=2");
     expect(chapterLog).toContain("ch2 success attempt=1");
+    expect(chapterLog).toContain("safeguards future-character-debate=1");
+    expect(result.reportPath).toBe(path.join(outDir, "report.json"));
+    expect(result.artifactVerification.ok).toBe(true);
+    expect(result.report.summary).toBe("2화 중 2화 성공, 없음화 실패");
+    expect(report.summary).toBe("2화 중 2화 성공, 없음화 실패");
+    expect(report.safeguardSummary["future-character-debate"]).toBe(1);
+    expect(report.safeguardSummary["final-cast-hard-repair"]).toBe(1);
+    expect(report.artifactVerification.ok).toBe(true);
+    expect(report.artifactVerification.checks.some((check) => check.kind === "report" && check.exists)).toBe(true);
+    expect(report.statuses[1]?.safeguardStages).toEqual(["future-character-debate", "final-cast-hard-repair"]);
+    expect(report.statuses[1]?.pipelineWarnings).toEqual(["[future-character-debate] keep_original — cast guard preserved"]);
+    expect(report.statuses[1]?.attemptDetails[0]?.stageHistory).toContain("future-character-debate");
 
     expect(harness.calls).toHaveLength(3);
     expect(harness.calls[1]?.options?.masterPlan).toBeDefined();
@@ -210,5 +275,45 @@ describe("quick-rerun", () => {
     expect(harness.calls[2]?.options?.previousSummaries).toEqual([
       { chapter: 1, title: "1화 제목", summary: "1화 요약" },
     ]);
+  });
+
+  it("records exhausted retries and summary artifacts when a later chapter never completes", async () => {
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "quick-rerun-fail-test-"));
+    const harness = new ExhaustedHarness();
+    const sleep = vi.fn(async () => {});
+
+    const result = await runQuickRerun({
+      harness,
+      seed: createSeed(),
+      maxChapters: 2,
+      outDir,
+      retryDelaysMs: [0, 0],
+      sleep,
+    });
+
+    expect(result.statuses).toEqual([
+      expect.objectContaining({ chapter: 1, success: true, attempts: 2 }),
+      expect.objectContaining({
+        chapter: 2,
+        success: false,
+        attempts: 3,
+        errorMessages: ["upstream timeout"],
+      }),
+    ]);
+    expect(sleep).toHaveBeenCalledTimes(3);
+
+    expect(fs.existsSync(path.join(outDir, "seed.json"))).toBe(true);
+    expect(fs.existsSync(path.join(outDir, "chapters", "ch01.txt"))).toBe(true);
+    expect(fs.existsSync(path.join(outDir, "chapters", "ch02.txt"))).toBe(false);
+    expect(fs.existsSync(path.join(outDir, "world-state.json"))).toBe(false);
+
+    const progressLog = fs.readFileSync(path.join(outDir, "progress.log"), "utf-8");
+    const chapterLog = fs.readFileSync(path.join(outDir, "quick-rerun.log"), "utf-8");
+    expect(progressLog).toContain("ch2 failed after 3 attempts");
+    expect(progressLog).toContain("[rerun] 2화 중 1화 성공, 2화 실패");
+    expect(chapterLog).toContain("ch2 failure attempt=1 error=upstream timeout");
+    expect(chapterLog).toContain("ch2 failure attempt=2 error=upstream timeout");
+    expect(chapterLog).toContain("ch2 failure attempt=3 error=upstream timeout");
+    expect(chapterLog).toContain("summary 2화 중 1화 성공, 2화 실패");
   });
 });
