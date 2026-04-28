@@ -81,6 +81,26 @@ export interface ArtifactVerification {
   missingRequired: ArtifactCheck[];
 }
 
+export interface FactExtractionFallbackEntry {
+  chapter: number;
+  kind: "json_parse_fallback" | "agent_failure_fallback";
+  reason?: string;
+}
+
+export interface FactExtractionFallbackSummary {
+  total: number;
+  byKind: Record<FactExtractionFallbackEntry["kind"], number>;
+  chapters: FactExtractionFallbackEntry[];
+}
+
+export interface LowScoreChapterEntry {
+  chapter: number;
+  score: number;
+  safeguardStages: string[];
+  pipelineWarnings: string[];
+  factExtractionFallbackKind?: FactExtractionFallbackEntry["kind"];
+}
+
 export interface QuickRerunReport {
   generatedAt: string;
   seedTitle: string;
@@ -92,6 +112,8 @@ export interface QuickRerunReport {
   progressLogPath: string;
   chapterLogPath: string;
   worldStateEntries: number;
+  factExtractionFallbacks: FactExtractionFallbackSummary;
+  lowScoreChapters: LowScoreChapterEntry[];
 }
 
 export interface QuickRerunResult {
@@ -157,7 +179,16 @@ function timestamp(): string {
 
 function appendLine(filePath: string, line: string): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.appendFileSync(filePath, `${line}\n`, "utf-8");
+  try {
+    fs.appendFileSync(filePath, `${line}\n`, "utf-8");
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code) : "unknown";
+    if (code === "EPERM" || code === "EBUSY") {
+      console.warn(`[quick-rerun] log append skipped for ${filePath}: ${code}`);
+      return;
+    }
+    throw error;
+  }
 }
 
 function logProgress(progressLogPath: string, message: string): void {
@@ -393,6 +424,58 @@ function summarizeSafeguards(statuses: ChapterRunStatus[]): Record<string, numbe
   return summary;
 }
 
+function summarizeFactExtractionFallbacks(worldState: unknown[]): FactExtractionFallbackSummary {
+  const summary: FactExtractionFallbackSummary = {
+    total: 0,
+    byKind: {
+      json_parse_fallback: 0,
+      agent_failure_fallback: 0,
+    },
+    chapters: [],
+  };
+
+  for (const entry of worldState) {
+    if (!entry || typeof entry !== "object") continue;
+    const chapter = typeof (entry as { chapter?: unknown }).chapter === "number"
+      ? (entry as { chapter: number }).chapter
+      : undefined;
+    const kind = (entry as { extraction_status?: unknown }).extraction_status;
+    if (!chapter || (kind !== "json_parse_fallback" && kind !== "agent_failure_fallback")) {
+      continue;
+    }
+    const reason = typeof (entry as { fallback_reason?: unknown }).fallback_reason === "string"
+      ? (entry as { fallback_reason: string }).fallback_reason
+      : undefined;
+    summary.total += 1;
+    summary.byKind[kind] += 1;
+    summary.chapters.push({ chapter, kind, reason });
+  }
+
+  return summary;
+}
+
+function summarizeLowScoreChapters(
+  statuses: ChapterRunStatus[],
+  factExtractionFallbacks: FactExtractionFallbackSummary,
+  limit = 3,
+): LowScoreChapterEntry[] {
+  const fallbackByChapter = new Map(
+    factExtractionFallbacks.chapters.map((entry) => [entry.chapter, entry.kind]),
+  );
+
+  return statuses
+    .filter((status): status is ChapterRunStatus & { score: number } => status.success && typeof status.score === "number")
+    .sort((left, right) => left.score - right.score || left.chapter - right.chapter)
+    .slice(0, limit)
+    .map((status) => ({
+      chapter: status.chapter,
+      score: status.score,
+      safeguardStages: [...status.safeguardStages],
+      pipelineWarnings: [...status.pipelineWarnings],
+      factExtractionFallbackKind: fallbackByChapter.get(status.chapter),
+    }));
+}
+
 function writeReport(
   outDir: string,
   seed: NovelSeed,
@@ -400,9 +483,10 @@ function writeReport(
   statuses: ChapterRunStatus[],
   progressLogPath: string,
   chapterLogPath: string,
-  worldStateEntries: number,
+  worldState: unknown[],
 ): { reportPath: string; report: QuickRerunReport; artifactVerification: ArtifactVerification } {
   const reportPath = path.join(outDir, "report.json");
+  const factExtractionFallbacks = summarizeFactExtractionFallbacks(worldState);
   const report: QuickRerunReport = {
     generatedAt: timestamp(),
     seedTitle: seed.title,
@@ -417,7 +501,9 @@ function writeReport(
     },
     progressLogPath,
     chapterLogPath,
-    worldStateEntries,
+    worldStateEntries: worldState.length,
+    factExtractionFallbacks,
+    lowScoreChapters: summarizeLowScoreChapters(statuses, factExtractionFallbacks),
   };
 
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
@@ -427,7 +513,7 @@ function writeReport(
     progressLogPath,
     chapterLogPath,
     reportPath,
-    worldStateEntries,
+    worldState.length,
   );
   report.artifactVerification = artifactVerification;
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
@@ -562,6 +648,23 @@ export async function runQuickRerun({
     progressLogPath,
     `[rerun] safeguard summary ${Object.entries(safeguardSummary).map(([stage, count]) => `${stage}=${count}`).join(", ")}`,
   );
+  const factExtractionFallbacks = summarizeFactExtractionFallbacks(worldState);
+  if (factExtractionFallbacks.total > 0) {
+    logProgress(
+      progressLogPath,
+      `[rerun] fact-extractor fallbacks total=${factExtractionFallbacks.total} ${factExtractionFallbacks.chapters.map((entry) => `ch${entry.chapter}:${entry.kind}`).join(", ")}`,
+    );
+    appendChapterStatus(
+      chapterLogPath,
+      `fact-extractor-fallbacks total=${factExtractionFallbacks.total} ${factExtractionFallbacks.chapters.map((entry) => `ch${entry.chapter}:${entry.kind}`).join(" ")}`,
+    );
+  }
+  const lowScoreChapters = summarizeLowScoreChapters(statuses, factExtractionFallbacks);
+  if (lowScoreChapters.length > 0) {
+    const summaryLine = lowScoreChapters.map((entry) => `ch${entry.chapter}=${entry.score.toFixed(2)}`).join(", ");
+    logProgress(progressLogPath, `[rerun] low-score chapters ${summaryLine}`);
+    appendChapterStatus(chapterLogPath, `low-score-chapters ${summaryLine}`);
+  }
   appendChapterStatus(
     chapterLogPath,
     `safeguards ${Object.entries(safeguardSummary).map(([stage, count]) => `${stage}=${count}`).join(" ")}`,
@@ -573,7 +676,7 @@ export async function runQuickRerun({
     statuses,
     progressLogPath,
     chapterLogPath,
-    worldState.length,
+    worldState,
   );
   if (artifactVerification.ok) {
     logProgress(progressLogPath, `[rerun] artifact verification passed (${artifactVerification.checks.length} checks)`);

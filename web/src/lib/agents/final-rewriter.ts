@@ -38,7 +38,7 @@ export function buildFinalRewriterPrompt(
     }
   }
 
-  const chapterQualityIssues = detectChapterQualityIssues(text);
+  const chapterQualityIssues = detectChapterQualityIssues(text, ctx ? { blueprint: ctx.blueprint, seedCharacterNames: ctx.seed.characters.map((character) => character.name) } : undefined);
   if (chapterQualityIssues.length > 0) {
     parts.push("");
     parts.push("## 추가 구조 품질 문제 (반드시 해결)");
@@ -133,7 +133,7 @@ export class FinalRewriterAgent implements PipelineAgent {
     }
 
     async function runSecondPassIfNeeded(candidateText: string): Promise<{ text: string; extraUsage: typeof usage }> {
-      const currentIssues = detectChapterQualityIssues(candidateText);
+      const currentIssues = detectChapterQualityIssues(candidateText, { blueprint: ctx.blueprint, seedCharacterNames: ctx.seed.characters.map((character) => character.name) });
       if (currentIssues.length === 0) {
         return { text: candidateText, extraUsage: zeroUsage };
       }
@@ -182,8 +182,8 @@ export class FinalRewriterAgent implements PipelineAgent {
     const maxLen = originalText.length * 1.3;
     if (cleaned.length >= minLen && cleaned.length <= maxLen) {
       let acceptRewrite = true;
-      const originalQualityIssues = detectChapterQualityIssues(originalText);
-      const rewrittenQualityIssues = detectChapterQualityIssues(cleaned);
+      const originalQualityIssues = detectChapterQualityIssues(originalText, { blueprint: ctx.blueprint, seedCharacterNames: ctx.seed.characters.map((character) => character.name) });
+      const rewrittenQualityIssues = detectChapterQualityIssues(cleaned, { blueprint: ctx.blueprint, seedCharacterNames: ctx.seed.characters.map((character) => character.name) });
       if (ctx.blueprint) {
         const originalCount = getCastViolations(originalText).length;
         const rewrittenCount = getCastViolations(cleaned).length;
@@ -204,7 +204,7 @@ export class FinalRewriterAgent implements PipelineAgent {
         if (rewrittenQualityIssues.length > 0 && rewrittenQualityIssues.length >= originalQualityIssues.length) {
           const secondPass = await runSecondPassIfNeeded(cleaned);
           ctx.totalUsage = accumulateUsage(ctx.totalUsage, secondPass.extraUsage);
-          const secondIssues = detectChapterQualityIssues(secondPass.text);
+          const secondIssues = detectChapterQualityIssues(secondPass.text, { blueprint: ctx.blueprint, seedCharacterNames: ctx.seed.characters.map((character) => character.name) });
           const secondMinLen = originalText.length * 0.7;
           const secondMaxLen = originalText.length * 1.3;
           const secondCastViolationKeys = getCastViolationKeys(secondPass.text);

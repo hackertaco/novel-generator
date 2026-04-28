@@ -83,6 +83,8 @@ export const ChapterWorldStateSchema = z.object({
   facts: z.array(WorldFactSchema),
   character_states: z.array(CharacterStateSchema),
   summary: z.string(),          // 1-2 sentence chapter summary
+  extraction_status: z.enum(["structured", "json_parse_fallback", "agent_failure_fallback"]).optional(),
+  fallback_reason: z.string().optional(),
   key_dialogues: z.array(KeyDialogueSchema).optional(),
   key_actions: z.array(KeyActionSchema).optional(),
   pending_situations: z.array(PendingSituationSchema).optional(),

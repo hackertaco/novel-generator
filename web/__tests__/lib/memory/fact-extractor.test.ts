@@ -184,6 +184,8 @@ describe("extractChapterFacts", () => {
       facts: [],
       character_states: [],
       summary: "4화",
+      extraction_status: "json_parse_fallback",
+      fallback_reason: "json_parse_failed",
     });
   });
 
@@ -204,6 +206,8 @@ describe("extractChapterFacts", () => {
       facts: [],
       character_states: [],
       summary: "5화",
+      extraction_status: "agent_failure_fallback",
+      fallback_reason: "network timeout",
     });
   });
 });

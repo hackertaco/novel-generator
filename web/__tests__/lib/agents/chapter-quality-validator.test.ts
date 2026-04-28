@@ -5,6 +5,7 @@ import {
   buildChapterQualityRepairPrompt,
   detectChapterQualityIssues,
 } from "@/lib/agents/chapter-quality-validator";
+import type { ChapterBlueprint } from "@/lib/schema/planning";
 
 describe("detectChapterQualityIssues", () => {
   it("detects repeated reveal/decision payloads in a chapter", () => {
@@ -36,6 +37,45 @@ describe("detectChapterQualityIssues", () => {
     expect(issues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: "overfast_deduction", severity: "warning" }),
+      ]),
+    );
+  });
+
+  it("uses blueprint-derived tokens to detect repeated payloads without story-specific markers", () => {
+    const blueprint = {
+      one_liner: "민우가 비상 출항 명부를 보고 항구 탈출 준비를 굳힌다",
+      key_points: ["비상 출항 명부", "항구 탈출 준비"],
+      already_established: ["민우는 서쪽 창고를 알고 있다"],
+      characters_involved: ["minu"],
+      scenes: [
+        {
+          purpose: "민우가 비상 출항 명부와 항구 열쇠를 확인하고 도주 준비를 굳힌다",
+          type: "discovery",
+          characters: ["minu"],
+          estimated_chars: 1000,
+          emotional_tone: "긴장",
+          must_reveal: ["비상 출항 명부가 존재한다"],
+        },
+      ],
+    } as unknown as ChapterBlueprint;
+
+    const text = [
+      "민우는 비상 출항 명부를 펼쳐 마지막 배 시간을 확인했다.",
+      "항구 열쇠와 짐 목록을 챙기지 않으면 탈출할 수 없다고 결심했다.",
+      "그는 누구보다 먼저 부두로 내려갈 순서를 정리했다.",
+      "",
+      "다시 책상 앞에 선 민우는 비상 출항 명부를 손에서 놓지 못했다.",
+      "그는 항구 열쇠와 짐 목록을 또 확인하며 탈출 준비를 되풀이했다.",
+    ].join("\n\n");
+
+    const issues = detectChapterQualityIssues(text, {
+      blueprint,
+      seedCharacterNames: ["민우"],
+    });
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "repeated_reveal_payload", severity: "error" }),
       ]),
     );
   });

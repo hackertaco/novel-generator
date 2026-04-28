@@ -92,7 +92,11 @@ ${text.slice(0, 4000)}
       // Validate with schema, but use parsed data even if validation is loose
       const validated = ChapterWorldStateSchema.safeParse(parsed);
       if (validated.success) {
-        return enrichCharacterVisibility(validated.data, text, seed, chapterNumber);
+        return enrichCharacterVisibility({
+          ...validated.data,
+          extraction_status: "structured",
+          fallback_reason: undefined,
+        }, text, seed, chapterNumber);
       }
       // Schema validation failed but we have parsed JSON — use it with defaults
       const charStates = Array.isArray(parsed.character_states)
@@ -120,6 +124,8 @@ ${text.slice(0, 4000)}
           : [],
         character_states: charStates,
         summary: typeof parsed.summary === "string" ? parsed.summary : `${chapterNumber}화`,
+        extraction_status: "json_parse_fallback" as const,
+        fallback_reason: "schema_validation_failed",
         key_dialogues: Array.isArray(parsed.key_dialogues) ? parsed.key_dialogues : undefined,
         key_actions: Array.isArray(parsed.key_actions) ? parsed.key_actions : undefined,
         pending_situations: Array.isArray(parsed.pending_situations) ? parsed.pending_situations : undefined,
@@ -139,11 +145,14 @@ ${text.slice(0, 4000)}
       facts: [],
       character_states: [],
       summary: summaryMatch ? summaryMatch[1] : `${chapterNumber}화`,
+      extraction_status: "json_parse_fallback",
+      fallback_reason: "json_parse_failed",
     };
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     console.warn(
       `[fact-extractor] ${chapterNumber}화 사실 추출 실패:`,
-      err instanceof Error ? err.message : err,
+      message,
     );
     // Return minimal fallback
     return {
@@ -151,6 +160,8 @@ ${text.slice(0, 4000)}
       facts: [],
       character_states: [],
       summary: `${chapterNumber}화`,
+      extraction_status: "agent_failure_fallback",
+      fallback_reason: message,
     };
   }
 }

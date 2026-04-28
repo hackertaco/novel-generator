@@ -46,13 +46,37 @@ export function shouldAct(
   fs: Foreshadowing,
   chapter: number,
 ): ForeshadowingAction | null {
-  if (chapter === fs.planted_at && fs.status === "pending") {
+  const legacy = fs as Foreshadowing & {
+    plant_chapter?: number;
+    hint_chapters?: number[];
+    reveal_chapter?: number | null;
+  };
+  const plantedAt = typeof legacy.planted_at === "number"
+    ? legacy.planted_at
+    : typeof legacy.plant_chapter === "number"
+      ? legacy.plant_chapter
+      : 1;
+  const revealAt = typeof legacy.reveal_at === "number"
+    ? legacy.reveal_at
+    : typeof legacy.reveal_chapter === "number"
+      ? legacy.reveal_chapter
+      : null;
+  const hintsAt = Array.isArray(legacy.hints_at)
+    ? legacy.hints_at
+    : Array.isArray(legacy.hint_chapters)
+      ? legacy.hint_chapters
+      : [];
+  const status = typeof legacy.status === "string"
+    ? legacy.status
+    : "pending";
+
+  if (chapter === plantedAt && status === "pending") {
     return "plant";
   }
-  if (fs.reveal_at && chapter === fs.reveal_at && fs.status === "planted") {
+  if (revealAt && chapter === revealAt && status === "planted") {
     return "reveal";
   }
-  if (fs.hints_at.includes(chapter) && fs.status === "planted") {
+  if (hintsAt.includes(chapter) && status === "planted") {
     return "hint";
   }
   return null;

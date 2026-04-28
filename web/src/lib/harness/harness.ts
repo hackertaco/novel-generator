@@ -715,7 +715,10 @@ export class NovelHarness {
       }
 
       if (!rerunWithPatchedBlueprint && chapterQualityReruns < MAX_CHAPTER_QUALITY_RERUNS) {
-        const chapterQualityIssues = detectChapterQualityIssues(ctx.text);
+        const chapterQualityIssues = detectChapterQualityIssues(ctx.text, {
+          blueprint: ctx.blueprint,
+          seedCharacterNames: ctx.seed.characters.map((character) => character.name),
+        });
         if (chapterQualityIssues.some((issue) => issue.severity === "error")) {
           yield {
             type: "pipeline_event",

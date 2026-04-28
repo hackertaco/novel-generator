@@ -94,6 +94,23 @@ describe("shouldAct", () => {
     expect(shouldAct(fs, 20)).toBeNull();
   });
 
+  it("supports legacy foreshadowing field names from raw seeds", () => {
+    const legacy = {
+      id: "fs_legacy",
+      name: "복선 레거시",
+      description: "옛 seed 포맷",
+      importance: "critical",
+      plant_chapter: 2,
+      hint_chapters: [4, 6],
+      reveal_chapter: 9,
+      status: "planted",
+    } as unknown as Foreshadowing;
+
+    expect(shouldAct({ ...legacy, status: "pending" } as Foreshadowing, 2)).toBe("plant");
+    expect(shouldAct(legacy, 4)).toBe("hint");
+    expect(shouldAct(legacy, 9)).toBe("reveal");
+  });
+
   it("returns null when status does not match (e.g., planted_at chapter but status is already planted)", () => {
     const fs = makeForeshadowing({ planted_at: 5, status: "planted" });
     // planted_at chapter but status is not "pending"

@@ -19,7 +19,10 @@ class FakeHarness {
   }
 
   getWorldStateSnapshot() {
-    return [{ chapter: 1, facts: [] }];
+    return [
+      { chapter: 1, facts: [], extraction_status: "structured" },
+      { chapter: 2, facts: [], extraction_status: "json_parse_fallback", fallback_reason: "schema_validation_failed" },
+    ];
   }
 
   async *run(
@@ -196,9 +199,9 @@ describe("quick-rerun", () => {
 
   it("formats a final summary with failed chapter list", () => {
     expect(formatRunSummary([
-      { chapter: 1, success: true, attempts: 1, errorMessages: [] },
-      { chapter: 2, success: false, attempts: 4, errorMessages: ["boom"] },
-      { chapter: 3, success: true, attempts: 2, errorMessages: [] },
+      { chapter: 1, success: true, attempts: 1, errorMessages: [], attemptDetails: [], safeguardStages: [], pipelineWarnings: [] },
+      { chapter: 2, success: false, attempts: 4, errorMessages: ["boom"], attemptDetails: [], safeguardStages: [], pipelineWarnings: [] },
+      { chapter: 3, success: true, attempts: 2, errorMessages: [], attemptDetails: [], safeguardStages: [], pipelineWarnings: [] },
     ], 3)).toBe("3화 중 2화 성공, 2화 실패");
   });
 
@@ -236,6 +239,18 @@ describe("quick-rerun", () => {
       summary: string;
       safeguardSummary: Record<string, number>;
       artifactVerification: { ok: boolean; checks: Array<{ kind: string; exists: boolean }> };
+      factExtractionFallbacks: {
+        total: number;
+        byKind: Record<string, number>;
+        chapters: Array<{ chapter: number; kind: string; reason?: string }>;
+      };
+      lowScoreChapters: Array<{
+        chapter: number;
+        score: number;
+        safeguardStages: string[];
+        pipelineWarnings: string[];
+        factExtractionFallbackKind?: string;
+      }>;
       statuses: Array<{
         chapter: number;
         attemptDetails: Array<{ stageHistory: string[]; safeguardStages: string[]; pipelineWarnings: string[] }>;
@@ -246,10 +261,14 @@ describe("quick-rerun", () => {
     expect(progressLog).toContain("ch1 retry scheduled in 0s");
     expect(progressLog).toContain("[rerun] 2화 중 2화 성공, 없음화 실패");
     expect(progressLog).toContain("[rerun] safeguard summary");
+    expect(progressLog).toContain("[rerun] fact-extractor fallbacks total=1 ch2:json_parse_fallback");
+    expect(progressLog).toContain("[rerun] low-score chapters ch1=0.63, ch2=0.63");
     expect(progressLog).toContain("[rerun] artifact verification passed");
     expect(chapterLog).toContain("ch1 failure attempt=1 error=OpenAI Connection error");
     expect(chapterLog).toContain("ch1 success attempt=2");
     expect(chapterLog).toContain("ch2 success attempt=1");
+    expect(chapterLog).toContain("fact-extractor-fallbacks total=1 ch2:json_parse_fallback");
+    expect(chapterLog).toContain("low-score-chapters ch1=0.63, ch2=0.63");
     expect(chapterLog).toContain("safeguards future-character-debate=1");
     expect(result.reportPath).toBe(path.join(outDir, "report.json"));
     expect(result.artifactVerification.ok).toBe(true);
@@ -259,6 +278,25 @@ describe("quick-rerun", () => {
     expect(report.safeguardSummary["final-cast-hard-repair"]).toBe(1);
     expect(report.artifactVerification.ok).toBe(true);
     expect(report.artifactVerification.checks.some((check) => check.kind === "report" && check.exists)).toBe(true);
+    expect(report.factExtractionFallbacks.total).toBe(1);
+    expect(report.factExtractionFallbacks.byKind.json_parse_fallback).toBe(1);
+    expect(report.factExtractionFallbacks.chapters).toEqual([
+      { chapter: 2, kind: "json_parse_fallback", reason: "schema_validation_failed" },
+    ]);
+    expect(report.lowScoreChapters).toHaveLength(2);
+    expect(report.lowScoreChapters[0]).toMatchObject({
+      chapter: 1,
+      safeguardStages: [],
+      pipelineWarnings: [],
+    });
+    expect(report.lowScoreChapters[0]?.score).toBeCloseTo(0.62725, 5);
+    expect(report.lowScoreChapters[1]).toMatchObject({
+      chapter: 2,
+      safeguardStages: ["future-character-debate", "final-cast-hard-repair"],
+      pipelineWarnings: ["[future-character-debate] keep_original — cast guard preserved"],
+      factExtractionFallbackKind: "json_parse_fallback",
+    });
+    expect(report.lowScoreChapters[1]?.score).toBeCloseTo(0.62725, 5);
     expect(report.statuses[1]?.safeguardStages).toEqual(["future-character-debate", "final-cast-hard-repair"]);
     expect(report.statuses[1]?.pipelineWarnings).toEqual(["[future-character-debate] keep_original — cast guard preserved"]);
     expect(report.statuses[1]?.attemptDetails[0]?.stageHistory).toContain("future-character-debate");

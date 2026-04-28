@@ -128,6 +128,22 @@ export async function generateChapterBlueprints(
       ? seed.extended_outlines?.find((o) => o.chapter_number === bp.chapter_number)
       : undefined;
 
+    if (outline?.characters_involved?.length) {
+      const requiredCharacters = normalizeCharacterRefs(
+        outline.characters_involved,
+        seed,
+        `${bp.chapter_number}화 outline.characters_involved`,
+      ).filter((charId) => {
+        const seedChar = seed.characters.find((c) => c.id === charId);
+        return !seedChar || bp.chapter_number >= seedChar.introduction_chapter;
+      });
+      for (const charId of requiredCharacters) {
+        if (!bp.characters_involved.includes(charId)) {
+          bp.characters_involved.push(charId);
+        }
+      }
+    }
+
     // For extended outlines without key_points, inject the one_liner as context
     if (!outline && extOutline && bp.scenes.length > 0 && !bp.scenes[0].must_reveal?.length) {
       bp.scenes[0].must_reveal = bp.scenes[0].must_reveal || [];

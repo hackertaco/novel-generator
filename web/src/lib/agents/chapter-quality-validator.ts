@@ -1,13 +1,32 @@
+import type { NovelSeed } from "../schema/novel";
+import type { ChapterBlueprint } from "../schema/planning";
+
 export interface ChapterQualityIssue {
   type: "repeated_reveal_payload" | "overfast_deduction" | "duplicate_beat_restart";
   message: string;
   severity: "warning" | "error";
 }
 
+export interface ChapterQualityDetectionContext {
+  blueprint?: Pick<ChapterBlueprint, "one_liner" | "key_points" | "already_established" | "characters_involved" | "scenes">;
+  seedCharacterNames?: NovelSeed["characters"][number]["name"][];
+}
+
+interface DetectorLexicon {
+  decisionMarkers: string[];
+  restartMarkers: string[];
+  evidenceMarkers: string[];
+  certaintyMarkers: string[];
+  hedgeMarkers: string[];
+  anchorTokens: Set<string>;
+}
+
 const TOKEN_REGEX = /[가-힣A-Za-z0-9]{2,}/g;
 const WINDOW_SIZE = 3;
-const MIN_SHARED_TOKENS_FOR_REPEAT = 4;
+const MIN_SHARED_TOKENS_FOR_REPEAT = 3;
 const MIN_SHARED_TOKENS_FOR_RESTART = 5;
+const MIN_SHARED_ANCHOR_TOKENS = 2;
+const MAX_DYNAMIC_MARKERS = 24;
 
 const STOPWORDS = new Set([
   "그리고", "하지만", "그러나", "그래서", "그때", "정말", "아주", "조금", "다시", "이미", "이번", "저런",
@@ -58,6 +77,43 @@ function extractContentTokens(text: string): string[] {
     .filter((token) => !STOPWORDS.has(token));
 }
 
+function dedupe(items: string[]): string[] {
+  return [...new Set(items.filter(Boolean))];
+}
+
+function pickDynamicMarkers(tokens: string[]): string[] {
+  return dedupe(tokens)
+    .filter((token) => token.length >= 2)
+    .slice(0, MAX_DYNAMIC_MARKERS);
+}
+
+function buildLexicon(context?: ChapterQualityDetectionContext): DetectorLexicon {
+  const blueprint = context?.blueprint;
+  const sceneTexts = blueprint?.scenes?.flatMap((scene) => [
+    scene.purpose,
+    ...(scene.must_reveal || []),
+    scene.triggered_by || "",
+    scene.leads_to || "",
+  ]) || [];
+  const evidenceSource = [
+    blueprint?.one_liner || "",
+    ...(blueprint?.key_points || []),
+    ...(blueprint?.already_established || []),
+    ...sceneTexts,
+    ...(context?.seedCharacterNames || []),
+  ].join("\n");
+  const dynamicTokens = pickDynamicMarkers(extractContentTokens(evidenceSource));
+
+  return {
+    decisionMarkers: GENERIC_DECISION_MARKERS,
+    restartMarkers: GENERIC_RESTART_MARKERS,
+    evidenceMarkers: dedupe([...GENERIC_EVIDENCE_MARKERS, ...dynamicTokens]),
+    certaintyMarkers: GENERIC_CERTAINTY_MARKERS,
+    hedgeMarkers: GENERIC_HEDGE_MARKERS,
+    anchorTokens: new Set(dynamicTokens),
+  };
+}
+
 function hasAnyMarker(text: string, markers: string[]): boolean {
   return markers.some((marker) => text.includes(marker));
 }
@@ -70,14 +126,14 @@ function hasNumericAnchor(text: string): boolean {
   return /\b\d{2,4}\b/.test(text) || /(남은|기한|마지막|시한|시간표|일정|사흘|하루|며칠)/.test(text);
 }
 
-function buildWindowSignatures(paragraphs: string[]): WindowSignature[] {
+function buildWindowSignatures(paragraphs: string[], lexicon: DetectorLexicon): WindowSignature[] {
   return paragraphs.map((_, index) => {
     const text = paragraphs.slice(index, index + WINDOW_SIZE).join("\n\n");
     return {
       index,
       text,
       tokens: new Set(extractContentTokens(text)),
-      decisionCount: countMarkerMatches(text, GENERIC_DECISION_MARKERS),
+      decisionCount: countMarkerMatches(text, lexicon.decisionMarkers),
       hasNumericAnchor: hasNumericAnchor(text),
     };
   });
@@ -87,26 +143,31 @@ function getSharedTokens(left: Set<string>, right: Set<string>): string[] {
   return [...left].filter((token) => right.has(token));
 }
 
-function detectRepeatedRevealPayload(paragraphs: string[]): ChapterQualityIssue[] {
+function countSharedAnchorTokens(sharedTokens: string[], lexicon: DetectorLexicon): number {
+  return sharedTokens.filter((token) => lexicon.anchorTokens.has(token)).length;
+}
+
+function detectRepeatedRevealPayload(paragraphs: string[], lexicon: DetectorLexicon): ChapterQualityIssue[] {
   const issues: ChapterQualityIssue[] = [];
-  const windows = buildWindowSignatures(paragraphs);
+  const windows = buildWindowSignatures(paragraphs, lexicon);
 
   for (let i = 0; i < windows.length; i++) {
-    for (let j = i + 2; j < windows.length; j++) {
+    for (let j = i + WINDOW_SIZE; j < windows.length; j++) {
       const sharedTokens = getSharedTokens(windows[i]?.tokens || new Set<string>(), windows[j]?.tokens || new Set<string>());
+      const sharedAnchorCount = countSharedAnchorTokens(sharedTokens, lexicon);
+      const hasEnoughSharedPayload =
+        sharedTokens.length >= MIN_SHARED_TOKENS_FOR_REPEAT ||
+        sharedAnchorCount >= MIN_SHARED_ANCHOR_TOKENS;
       const repeatedDecisionPayload =
-        sharedTokens.length >= MIN_SHARED_TOKENS_FOR_REPEAT &&
+        hasEnoughSharedPayload &&
         (windows[i]?.decisionCount || 0) >= 1 &&
         (windows[j]?.decisionCount || 0) >= 1;
       const repeatedTimedReveal =
-        sharedTokens.length >= MIN_SHARED_TOKENS_FOR_REPEAT &&
+        hasEnoughSharedPayload &&
         Boolean(windows[i]?.hasNumericAnchor) &&
         Boolean(windows[j]?.hasNumericAnchor);
 
-      if (
-        repeatedDecisionPayload ||
-        repeatedTimedReveal
-      ) {
+      if (repeatedDecisionPayload || repeatedTimedReveal) {
         issues.push({
           type: "repeated_reveal_payload",
           severity: "error",
@@ -120,12 +181,12 @@ function detectRepeatedRevealPayload(paragraphs: string[]): ChapterQualityIssue[
   return issues;
 }
 
-function detectDuplicateBeatRestart(paragraphs: string[]): ChapterQualityIssue[] {
+function detectDuplicateBeatRestart(paragraphs: string[], lexicon: DetectorLexicon): ChapterQualityIssue[] {
   const issues: ChapterQualityIssue[] = [];
 
   for (let i = 0; i < paragraphs.length; i++) {
     const paragraph = paragraphs[i] || "";
-    if (!hasAnyMarker(paragraph, GENERIC_RESTART_MARKERS)) continue;
+    if (!hasAnyMarker(paragraph, lexicon.restartMarkers)) continue;
 
     const before = paragraphs.slice(Math.max(0, i - WINDOW_SIZE), i).join("\n\n");
     const after = paragraphs.slice(i, i + WINDOW_SIZE).join("\n\n");
@@ -133,8 +194,12 @@ function detectDuplicateBeatRestart(paragraphs: string[]): ChapterQualityIssue[]
       new Set(extractContentTokens(before)),
       new Set(extractContentTokens(after)),
     );
+    const sharedAnchorCount = countSharedAnchorTokens(overlappingTokens, lexicon);
 
-    if (overlappingTokens.length >= MIN_SHARED_TOKENS_FOR_RESTART) {
+    if (
+      overlappingTokens.length >= MIN_SHARED_TOKENS_FOR_RESTART ||
+      sharedAnchorCount >= MIN_SHARED_ANCHOR_TOKENS
+    ) {
       issues.push({
         type: "duplicate_beat_restart",
         severity: "error",
@@ -147,15 +212,15 @@ function detectDuplicateBeatRestart(paragraphs: string[]): ChapterQualityIssue[]
   return issues;
 }
 
-function detectOverfastDeduction(paragraphs: string[]): ChapterQualityIssue[] {
+function detectOverfastDeduction(paragraphs: string[], lexicon: DetectorLexicon): ChapterQualityIssue[] {
   const issues: ChapterQualityIssue[] = [];
 
   for (let i = 0; i < paragraphs.length; i++) {
-    if (!hasAnyMarker(paragraphs[i] || "", GENERIC_EVIDENCE_MARKERS)) continue;
+    if (!hasAnyMarker(paragraphs[i] || "", lexicon.evidenceMarkers)) continue;
     const windowText = paragraphs.slice(i, i + 5).join("\n\n");
     if (
-      hasAnyMarker(windowText, GENERIC_CERTAINTY_MARKERS) &&
-      !hasAnyMarker(windowText, GENERIC_HEDGE_MARKERS)
+      hasAnyMarker(windowText, lexicon.certaintyMarkers) &&
+      !hasAnyMarker(windowText, lexicon.hedgeMarkers)
     ) {
       issues.push({
         type: "overfast_deduction",
@@ -169,12 +234,16 @@ function detectOverfastDeduction(paragraphs: string[]): ChapterQualityIssue[] {
   return issues;
 }
 
-export function detectChapterQualityIssues(text: string): ChapterQualityIssue[] {
+export function detectChapterQualityIssues(
+  text: string,
+  context?: ChapterQualityDetectionContext,
+): ChapterQualityIssue[] {
   const paragraphs = splitParagraphs(text);
+  const lexicon = buildLexicon(context);
   return [
-    ...detectRepeatedRevealPayload(paragraphs),
-    ...detectDuplicateBeatRestart(paragraphs),
-    ...detectOverfastDeduction(paragraphs),
+    ...detectRepeatedRevealPayload(paragraphs, lexicon),
+    ...detectDuplicateBeatRestart(paragraphs, lexicon),
+    ...detectOverfastDeduction(paragraphs, lexicon),
   ];
 }
 

@@ -34,6 +34,8 @@ Each run now emits a small artifact set that is meant to be inspected together:
   - `chapter-quality-repair`
   - `final-cast-hard-repair`
 - artifact verification results, including missing required files
+- fact-extractor fallback summary (which chapter fell back and why)
+- low-score chapter summary for fast human review
 
 ## Verification expectations
 
