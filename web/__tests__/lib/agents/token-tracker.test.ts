@@ -130,6 +130,20 @@ describe("TokenTracker", () => {
       expect(cost).toBeCloseTo(0.0125, 8);
     });
 
+
+    it("calculates cost for gpt-5.4", () => {
+      // official pricing: input=2.50, output=15.00 per 1M tokens
+      const cost = TokenTracker.estimateCost("gpt-5.4", 1000, 1000);
+      // (1000/1_000_000)*2.50 + (1000/1_000_000)*15.00 = 0.0175
+      expect(cost).toBeCloseTo(0.0175, 8);
+    });
+
+    it("calculates cost for gpt-5.4-mini", () => {
+      // official pricing: input=0.75, output=4.50 per 1M tokens
+      const cost = TokenTracker.estimateCost("gpt-5.4-mini", 1000, 1000);
+      // (1000/1_000_000)*0.75 + (1000/1_000_000)*4.50 = 0.00525
+      expect(cost).toBeCloseTo(0.00525, 8);
+    });
     it("defaults to gpt-4o-mini pricing for unknown model", () => {
       const unknownCost = TokenTracker.estimateCost("some-unknown-model", 1000, 1000);
       const miniCost = TokenTracker.estimateCost("gpt-4o-mini", 1000, 1000);
