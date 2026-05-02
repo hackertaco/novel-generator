@@ -10,6 +10,8 @@ import { getAgent } from "./llm-agent";
 import type { NovelSeed } from "@/lib/schema/novel";
 import { getForeshadowingActions } from "@/lib/schema/novel";
 import { getCharacterReferenceVariants } from "@/lib/schema/character";
+import { getAddressEntriesForCharacters, formatAddressMatrixForPrompt } from "@/lib/schema/direction";
+import type { DirectionDesign } from "@/lib/schema/direction";
 import type { ChapterBlueprint, SceneSpec } from "@/lib/schema/planning";
 import type { TokenUsage } from "@/lib/agents/types";
 import { validateScene, buildSceneRepairPrompt } from "./scene-validator";
@@ -48,6 +50,8 @@ export interface SceneWriterOptions {
   simpleMode?: boolean;
   /** World state manager for audience knowledge + relationship context */
   worldStateManager?: import("@/lib/memory/world-state-manager").WorldStateManager;
+  /** Direction design metadata incl. address matrix */
+  directionDesign?: DirectionDesign;
 }
 
 export interface SceneWriterResult {
@@ -117,6 +121,7 @@ export function buildScenePrompt(
     threadReminders?: string[];
     correctionContext?: string;
     previousChapterEnding?: string;
+    directionDesign?: DirectionDesign;
   },
 ): string {
   const parts: string[] = [];
@@ -168,6 +173,11 @@ ${chapterOutline.one_liner}${keyPtsStr}
   const sceneChars = scene.characters
     .map((id) => seed.characters.find((c) => c.id === id))
     .filter(Boolean);
+
+  const sceneCharNames = sceneChars.map((c) => c!.name);
+  const addressEntries = extras?.directionDesign
+    ? getAddressEntriesForCharacters(extras.directionDesign, sceneCharNames)
+    : [];
 
   if (sceneChars.length > 0) {
     parts.push("# 이 씬의 캐릭터 (말투를 반드시 구분하세요!)");
@@ -692,6 +702,7 @@ export async function writeChapterByScenes(
     fastMode,
     simpleMode,
     worldStateManager,
+    directionDesign,
   } = options;
 
   const agent = getAgent();
@@ -879,6 +890,7 @@ export async function writeChapterParallel(
     previousChapterEnding,
     simpleMode,
     worldStateManager,
+    directionDesign,
   } = options;
 
   const agent = getAgent();
@@ -922,6 +934,7 @@ export async function writeChapterParallel(
             threadReminders: i >= blueprint.scenes.length - 2 ? threadReminders : undefined,
             correctionContext,
             previousChapterEnding: previousChapterEnding,
+            directionDesign,
           },
         );
 

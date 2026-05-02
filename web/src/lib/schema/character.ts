@@ -2,6 +2,16 @@ import { z } from "zod";
 
 // --- Schemas ---
 
+export const CharacterAddressHintSchema = z.object({
+  to: z.string().describe("상대 캐릭터 id 또는 이름"),
+  relation: z.enum(["older_sibling", "younger_sibling", "serves", "served_by", "guardian", "ward"]).optional().describe("관계 힌트"),
+  address: z.string().optional().describe("이 상대를 직접 부를 때 기본 호칭"),
+  speech_level: z.enum(["formal", "polite", "casual", "intimate"]).optional().describe("이 상대에게 기본적으로 사용하는 화계"),
+  note: z.string().optional().describe("조건부 메모"),
+});
+
+export type CharacterAddressHint = z.infer<typeof CharacterAddressHintSchema>;
+
 export const CharacterVoiceSchema = z.object({
   tone: z.string().describe("Overall tone (e.g., '냉소적, 하지만 속정 있음')"),
   speech_patterns: z
@@ -110,6 +120,9 @@ export const CharacterSchema = z.object({
   arc_summary: z
     .string()
     .describe("Character's growth arc throughout the story"),
+  address_hints: z.array(CharacterAddressHintSchema).optional().describe(
+    "관계별 호칭/화계 힌트. 예: 시녀→아가씨, 동생→언니 같은 비대칭 규칙"
+  ),
   internal_arc: z
     .object({
       want: z
@@ -156,6 +169,22 @@ export const CharacterSchema = z.object({
 });
 
 export type Character = z.infer<typeof CharacterSchema>;
+
+function normalizeRelationLookup(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+export function getAddressHintForPair<T extends Pick<Character, "id" | "name"> & { address_hints?: CharacterAddressHint[] }>(
+  from: T,
+  to: Pick<Character, "id" | "name">,
+): CharacterAddressHint | undefined {
+  const targets = new Set([
+    normalizeRelationLookup(to.id),
+    normalizeRelationLookup(to.name),
+    normalizeRelationLookup(to.name.split(/\s+/)[0] || to.name),
+  ]);
+  return (from.address_hints || []).find((hint) => targets.has(normalizeRelationLookup(hint.to)));
+}
 
 function normalizeCharacterRef(value: string): string {
   return value.replace(/\s+/g, " ").trim();

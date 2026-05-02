@@ -8,6 +8,7 @@
 
 import { getAgent } from "@/lib/agents/llm-agent";
 import { DirectionDesignSchema, type DirectionDesign } from "@/lib/schema/direction";
+import { getAddressHintForPair } from "@/lib/schema/character";
 import type { NovelSeed } from "@/lib/schema/novel";
 import type { TokenUsage } from "@/lib/agents/types";
 
@@ -36,6 +37,54 @@ function computeChapterRanges(totalChapters: number): string[] {
   }
   const mid = Math.floor(totalChapters * 0.4);
   return ["1-3", `4-${mid}`, `${mid + 1}-${totalChapters}`];
+}
+
+
+function relationTextBetween(from: NovelSeed["characters"][number], to: NovelSeed["characters"][number]): string {
+  const rel = from.state.relationships || {};
+  return String(rel[to.id] || rel[to.name] || rel[to.name.split(/\s+/)[0] || ""] || "");
+}
+
+function inferAddressEntry(
+  from: NovelSeed["characters"][number],
+  to: NovelSeed["characters"][number],
+): { address: string; speech_level: "formal" | "polite" | "casual" | "intimate"; note?: string } {
+  const explicit = getAddressHintForPair(from, to);
+  if (explicit?.address && explicit?.speech_level) {
+    return { address: explicit.address, speech_level: explicit.speech_level, note: explicit.note };
+  }
+
+  const relation = relationTextBetween(from, to);
+  if (/(언니|누나)/.test(relation)) {
+    return { address: "언니", speech_level: "polite", note: "자매 관계 유지" };
+  }
+  if (/(오빠|형)/.test(relation)) {
+    return { address: relation.match(/오빠|형/)?.[0] || to.name, speech_level: "polite", note: "형제 관계 유지" };
+  }
+  if (/(동생)/.test(relation)) {
+    return { address: to.name.split(/\s+/)[0] || to.name, speech_level: "casual", note: "윗형제가 아랫형제를 부름" };
+  }
+
+  if (from.social_rank === "servant") {
+    if (to.social_rank === "royal") {
+      return { address: "전하", speech_level: "formal", note: "시종/하인이 왕족에게 말함" };
+    }
+    if (to.social_rank === "noble" || to.social_rank === "gentry") {
+      if (to.gender === "male") {
+        return { address: "도련님", speech_level: "polite", note: "시종/하인이 상급 남성에게 말함" };
+      }
+      return { address: "아가씨", speech_level: "polite", note: "시녀/하인이 상급 여성에게 말함" };
+    }
+  }
+
+  if ((from.social_rank === "noble" || from.social_rank === "gentry" || from.social_rank === "royal") && to.social_rank === "servant") {
+    return { address: to.name.split(/\s+/)[0] || to.name, speech_level: "casual", note: "상급자가 시종/하인을 부름" };
+  }
+
+  return {
+    address: to.name,
+    speech_level: "polite",
+  };
 }
 
 /**
@@ -126,11 +175,13 @@ function buildFallbackDesign(seed: NovelSeed): DirectionDesign {
       if (i === j) continue;
       const from = keyChars[i];
       const to = keyChars[j];
+      const inferred = inferAddressEntry(from, to);
       addressMatrix.push({
         from: from.name,
         to: to.name,
-        address: to.name,
-        speech_level: "polite" as const,
+        address: inferred.address,
+        speech_level: inferred.speech_level,
+        ...(inferred.note ? { note: inferred.note } : {}),
       });
     }
   }

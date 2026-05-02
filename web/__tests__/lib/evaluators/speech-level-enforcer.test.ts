@@ -18,6 +18,7 @@ function makeSeed(characters: Array<{
   name: string;
   rank: SocialRank;
   introChapter?: number;
+  address_hints?: Array<{ to: string; address: string; speech_level?: "formal" | "polite" | "casual" | "intimate" }>;
 }>): NovelSeed {
   return {
     title: "테스트 소설",
@@ -47,6 +48,7 @@ function makeSeed(characters: Array<{
       },
       backstory: "배경",
       arc_summary: "성장",
+      address_hints: c.address_hints ?? [],
       state: {
         level: null,
         location: null,
@@ -204,6 +206,37 @@ describe("enforceSpeechLevels", () => {
     const text = '하인이 공작에게 말했다. "그건 내가 했어"';
     const result = enforceSpeechLevels(text, seed, 1);
     expect(result.violations.length).toBeGreaterThanOrEqual(1);
+  });
+
+
+  it("servant calling a lady by bare name triggers an address violation", () => {
+    const seed = makeSeed([
+      { id: "lady", name: "엘리시아", rank: "noble" },
+      { id: "maid", name: "마리안", rank: "servant", address_hints: [{ to: "lady", address: "아가씨", speech_level: "polite" }] },
+    ]);
+    const text = '엘리시아를 본 마리안이 숨을 삼키며 말했다. "엘리시아, 지금 가시면 안 돼요"';
+    const result = enforceSpeechLevels(text, seed, 1);
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "address", expectedAddress: "아가씨", detectedAddress: "엘리시아" }),
+      ]),
+    );
+    expect(result.text).toContain('"아가씨, 지금 가시면 안 돼요"');
+  });
+
+  it("younger sibling using a bare name instead of 언니 can be corrected from pair hints", () => {
+    const seed = makeSeed([
+      { id: "older", name: "세레나", rank: "noble" },
+      { id: "younger", name: "엘리시아", rank: "noble", address_hints: [{ to: "older", address: "언니", speech_level: "polite" }] },
+    ]);
+    const text = '세레나 앞에 선 엘리시아가 낮게 말했다. "세레나, 잠깐만요"';
+    const result = enforceSpeechLevels(text, seed, 1);
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "address", expectedAddress: "언니", detectedAddress: "세레나" }),
+      ]),
+    );
+    expect(result.text).toContain('"언니, 잠깐만요"');
   });
 
   it("same rank dialogue using haeyo → no violations", () => {

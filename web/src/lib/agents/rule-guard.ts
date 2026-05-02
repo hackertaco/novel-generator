@@ -931,6 +931,7 @@ export class RuleGuardAgent implements PipelineAgent {
       ctx.seed,
       ctx.chapterNumber,
       ctx.blueprint,
+      ctx.directionDesign,
     );
     ctx.text = speechResult.text;
 

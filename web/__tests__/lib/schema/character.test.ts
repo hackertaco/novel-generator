@@ -6,6 +6,7 @@ import {
   CharacterSchema,
   getCharacterReferenceVariants,
   resolveCharacterReference,
+  getAddressHintForPair,
 } from "@/lib/schema/character";
 
 describe("CharacterVoiceSchema", () => {
@@ -160,6 +161,36 @@ describe("CharacterSchema", () => {
     });
   });
 });
+
+
+  it("parses address hints and resolves pair-specific hint lookup", () => {
+    const character = CharacterSchema.parse({
+      id: "elysia",
+      name: "엘리시아 크레센트",
+      role: "주인공",
+      address_hints: [
+        { to: "marian", relation: "served_by", address: "마리안", speech_level: "casual" },
+        { to: "세레나 크레센트", relation: "younger_sibling", address: "언니", speech_level: "polite" },
+      ],
+      introduction_chapter: 1,
+      voice: {
+        tone: "냉정함",
+        speech_patterns: [],
+        sample_dialogues: [],
+        personality_core: "냉정함",
+      },
+      backstory: "배경",
+      arc_summary: "아크",
+    });
+
+    const marianHint = getAddressHintForPair(character, { id: "marian", name: "마리안" });
+    const serenaHint = getAddressHintForPair(character, { id: "serena", name: "세레나 크레센트" });
+
+    expect(marianHint?.address).toBe("마리안");
+    expect(marianHint?.speech_level).toBe("casual");
+    expect(serenaHint?.address).toBe("언니");
+    expect(serenaHint?.speech_level).toBe("polite");
+  });
 
 describe("character reference helpers", () => {
   const characters = [

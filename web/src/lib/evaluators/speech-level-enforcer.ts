@@ -11,6 +11,9 @@
 import type { NovelSeed } from "@/lib/schema/novel";
 import type { ChapterBlueprint } from "@/lib/schema/planning";
 import type { Character } from "@/lib/schema/character";
+import type { DirectionDesign } from "@/lib/schema/direction";
+import { getAddressEntriesForCharacters } from "@/lib/schema/direction";
+import { getAddressHintForPair } from "@/lib/schema/character";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,6 +50,61 @@ export interface SpeechViolation {
   expectedLevel: SpeechLevel;
   /** Speech level actually detected */
   detectedLevel: SpeechLevel;
+  /** violation kind */
+  kind?: "speech_level" | "address";
+  expectedAddress?: string;
+  detectedAddress?: string;
+}
+
+
+function normalizeName(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function firstToken(value: string): string {
+  return normalizeName(value).split(/\s+/)[0] || normalizeName(value);
+}
+
+const COMMON_ADDRESS_TOKENS = [
+  '언니', '누나', '오빠', '형', '아가씨', '도련님', '전하', '폐하', '각하', '공작님', '영애',
+];
+
+function getCharacterByName(characters: Character[], name: string): Character | undefined {
+  const norm = normalizeName(name);
+  return characters.find((c) => normalizeName(c.name) === norm || firstToken(c.name) === norm || c.id === norm);
+}
+
+function getPairRule(
+  speaker: Character,
+  listener: Character,
+  design?: DirectionDesign,
+): { speechLevel?: SpeechLevel; address?: string } {
+  const explicit = getAddressHintForPair(speaker as Character & { address_hints?: Character["address_hints"] }, listener);
+  if (explicit) {
+    return {
+      speechLevel: explicit.speech_level === 'formal' ? 'hapsyo' : explicit.speech_level === 'polite' ? 'haeyo' : explicit.speech_level === 'casual' ? 'hae' : 'hae',
+      address: explicit.address,
+    };
+  }
+  if (design) {
+    const entries = getAddressEntriesForCharacters(design, [speaker.name, listener.name]);
+    const hit = entries.find((e) => e.from === speaker.name && e.to === listener.name);
+    if (hit) {
+      return {
+        speechLevel: hit.speech_level === 'formal' ? 'hapsyo' : hit.speech_level === 'polite' ? 'haeyo' : hit.speech_level === 'casual' ? 'hae' : 'hae',
+        address: hit.address,
+      };
+    }
+  }
+  return {};
+}
+
+function detectAddressMention(dialogue: string, listener: Character): string | null {
+  const candidates = [listener.name, firstToken(listener.name), ...COMMON_ADDRESS_TOKENS];
+  for (const token of candidates) {
+    if (token && dialogue.includes(token)) return token;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -205,6 +263,42 @@ function detectSentenceLevel(sent: string): SpeechLevel | null {
   }
 
   return null;
+}
+
+
+function detectSpeechLevels(dialogue: string): SpeechLevel[] {
+  const levels: SpeechLevel[] = [];
+  const cleaned = dialogue.replace(/[\s""”」』『「.!?…~]+$/g, "").trim();
+  if (cleaned.length < 2) return levels;
+  const sentences = dialogue.split(/[.!?…]+/).filter((s) => s.trim().length > 0);
+  for (const raw of sentences) {
+    const sent = raw.replace(/[\s""”」』『「]+$/g, "").trim();
+    if (sent.length < 2) continue;
+    const level = detectSentenceLevel(sent);
+    if (level) levels.push(level);
+  }
+  if (levels.length === 0) {
+    const fallback = detectSentenceLevel(cleaned);
+    if (fallback) levels.push(fallback);
+  }
+  return levels;
+}
+
+function findExplicitPairInContext(before: string, characterNames: string[]): { speaker?: string; listener?: string } {
+  const window = before.slice(-160);
+  for (const speaker of characterNames) {
+    for (const listener of characterNames) {
+      if (speaker === listener) continue;
+      const patterns = [
+        new RegExp(`${speaker}[^\n]{0,40}${listener}(?:에게|한테)[^\n]{0,40}(?:말했다|물었다|속삭였다|중얼거렸다|답했다)$`),
+        new RegExp(`${speaker}(?:이|가)?[^\n]{0,60}${listener}(?:에게|한테)`),
+      ];
+      if (patterns.some((re) => re.test(window))) {
+        return { speaker, listener };
+      }
+    }
+  }
+  return {};
 }
 
 // ---------------------------------------------------------------------------
@@ -380,6 +474,7 @@ export function detectSpeechViolations(
   seed: NovelSeed,
   chapterNumber: number,
   blueprint?: ChapterBlueprint,
+  directionDesign?: DirectionDesign,
 ): SpeechViolation[] {
   const characters = seed.characters.filter(
     (c) => c.introduction_chapter <= chapterNumber,
@@ -395,7 +490,9 @@ export function detectSpeechViolations(
     // Skip very short dialogues (interjections, etc.)
     if (dlg.innerText.trim().length < 4) continue;
 
-    const speaker = findSpeaker(text, dlg.position, characterNames);
+    const beforeContext = text.slice(Math.max(0, dlg.position - 160), dlg.position);
+    const explicitPair = findExplicitPairInContext(beforeContext, characterNames);
+    const speaker = explicitPair.speaker || findSpeaker(text, dlg.position, characterNames);
     if (!speaker) continue;
 
     const sceneChars = getSceneCharacters(
@@ -410,7 +507,7 @@ export function detectSpeechViolations(
       return char ? char.name : id;
     });
 
-    const listener = findListener(
+    const listener = explicitPair.listener || findListener(
       text,
       dlg.position,
       dlg.fullMatch.length,
@@ -420,26 +517,49 @@ export function detectSpeechViolations(
     );
     if (!listener) continue;
 
+    const speakerChar = getCharacterByName(characters, speaker);
+    const listenerChar = getCharacterByName(characters, listener);
     const speakerRank = rankMap.get(speaker) ?? "commoner";
     const listenerRank = rankMap.get(listener) ?? "commoner";
 
-    const expectedLevel = getExpectedSpeechLevel(speakerRank, listenerRank);
-    const detectedLevel = detectSpeechLevel(dlg.innerText);
+    const pairRule = speakerChar && listenerChar ? getPairRule(speakerChar, listenerChar, directionDesign) : {};
+    const expectedLevel = pairRule.speechLevel || getExpectedSpeechLevel(speakerRank, listenerRank);
+    const detectedLevels = detectSpeechLevels(dlg.innerText);
+    const detectedLevel = detectedLevels[detectedLevels.length - 1] || detectSpeechLevel(dlg.innerText);
 
-    // Only flag if we confidently detected a speech level AND it does not match
-    if (detectedLevel && detectedLevel !== expectedLevel) {
-      // Allow haeyo as acceptable when hapsyo is expected (slightly less formal but not wrong)
-      // This is a conservative choice to reduce false positives
-      if (expectedLevel === "hapsyo" && detectedLevel === "haeyo") continue;
+    const violatingLevel = detectedLevels.find((level) => {
+      if (level === expectedLevel) return false;
+      if (expectedLevel === "hapsyo" && level === "haeyo") return false;
+      return true;
+    });
 
+    if (violatingLevel) {
       violations.push({
         position: dlg.position,
         dialogueText: dlg.fullMatch,
         speaker,
         listener,
         expectedLevel,
-        detectedLevel,
+        detectedLevel: violatingLevel,
+        kind: "speech_level",
       });
+    }
+
+    if (speakerChar && listenerChar && pairRule.address) {
+      const detectedAddress = detectAddressMention(dlg.innerText, listenerChar);
+      if (detectedAddress && detectedAddress !== pairRule.address) {
+        violations.push({
+          position: dlg.position,
+          dialogueText: dlg.fullMatch,
+          speaker,
+          listener,
+          expectedLevel,
+          detectedLevel: detectedLevel || expectedLevel,
+          kind: "address",
+          expectedAddress: pairRule.address,
+          detectedAddress,
+        });
+      }
     }
   }
 
@@ -562,6 +682,18 @@ export function fixSpeechViolations(
   let result = text;
 
   for (const v of sorted) {
+    if (v.kind === "address" && v.expectedAddress && v.detectedAddress) {
+      const quoteMatch = result.slice(v.position).match(/^["“「]([^"”」]*?)["”」]/);
+      if (!quoteMatch) continue;
+      const fullMatch = quoteMatch[0];
+      const innerText = quoteMatch[1];
+      if (!innerText.includes(v.detectedAddress) || innerText.includes(v.expectedAddress)) continue;
+      const newInner = innerText.replace(v.detectedAddress, v.expectedAddress);
+      const newDialogue = fullMatch[0] + newInner + fullMatch[fullMatch.length - 1];
+      result = result.slice(0, v.position) + newDialogue + result.slice(v.position + fullMatch.length);
+      continue;
+    }
+
     const replacements = getReplacementMap(v.detectedLevel, v.expectedLevel);
     if (replacements.length === 0) continue;
 
@@ -617,8 +749,9 @@ export function enforceSpeechLevels(
   seed: NovelSeed,
   chapterNumber: number,
   blueprint?: ChapterBlueprint,
+  directionDesign?: DirectionDesign,
 ): { text: string; violations: SpeechViolation[] } {
-  const violations = detectSpeechViolations(text, seed, chapterNumber, blueprint);
+  const violations = detectSpeechViolations(text, seed, chapterNumber, blueprint, directionDesign);
   const fixedText = fixSpeechViolations(text, violations);
   return { text: fixedText, violations };
 }
