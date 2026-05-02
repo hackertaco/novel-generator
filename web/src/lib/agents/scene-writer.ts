@@ -404,11 +404,29 @@ ${lastSummary.summary.slice(0, 300)}
     ? `\n# 🔒 이미 독자가 알고 있는 사실 (재서술 금지)\n${alreadyEstablished.map((f: string) => `- ${f}`).join("\n")}\n→ 위 사실은 이전 화들에서 독자가 이미 알게 되었습니다.\n→ 캐릭터가 이걸 "다시 깨닫거나" "내면에서 재확인"하는 서술 절대 금지.\n→ 이미 안 것을 전제로 깔고 다음 단계로 나아가세요.\n`
     : "";
 
+  const newTruth = (blueprint as { new_truth?: string }).new_truth;
+  const irreversibleChange = (blueprint as { irreversible_change?: string }).irreversible_change;
+  const doNotRestate = (blueprint as { do_not_restate?: string[] }).do_not_restate;
+  const emotionTarget = (blueprint as { emotion_target?: string }).emotion_target;
+  const transitionContractSection = sceneIndex === 0
+    ? `
+# 이번 화의 전이 목표
+- 새로 확실해지는 사실: ${newTruth || "없음"}
+- 되돌릴 수 없는 변화: ${irreversibleChange || "없음"}
+- 다시 설명 금지: ${(doNotRestate && doNotRestate.length > 0) ? doNotRestate.join(", ") : "없음"}
+- 감정 목표: ${emotionTarget || "없음"}
+→ do_not_restate에 있는 내용은 내면 독백/설명문/대사로 다시 정리하지 마세요.
+→ new_truth는 한 번 명확히 도달하면 끝입니다. 뒤에서 같은 의미를 다시 요약하지 마세요.
+→ irreversible_change가 실제로 일어난 상태로 화를 끝내세요.
+→ emotion_target은 설명하지 말고 장면의 선택, 몸 반응, 대치로 느끼게 하세요.
+`
+    : "";
+
   // Removed rules now enforced by pipeline stages:
   //   rule-guard        — 어미 반복(fixEndingRepeat), 주어 반복(fixSentenceStartRepeat), 대사 태그 반복
   //   scene-validator   — 대사 비율(30% threshold), Show/Tell 패턴 감지
   //   repetition-detector — 표현/묘사 반복, 구조적 반복
-  parts.push(`${timeSpanSection}${alreadyEstablishedSection}# ${sceneLabel} 지시
+  parts.push(`${timeSpanSection}${alreadyEstablishedSection}${transitionContractSection}# ${sceneLabel} 지시
 
 **목적**: ${scene.purpose}
 **유형**: ${scene.type}
@@ -419,15 +437,17 @@ ${mustRevealSection}${dialogueTurnsSection}${correctionRule}
 - 이 단계는 **장면을 앞으로 밀어붙이는 초안 작성 단계**입니다.
 - 반복 제거와 문장 polish는 후단 편집이 도와줄 수 있지만, **구조적 전진**(새 행동, 새 선택, 새 충돌)은 여기서 이미 만들어야 합니다.
 - 후단 편집이 같은 사실을 다시 설명해 줄 것이라고 기대하지 말고, 초안부터 reveal 뒤에 행동/대치/위험 증가가 오게 쓰세요.
+- reveal 직후에 "지금은 …", "중요한 건 …" 식의 정리 문단으로 의미를 다시 요약하지 마세요. 독자가 이미 알게 된 결론은 행동으로만 이어가세요.
 
 ## 작성 규칙
 1. 이 씬의 목적에만 집중하세요. 다른 사건을 끌어오지 마세요.
 2. 물리적 공간에 장면을 고정하세요: 장소, 시간대, 날씨/조명을 첫 2문장 안에 설정하세요.
 3. 갈등은 이 씬에서 해결하지 마세요. 더 꼬이게 만드세요.
 4. 이 씬에서 핵심 사실이 한 번 드러났다면, 뒤 문단은 그 사실의 재설명이 아니라 **행동/준비/대치/위험 증가**로 나아가세요.
-5. 제한된 단서만으로 정답을 바로 확신하지 마세요. 추론이 필요하면 먼저 의심, 반쯤 맞는 가설, 망설임 중 하나를 거친 뒤에 결론에 닿게 하세요.
-6. 같은 결심을 두 번 선언하지 마세요. 결심이 이미 나온 뒤에는 다음 단계(숨기기, 도망 준비, 충돌, 방해, 선택 비용)를 보여주세요.
-${sceneIndex === blueprint.scenes.length - 1 ? "7. 마지막 씬이므로 다음 화가 궁금해지는 문장으로 끝내세요. 반전이나 새로운 위기를 던지세요." : ""}
+5. reveal 뒤에 "이제는", "중요한 건", "지금은"처럼 의미를 다시 풀어쓰는 recap 문단을 쓰지 마세요. 같은 판단은 한 번만 말하고, 그다음엔 움직이세요.
+6. 제한된 단서만으로 정답을 바로 확신하지 마세요. 추론이 필요하면 먼저 의심, 반쯤 맞는 가설, 망설임 중 하나를 거친 뒤에 결론에 닿게 하세요.
+7. 같은 결심을 두 번 선언하지 마세요. 결심이 이미 나온 뒤에는 다음 단계(숨기기, 도망 준비, 충돌, 방해, 선택 비용)를 보여주세요.
+${sceneIndex === blueprint.scenes.length - 1 ? "8. 마지막 씬이므로 다음 화가 궁금해지는 문장으로 끝내세요. 반전이나 새로운 위기를 던지세요." : ""}
 ${threadReminderSection}
 출력: 씬 본문만 (메타 정보 없이)`);
 

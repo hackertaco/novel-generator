@@ -52,10 +52,18 @@ describe("ChapterBlueprint", () => {
       characters_involved: ["mc", "companion_1"],
       tension_level: 7,
       foreshadowing_actions: [{ id: "fs_1", action: "hint" }],
+      new_truth: "보스가 형의 목소리를 흉내 낸다는 사실",
+      irreversible_change: "이준혁은 보스를 직접 추적하기로 결심한다",
+      do_not_restate: ["던전이 위험하다는 사실"],
+      emotion_target: "불안보다 집착이 앞서는 긴장",
     });
     expect(blueprint.scenes).toHaveLength(3);
     expect(blueprint.target_word_count).toBe(3000);
     expect(blueprint.role_in_arc).toBe("rising_action");
+    expect(blueprint.new_truth).toBe("보스가 형의 목소리를 흉내 낸다는 사실");
+    expect(blueprint.irreversible_change).toBe("이준혁은 보스를 직접 추적하기로 결심한다");
+    expect(blueprint.do_not_restate).toEqual(["던전이 위험하다는 사실"]);
+    expect(blueprint.emotion_target).toBe("불안보다 집착이 앞서는 긴장");
   });
 
   it("computes target_word_count from scenes if not provided", () => {
@@ -70,6 +78,7 @@ describe("ChapterBlueprint", () => {
       ],
     });
     expect(blueprint.target_word_count).toBe(2000);
+    expect(blueprint.do_not_restate).toBeUndefined();
   });
 });
 

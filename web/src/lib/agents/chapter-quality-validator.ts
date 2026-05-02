@@ -8,7 +8,7 @@ export interface ChapterQualityIssue {
 }
 
 export interface ChapterQualityDetectionContext {
-  blueprint?: Pick<ChapterBlueprint, "one_liner" | "key_points" | "already_established" | "characters_involved" | "scenes">;
+  blueprint?: Pick<ChapterBlueprint, "one_liner" | "key_points" | "already_established" | "characters_involved" | "scenes" | "new_truth" | "do_not_restate">;
   seedCharacterNames?: NovelSeed["characters"][number]["name"][];
 }
 
@@ -18,6 +18,7 @@ interface DetectorLexicon {
   evidenceMarkers: string[];
   certaintyMarkers: string[];
   hedgeMarkers: string[];
+  recapMarkers: string[];
   anchorTokens: Set<string>;
 }
 
@@ -53,6 +54,11 @@ const GENERIC_CERTAINTY_MARKERS = [
 
 const GENERIC_HEDGE_MARKERS = [
   "아마", "어쩌면", "일지도", "아닐지도", "가능성", "짐작", "추측", "확실하진",
+];
+
+const GENERIC_RECAP_MARKERS = [
+  "지금은", "이번엔", "이번에는", "중요한 건", "다만", "적어도", "결국", "이제", "그래도", "그러니",
+  "알 수 없었다", "생각할 때가 아니었다", "할 때가 아니었다", "확인할 것", "감출 것",
 ];
 
 interface WindowSignature {
@@ -99,6 +105,8 @@ function buildLexicon(context?: ChapterQualityDetectionContext): DetectorLexicon
     blueprint?.one_liner || "",
     ...(blueprint?.key_points || []),
     ...(blueprint?.already_established || []),
+    ...(blueprint?.do_not_restate || []),
+    ...(blueprint?.new_truth ? [blueprint.new_truth] : []),
     ...sceneTexts,
     ...(context?.seedCharacterNames || []),
   ].join("\n");
@@ -110,6 +118,7 @@ function buildLexicon(context?: ChapterQualityDetectionContext): DetectorLexicon
     evidenceMarkers: dedupe([...GENERIC_EVIDENCE_MARKERS, ...dynamicTokens]),
     certaintyMarkers: GENERIC_CERTAINTY_MARKERS,
     hedgeMarkers: GENERIC_HEDGE_MARKERS,
+    recapMarkers: GENERIC_RECAP_MARKERS,
     anchorTokens: new Set(dynamicTokens),
   };
 }
@@ -166,8 +175,11 @@ function detectRepeatedRevealPayload(paragraphs: string[], lexicon: DetectorLexi
         hasEnoughSharedPayload &&
         Boolean(windows[i]?.hasNumericAnchor) &&
         Boolean(windows[j]?.hasNumericAnchor);
+      const recapLikeLaterWindow =
+        hasAnyMarker(windows[j]?.text || "", lexicon.recapMarkers) &&
+        (sharedTokens.length >= 2 || sharedAnchorCount >= 1);
 
-      if (repeatedDecisionPayload || repeatedTimedReveal) {
+      if (repeatedDecisionPayload || repeatedTimedReveal || recapLikeLaterWindow) {
         issues.push({
           type: "repeated_reveal_payload",
           severity: "error",
@@ -265,7 +277,8 @@ export function buildChapterQualityRepairPrompt(
     guidance.push(`### 같은 reveal/결심 반복 제거
 - 앞부분에서 이미 드러난 사실(숫자, 결론, 도주 결정)을 뒤에서 다시 긴 설명으로 반복하지 마세요.
 - 뒤 블록은 재설명 대신 준비, 은폐, 선택 비용, 즉시 닥친 외부 위험으로 전진시키세요.
-- 같은 숫자/결심 문장을 다시 쓰기보다, 그 사실 때문에 지금 무엇을 하는지로 바꾸세요.`);
+- 같은 숫자/결심 문장을 다시 쓰기보다, 그 사실 때문에 지금 무엇을 하는지로 바꾸세요.
+- "지금은 …", "이번에는 …", "중요한 건 …"처럼 독자에게 의미를 다시 정리하는 recap 문단은 과감히 삭제하거나 행동 문단으로 바꾸세요.`);
   }
 
   if (issues.some((issue) => issue.type === "duplicate_beat_restart")) {

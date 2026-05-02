@@ -130,6 +130,18 @@ export const ChapterBlueprintSchema = z
       "Writer는 이 사실을 '재발견/재설명'하지 않아야 함. " +
       "FactLedger로부터 자동 주입 가능."
     ),
+    new_truth: z.string().optional().describe(
+      "이 화가 끝났을 때 독자가 새롭게 확실히 알게 되는 핵심 사실 1개"
+    ),
+    irreversible_change: z.string().optional().describe(
+      "이 화에서 발생하는 되돌릴 수 없는 변화 1개"
+    ),
+    do_not_restate: z.array(z.string()).optional().describe(
+      "이번 화에서 다시 설명하거나 재발견하면 안 되는 사실들"
+    ),
+    emotion_target: z.string().optional().describe(
+      "이 화에서 독자가 가장 강하게 느껴야 하는 감정 방향 1개"
+    ),
   })
   .transform((data) => ({
     ...data,

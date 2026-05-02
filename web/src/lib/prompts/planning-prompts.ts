@@ -415,6 +415,16 @@ ${targetChapter ?? arc.start_chapter}화의 블루프린트를 1개만 작성하
    - 위 "이전 화에서 터진 사건"이 있다면 핵심만 추려 담으세요.
    - 예: \`["세라핀이 자신의 수명 365일을 알았다","베네딕트가 진실을 은폐함","레온이 도주 계획표를 입수했다"]\`
    - **Writer는 이 사실을 캐릭터 내면에서 다시 깨닫거나 재설명하지 않습니다.** 이미 안 걸 전제로 다음으로 나아가야 함.
+16. **전이 설계 (반드시 채우기)**:
+   - **new_truth**: 이 화가 끝났을 때 독자가 새롭게 확실히 알게 되는 핵심 사실 1개
+   - **irreversible_change**: 이 화에서 되돌릴 수 없게 바뀌는 사건/관계/결심 1개
+   - **do_not_restate**: 이번 화에서 다시 설명하거나 재발견하면 안 되는 사실들
+   - **emotion_target**: 이 화에서 독자가 가장 강하게 느껴야 하는 감정 방향 1개
+   - 규칙:
+     - \`new_truth\`와 \`irreversible_change\`는 서로 다를 수 있지만, 둘 다 비어 있으면 안 됩니다.
+     - \`do_not_restate\`에는 이전 화에서 이미 독자가 안 사실만 넣으세요.
+     - \`emotion_target\`은 분위기 설명이 아니라 독서 체감 감정의 방향이어야 합니다.
+     - 이 4개는 장식이 아닙니다. writer가 실제로 따라야 하는 설계 계약입니다.
 
 씬 타입: action, dialogue, introspection, exposition, hook, flashback, transition
 
