@@ -154,6 +154,12 @@ export const ChapterBlueprintSchema = z
     romance_thread_advances: z.boolean().optional().describe(
       "이 화가 로맨스 스레드를 명시적으로 전진시키는지 여부"
     ),
+    romance_counterpart: z.string().optional().describe(
+      "이번 화의 로맨스 비트가 향하는 상대 인물 id 또는 이름"
+    ),
+    romance_beat_type: z.enum(["gaze_shift", "protection", "priority_shift", "jealousy", "shared_secret", "public_favor", "distance_change", "verbal_spark"]).optional().describe(
+      "로맨스 비트의 종류"
+    ),
   })
   .transform((data) => ({
     ...data,
