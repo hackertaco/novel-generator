@@ -459,6 +459,11 @@ ${targetChapter ?? arc.start_chapter}화의 블루프린트를 1개만 작성하
      - sensory_anchors는 물리 감각과 감정 압박을 연결해야 합니다. (예: 손끝의 냉기, 잔 표면의 떨림)
      - unspoken_subtext는 대사로 직접 해설하지 말고, 행동·침묵·우선순위 변화로 드러나야 합니다.
      - unresolved_tension은 공허한 떡밥이 아니라 이미 형성된 압력을 다음 화로 넘기는 용도여야 합니다.
+19. **초중반 추론 상한선 (특히 1~5화)**:
+   - 단서가 시선, 향, 타이밍, 짧은 손짓, 우연한 동시 등장 수준이라면 **공모/배신을 사실처럼 확정하지 마세요**.
+   - 이 구간의 new_truth는 '의심할 만하다', '연결 가능성이 보인다', '그를 경계해야 한다' 수준까지가 적절합니다.
+   - irreversible_change도 '감시 대상으로 삼는다', '더 확인하기로 한다'처럼 행동 결심으로 두고, 아직 증거 없는 conspiracy closure로 닫지 마세요.
+   - 독자가 아직 추론 중이어야 하는 회차에서는 relationship_shift 역시 결론보다 긴장 증가 쪽으로 설계하세요.
 
 씬 타입: action, dialogue, introspection, exposition, hook, flashback, transition
 
