@@ -425,6 +425,11 @@ ${lastSummary.summary.slice(0, 300)}
   const relationshipShift = (blueprint as { relationship_shift?: string }).relationship_shift;
   const intimacyDelta = (blueprint as { intimacy_delta?: number }).intimacy_delta;
   const romanceThreadAdvances = (blueprint as { romance_thread_advances?: boolean }).romance_thread_advances;
+  const interiorityTarget = (blueprint as { interiority_target?: number }).interiority_target;
+  const unspokenSubtext = (blueprint as { unspoken_subtext?: string }).unspoken_subtext;
+  const sensoryAnchors = (blueprint as { sensory_anchors?: string[] }).sensory_anchors;
+  const unresolvedTension = (blueprint as { unresolved_tension?: string }).unresolved_tension;
+  const romanceCore = seed.romance_core;
   const transitionContractSection = sceneIndex === 0
     ? `
 # 이번 화의 전이 목표
@@ -448,6 +453,15 @@ ${lastSummary.summary.slice(0, 300)}
 → romance_presence_mode가 direct가 아니라면, 실제 대면 대신 회상/전갈/소문/상징 물건/사회적 압박으로도 독자가 그 상대를 느끼게 하세요.
 → relationship_shift가 있다면 화가 끝날 때 두 사람의 관계가 실제로 한 칸 이동한 상태여야 합니다.
 → 로맨스 판타지에서는 romance_beat를 “설정상 약혼/관계가 있다” 수준으로 처리하지 말고, 독자가 장면에서 체감할 수 있는 접촉점으로 바꾸세요.
+- 내면 밀착도: ${typeof interiorityTarget === "number" ? interiorityTarget : "없음"}
+- 말하지 않는 속뜻: ${unspokenSubtext || "없음"}
+- 감각 단서: ${(sensoryAnchors && sensoryAnchors.length > 0) ? sensoryAnchors.join(", ") : "없음"}
+- 다음 화로 넘길 미해결 긴장: ${unresolvedTension || "없음"}
+${romanceCore ? `- 로맨스 장르 약속: ${romanceCore.primary_pair.join(" ↔ ")} / ${romanceCore.mode} / 장애물: ${romanceCore.obstacle} / 약속: ${romanceCore.promise}` : ""}
+→ interiority_target이 있다면 사건 설명보다 시점 인물의 지각, 망설임, 몸 반응, 편향된 해석이 먼저 와야 합니다.
+→ unspoken_subtext는 서술자가 해설하지 말고, 시선이 머무는 시간·말을 삼키는 침묵·우선순위의 어긋남으로 느끼게 하세요.
+→ sensory_anchors가 있다면 같은 감각 단서가 장면의 감정 압력과 연결되어 반복 체감돼야 합니다.
+→ unresolved_tension이 있다면 이 화에서 완전히 닫지 말고, 이미 형성된 압력을 선명한 상태로 남기세요.
 `
     : "";
 

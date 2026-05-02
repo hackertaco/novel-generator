@@ -36,6 +36,7 @@ export async function generateStoryThreads(seed: NovelSeed): Promise<{
 제목: ${seed.title}
 로그라인: ${seed.logline}
 장르: ${seed.world.genre}
+${seed.romance_core ? `로맨스 장르 약속: ${seed.romance_core.primary_pair.join(" ↔ ")} / ${seed.romance_core.mode} / 장애물: ${seed.romance_core.obstacle} / 보상: ${seed.romance_core.promise}` : ""}
 
 아웃라인:
 ${outlinesSummary}
@@ -90,11 +91,14 @@ JSON으로 출력:
     ];
     const genreText = `${seed.world.genre} ${seed.world.sub_genre}`.toLowerCase();
     if (genreText.includes("로맨스") || genreText.includes("romance")) {
+      const romanceDescription = seed.romance_core
+        ? `${seed.romance_core.primary_pair.join("과 ")} 사이의 ${seed.romance_core.mode} 감정선 — 장애물: ${seed.romance_core.obstacle} / 약속: ${seed.romance_core.promise}`
+        : "주요 인물 사이의 감정선과 관계 전환";
       threads.push({
         id: "romance",
         name: "로맨스",
         type: "relationship",
-        description: "주요 인물 사이의 감정선과 관계 전환",
+        description: romanceDescription,
         relations: [{ target: "main", relation: "conflicts_with", description: "로맨스가 메인 갈등과 얽혀 진행됨" }],
         reveal_timeline: [],
       });

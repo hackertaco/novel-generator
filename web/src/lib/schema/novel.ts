@@ -61,6 +61,15 @@ export const StoryThreadSchema = z.object({
 });
 export type StoryThread = z.infer<typeof StoryThreadSchema>;
 
+export const RomanceCoreSchema = z.object({
+  primary_pair: z.array(z.string()).length(2).describe("메인 로맨스 축을 이루는 인물 2명"),
+  mode: z.string().describe("로맨스 모드 (예: dangerous_courtship, slow_burn, enemies_to_lovers)"),
+  obstacle: z.string().describe("두 사람이 쉽게 이어질 수 없는 핵심 장애물"),
+  promise: z.string().describe("독자가 기대해야 하는 로맨스 감정/관계 보상"),
+});
+
+export type RomanceCore = z.infer<typeof RomanceCoreSchema>;
+
 export const PlotPointSchema = z.union([
   z.string(), // backward compat: plain string
   z.object({
@@ -203,6 +212,7 @@ export const NovelSeedSchema = z.object({
 
   // Story threads (main plot + sub plots)
   story_threads: z.array(StoryThreadSchema).default([]).describe("메인 스레드 + 서브 스레드. 각 화는 최소 1개 스레드를 진전시켜야 함"),
+  romance_core: RomanceCoreSchema.optional().describe("로맨스 판타지일 때 메인 로맨스 축의 장르 약속"),
 
   // Plot structure
   arcs: z.array(PlotArcSchema).default([]),

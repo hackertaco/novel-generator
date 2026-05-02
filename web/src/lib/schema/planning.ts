@@ -163,6 +163,18 @@ export const ChapterBlueprintSchema = z
     romance_presence_mode: z.enum(["memory", "rumor", "object", "message", "social_pressure", "direct"]).optional().describe(
       "로맨스 상대가 이번 화에서 어떻게 체감되는지: 회상, 소문, 물건, 전갈, 사회적 압박, 직접 등장"
     ),
+    interiority_target: z.number().min(0).max(1).optional().describe(
+      "이 화가 시점 인물의 내면/지각에 얼마나 밀착해야 하는지 (0~1)"
+    ),
+    unspoken_subtext: z.string().optional().describe(
+      "시점 인물이 직접 인정하거나 말하지 않지만 독자가 느껴야 하는 감정/의도"
+    ),
+    sensory_anchors: z.array(z.string()).optional().describe(
+      "이 화에서 반복적으로 체감되어야 하는 감각 단서 1~3개"
+    ),
+    unresolved_tension: z.string().optional().describe(
+      "이 화 끝에 일부러 닫지 않고 남겨야 하는 감정/관계/질문"
+    ),
   })
   .transform((data) => ({
     ...data,

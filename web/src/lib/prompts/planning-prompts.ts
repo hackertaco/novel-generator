@@ -239,6 +239,14 @@ ${(seed.story_threads || []).map((t) => {
   return `- ${t.type === "main" ? "🔴" : "🔵"} ${t.name}: ${t.description}${relStr ? "\n" + relStr : ""}`;
 }).join("\n") || "미정"}
 
+## 로맨스 장르 약속
+${seed.romance_core
+  ? `- 메인 쌍: ${seed.romance_core.primary_pair.join(" ↔ ")}
+- 모드: ${seed.romance_core.mode}
+- 장애물: ${seed.romance_core.obstacle}
+- 독자 약속: ${seed.romance_core.promise}`
+  : "(명시된 romance_core 없음 — 장르/스레드 문맥에 맞춰 추정)"}
+
 ## 이 화에서의 감정/비밀 공개 상태
 ${(() => {
   const chapterNum = targetChapter ?? arc.start_chapter;
@@ -441,6 +449,16 @@ ${targetChapter ?? arc.start_chapter}화의 블루프린트를 1개만 작성하
      - romance_presence_mode가 direct가 아닐 경우에도, 그 상대의 흔적(기억, 전갈, 물건, 공적 압박, 소문)이 장면에 남아야 합니다.
      - relationship_shift가 있다면, scene 목적이나 key_points 중 최소 하나에 반영되어야 합니다.
      - \`romance_thread_advances=false\`라면 왜 이번 화에서 로맨스를 늦추는지 다른 메인 payoff가 더 강해야 합니다.
+18. **POV / 미세 긴장 계약**:
+   - **interiority_target**: 이 화가 시점 인물의 내면과 지각에 얼마나 밀착해야 하는지 (0~1)
+   - **unspoken_subtext**: 시점 인물이 직접 말하거나 인정하지 않지만 독자가 느껴야 하는 감정/의도 1개
+   - **sensory_anchors**: 이 화에서 반복적으로 체감되어야 하는 감각 단서 1~3개
+   - **unresolved_tension**: 이 화 끝에 일부러 닫지 않고 남겨야 하는 감정/관계/질문 1개
+   - 규칙:
+     - romance/관계 긴장은 사건 요약이 아니라 시점 인물의 지각 편향 속에서 느껴져야 합니다.
+     - sensory_anchors는 물리 감각과 감정 압박을 연결해야 합니다. (예: 손끝의 냉기, 잔 표면의 떨림)
+     - unspoken_subtext는 대사로 직접 해설하지 말고, 행동·침묵·우선순위 변화로 드러나야 합니다.
+     - unresolved_tension은 공허한 떡밥이 아니라 이미 형성된 압력을 다음 화로 넘기는 용도여야 합니다.
 
 씬 타입: action, dialogue, introspection, exposition, hook, flashback, transition
 

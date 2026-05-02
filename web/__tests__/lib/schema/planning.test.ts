@@ -63,6 +63,10 @@ describe("ChapterBlueprint", () => {
       relationship_shift: "경계에서 미묘한 신뢰로 이동",
       intimacy_delta: 1,
       romance_thread_advances: true,
+      interiority_target: 0.65,
+      unspoken_subtext: "강서연의 편들기가 예상보다 오래 남는다",
+      sensory_anchors: ["젖은 석재 냄새", "손끝의 냉기"],
+      unresolved_tension: "강서연이 왜 그를 먼저 감쌌는지 확신할 수 없다",
     });
     expect(blueprint.scenes).toHaveLength(3);
     expect(blueprint.target_word_count).toBe(3000);
@@ -78,6 +82,10 @@ describe("ChapterBlueprint", () => {
     expect(blueprint.relationship_shift).toBe("경계에서 미묘한 신뢰로 이동");
     expect(blueprint.intimacy_delta).toBe(1);
     expect(blueprint.romance_thread_advances).toBe(true);
+    expect(blueprint.interiority_target).toBe(0.65);
+    expect(blueprint.unspoken_subtext).toBe("강서연의 편들기가 예상보다 오래 남는다");
+    expect(blueprint.sensory_anchors).toEqual(["젖은 석재 냄새", "손끝의 냉기"]);
+    expect(blueprint.unresolved_tension).toBe("강서연이 왜 그를 먼저 감쌌는지 확신할 수 없다");
   });
 
   it("computes target_word_count from scenes if not provided", () => {

@@ -23,6 +23,12 @@ function createTestSeed() {
       factions: {},
       rules: ["규칙 1"],
     },
+    romance_core: {
+      primary_pair: ["mc", "ally"],
+      mode: "dangerous_courtship",
+      obstacle: "서로를 완전히 믿을 수 없는 상황",
+      promise: "경계 속에서도 점점 서로를 신경 쓰게 된다",
+    },
     characters: [
       {
         id: "mc",
@@ -108,6 +114,7 @@ describe("NovelSeedSchema", () => {
     expect(result.chapter_outlines).toHaveLength(1);
     expect(result.foreshadowing).toHaveLength(1);
     expect(result.style.pov).toBe("1인칭");
+    expect(result.romance_core?.mode).toBe("dangerous_courtship");
   });
 });
 
