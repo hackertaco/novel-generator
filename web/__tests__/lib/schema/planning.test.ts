@@ -59,6 +59,7 @@ describe("ChapterBlueprint", () => {
       romance_beat: "위험한 상황에서 무심한 편들기",
       romance_counterpart: "companion_1",
       romance_beat_type: "protection",
+      romance_presence_mode: "message",
       relationship_shift: "경계에서 미묘한 신뢰로 이동",
       intimacy_delta: 1,
       romance_thread_advances: true,
@@ -73,6 +74,7 @@ describe("ChapterBlueprint", () => {
     expect(blueprint.romance_beat).toBe("위험한 상황에서 무심한 편들기");
     expect(blueprint.romance_counterpart).toBe("companion_1");
     expect(blueprint.romance_beat_type).toBe("protection");
+    expect(blueprint.romance_presence_mode).toBe("message");
     expect(blueprint.relationship_shift).toBe("경계에서 미묘한 신뢰로 이동");
     expect(blueprint.intimacy_delta).toBe(1);
     expect(blueprint.romance_thread_advances).toBe(true);

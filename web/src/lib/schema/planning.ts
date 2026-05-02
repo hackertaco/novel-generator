@@ -160,6 +160,9 @@ export const ChapterBlueprintSchema = z
     romance_beat_type: z.enum(["gaze_shift", "protection", "priority_shift", "jealousy", "shared_secret", "public_favor", "distance_change", "verbal_spark"]).optional().describe(
       "로맨스 비트의 종류"
     ),
+    romance_presence_mode: z.enum(["memory", "rumor", "object", "message", "social_pressure", "direct"]).optional().describe(
+      "로맨스 상대가 이번 화에서 어떻게 체감되는지: 회상, 소문, 물건, 전갈, 사회적 압박, 직접 등장"
+    ),
   })
   .transform((data) => ({
     ...data,

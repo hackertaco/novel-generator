@@ -429,6 +429,7 @@ ${targetChapter ?? arc.start_chapter}화의 블루프린트를 1개만 작성하
    - **romance_beat**: 이 화에서 독자가 실제로 체감할 로맨스 비트 1개 (예: 편들기, 보호, 시선 변화, 질투, 비밀 공유, 공적인 자리에서의 특별 취급)
    - **romance_counterpart**: 그 비트가 향하는 상대 인물 id 또는 이름 1명
    - **romance_beat_type**: gaze_shift / protection / priority_shift / jealousy / shared_secret / public_favor / distance_change / verbal_spark 중 1개
+   - **romance_presence_mode**: memory / rumor / object / message / social_pressure / direct 중 1개
    - **relationship_shift**: 이 화 전후로 관계가 어떻게 바뀌는지 1개
    - **intimacy_delta**: 정서적 거리 변화량 (-2~+2)
    - **romance_thread_advances**: 이 화가 로맨스 스레드를 실제로 전진시키는지 true/false
@@ -437,6 +438,7 @@ ${targetChapter ?? arc.start_chapter}화의 블루프린트를 1개만 작성하
      - **1~3화에는 적어도 한 번 이상 명시적 romance_beat가 있어야 합니다.** 단순 약혼 설정 언급만으로는 부족합니다.
      - romance_beat는 감정 설명이 아니라 장면 속 행동/거리/우선순위 변화로 표현 가능한 것이어야 합니다.
      - romance_counterpart가 비어 있으면 안 됩니다. 독자가 누구와의 긴장인지 알아야 합니다.
+     - romance_presence_mode가 direct가 아닐 경우에도, 그 상대의 흔적(기억, 전갈, 물건, 공적 압박, 소문)이 장면에 남아야 합니다.
      - relationship_shift가 있다면, scene 목적이나 key_points 중 최소 하나에 반영되어야 합니다.
      - \`romance_thread_advances=false\`라면 왜 이번 화에서 로맨스를 늦추는지 다른 메인 payoff가 더 강해야 합니다.
 
