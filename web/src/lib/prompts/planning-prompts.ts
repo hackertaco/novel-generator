@@ -425,6 +425,17 @@ ${targetChapter ?? arc.start_chapter}화의 블루프린트를 1개만 작성하
      - \`do_not_restate\`에는 이전 화에서 이미 독자가 안 사실만 넣으세요.
      - \`emotion_target\`은 분위기 설명이 아니라 독서 체감 감정의 방향이어야 합니다.
      - 이 4개는 장식이 아닙니다. writer가 실제로 따라야 하는 설계 계약입니다.
+17. **로맨스 진행 계약 (로맨스 판타지면 사실상 필수)**:
+   - **romance_beat**: 이 화에서 독자가 실제로 체감할 로맨스 비트 1개 (예: 편들기, 보호, 시선 변화, 질투, 비밀 공유, 공적인 자리에서의 특별 취급)
+   - **relationship_shift**: 이 화 전후로 관계가 어떻게 바뀌는지 1개
+   - **intimacy_delta**: 정서적 거리 변화량 (-2~+2)
+   - **romance_thread_advances**: 이 화가 로맨스 스레드를 실제로 전진시키는지 true/false
+   - 규칙:
+     - 로맨스 판타지에서는 로맨스 스레드가 3화 이상 정체되면 안 됩니다.
+     - **1~3화에는 적어도 한 번 이상 명시적 romance_beat가 있어야 합니다.** 단순 약혼 설정 언급만으로는 부족합니다.
+     - romance_beat는 감정 설명이 아니라 장면 속 행동/거리/우선순위 변화로 표현 가능한 것이어야 합니다.
+     - relationship_shift가 있다면, scene 목적이나 key_points 중 최소 하나에 반영되어야 합니다.
+     - \`romance_thread_advances=false\`라면 왜 이번 화에서 로맨스를 늦추는지 다른 메인 payoff가 더 강해야 합니다.
 
 씬 타입: action, dialogue, introspection, exposition, hook, flashback, transition
 

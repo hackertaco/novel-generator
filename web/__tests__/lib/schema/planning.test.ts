@@ -56,6 +56,10 @@ describe("ChapterBlueprint", () => {
       irreversible_change: "이준혁은 보스를 직접 추적하기로 결심한다",
       do_not_restate: ["던전이 위험하다는 사실"],
       emotion_target: "불안보다 집착이 앞서는 긴장",
+      romance_beat: "위험한 상황에서 무심한 편들기",
+      relationship_shift: "경계에서 미묘한 신뢰로 이동",
+      intimacy_delta: 1,
+      romance_thread_advances: true,
     });
     expect(blueprint.scenes).toHaveLength(3);
     expect(blueprint.target_word_count).toBe(3000);
@@ -64,6 +68,10 @@ describe("ChapterBlueprint", () => {
     expect(blueprint.irreversible_change).toBe("이준혁은 보스를 직접 추적하기로 결심한다");
     expect(blueprint.do_not_restate).toEqual(["던전이 위험하다는 사실"]);
     expect(blueprint.emotion_target).toBe("불안보다 집착이 앞서는 긴장");
+    expect(blueprint.romance_beat).toBe("위험한 상황에서 무심한 편들기");
+    expect(blueprint.relationship_shift).toBe("경계에서 미묘한 신뢰로 이동");
+    expect(blueprint.intimacy_delta).toBe(1);
+    expect(blueprint.romance_thread_advances).toBe(true);
   });
 
   it("computes target_word_count from scenes if not provided", () => {

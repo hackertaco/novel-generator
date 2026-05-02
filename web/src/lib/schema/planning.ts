@@ -142,6 +142,18 @@ export const ChapterBlueprintSchema = z
     emotion_target: z.string().optional().describe(
       "이 화에서 독자가 가장 강하게 느껴야 하는 감정 방향 1개"
     ),
+    romance_beat: z.string().optional().describe(
+      "이 화에서 반드시 체감되어야 하는 로맨스 비트 1개 (예: 편들기, 시선 변화, 질투, 비밀 공유)"
+    ),
+    relationship_shift: z.string().optional().describe(
+      "이 화에서 두 인물 사이 관계가 어떻게 바뀌는지 1개 (예: 경계 → 미묘한 신뢰)"
+    ),
+    intimacy_delta: z.number().int().min(-2).max(2).optional().describe(
+      "이 화가 두 인물 사이 정서적 거리감에 주는 변화량 (-2~+2)"
+    ),
+    romance_thread_advances: z.boolean().optional().describe(
+      "이 화가 로맨스 스레드를 명시적으로 전진시키는지 여부"
+    ),
   })
   .transform((data) => ({
     ...data,

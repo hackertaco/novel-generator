@@ -111,8 +111,24 @@ describe("NovelSeedSchema", () => {
   });
 });
 
-describe("StyleGuideSchema", () => {
-  it("has correct Korean defaults", () => {
+
+  it("parses relationship-type story threads", () => {
+    const data = createTestSeed() as ReturnType<typeof createTestSeed> & { story_threads?: unknown[] };
+    data.story_threads = [
+      {
+        id: "romance",
+        name: "로맨스",
+        type: "relationship",
+        description: "두 인물 사이의 감정선",
+        relations: [],
+        reveal_timeline: [],
+      },
+    ];
+    const result = NovelSeedSchema.parse(data);
+    expect(result.story_threads[0].type).toBe("relationship");
+  });
+
+describe("StyleGuideSchema", () => {  it("has correct Korean defaults", () => {
     const result = StyleGuideSchema.parse({});
 
     expect(result.max_paragraph_length).toBe(3);

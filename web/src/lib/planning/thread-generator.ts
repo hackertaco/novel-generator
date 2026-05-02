@@ -42,6 +42,7 @@ ${outlinesSummary}
 
 ## 지시사항
 1. 메인 스레드 1개 + 서브 스레드 2~3개를 정의하세요.
+1-1. 장르가 로맨스/로맨스 판타지 계열이면 romance 또는 relationship 타입 스레드를 최소 1개 포함하세요.
 2. 스레드 간 관계를 정의하세요 (feeds_into, conflicts_with, blocked_by, reveals).
 3. 각 화(chapter_number)가 어떤 스레드를 진전시키는지 매핑하세요.
 
@@ -84,10 +85,22 @@ JSON으로 출력:
     };
   } catch {
     // Fallback: create minimal threads from logline
+    const threads: StoryThread[] = [
+      { id: "main", name: seed.logline.slice(0, 30), type: "main", description: seed.logline, relations: [], reveal_timeline: [] },
+    ];
+    const genreText = `${seed.world.genre} ${seed.world.sub_genre}`.toLowerCase();
+    if (genreText.includes("로맨스") || genreText.includes("romance")) {
+      threads.push({
+        id: "romance",
+        name: "로맨스",
+        type: "relationship",
+        description: "주요 인물 사이의 감정선과 관계 전환",
+        relations: [{ target: "main", relation: "conflicts_with", description: "로맨스가 메인 갈등과 얽혀 진행됨" }],
+        reveal_timeline: [],
+      });
+    }
     return {
-      threads: [
-        { id: "main", name: seed.logline.slice(0, 30), type: "main", description: seed.logline, relations: [], reveal_timeline: [] },
-      ],
+      threads,
       chapterThreadMap: {},
     };
   }

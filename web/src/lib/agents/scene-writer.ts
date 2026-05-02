@@ -418,6 +418,10 @@ ${lastSummary.summary.slice(0, 300)}
   const irreversibleChange = (blueprint as { irreversible_change?: string }).irreversible_change;
   const doNotRestate = (blueprint as { do_not_restate?: string[] }).do_not_restate;
   const emotionTarget = (blueprint as { emotion_target?: string }).emotion_target;
+  const romanceBeat = (blueprint as { romance_beat?: string }).romance_beat;
+  const relationshipShift = (blueprint as { relationship_shift?: string }).relationship_shift;
+  const intimacyDelta = (blueprint as { intimacy_delta?: number }).intimacy_delta;
+  const romanceThreadAdvances = (blueprint as { romance_thread_advances?: boolean }).romance_thread_advances;
   const transitionContractSection = sceneIndex === 0
     ? `
 # 이번 화의 전이 목표
@@ -429,6 +433,13 @@ ${lastSummary.summary.slice(0, 300)}
 → new_truth는 한 번 명확히 도달하면 끝입니다. 뒤에서 같은 의미를 다시 요약하지 마세요.
 → irreversible_change가 실제로 일어난 상태로 화를 끝내세요.
 → emotion_target은 설명하지 말고 장면의 선택, 몸 반응, 대치로 느끼게 하세요.
+- 로맨스 비트: ${romanceBeat || "없음"}
+- 관계 변화: ${relationshipShift || "없음"}
+- 친밀도 변화: ${typeof intimacyDelta === "number" ? intimacyDelta : "없음"}
+- 로맨스 스레드 전진: ${romanceThreadAdvances === undefined ? "없음" : romanceThreadAdvances ? "예" : "아니오"}
+→ romance_beat가 있다면 감정 설명만 하지 말고, 시선/거리/편들기/보호/비밀 공유/공적 편의 제공 같은 행동으로 느끼게 하세요.
+→ relationship_shift가 있다면 화가 끝날 때 두 사람의 관계가 실제로 한 칸 이동한 상태여야 합니다.
+→ 로맨스 판타지에서는 romance_beat를 “설정상 약혼/관계가 있다” 수준으로 처리하지 말고, 독자가 장면에서 체감할 수 있는 접촉점으로 바꾸세요.
 `
     : "";
 
