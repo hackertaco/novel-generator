@@ -122,6 +122,22 @@ export async function generateChapterBlueprints(
       return !seedChar || bp.chapter_number >= seedChar.introduction_chapter;
     });
 
+
+    const romanceCounterpart = typeof (bp as { romance_counterpart?: unknown }).romance_counterpart === "string"
+      ? resolveCharacterReference((bp as { romance_counterpart: string }).romance_counterpart, seed.characters)
+      : undefined;
+    if (romanceCounterpart && bp.chapter_number >= romanceCounterpart.introduction_chapter) {
+      if (!bp.characters_involved.includes(romanceCounterpart.id)) {
+        bp.characters_involved.push(romanceCounterpart.id);
+      }
+      if ((bp as { romance_thread_advances?: boolean }).romance_thread_advances && bp.scenes.length > 0) {
+        const targetScene = bp.scenes[0];
+        if (!targetScene.characters.includes(romanceCounterpart.id)) {
+          targetScene.characters.push(romanceCounterpart.id);
+        }
+      }
+    }
+
     // Flow key_points.why → scene must_reveal (connect planning layers)
     const outline = seed.chapter_outlines.find((o) => o.chapter_number === bp.chapter_number);
     const extOutline = !outline

@@ -134,6 +134,10 @@ describe("generateChapterBlueprints", () => {
             characters_involved: ["elysia", "marian"],
             tension_level: 4,
             foreshadowing_actions: [],
+            romance_beat: "무심한 편들기",
+            romance_counterpart: "serena",
+            romance_beat_type: "gaze_shift",
+            romance_thread_advances: true,
             target_word_count: 2000,
           },
         ],
@@ -145,5 +149,6 @@ describe("generateChapterBlueprints", () => {
 
     expect(result.data).toHaveLength(1);
     expect(result.data[0]?.characters_involved).toEqual(["elysia", "marian", "serena"]);
+    expect(result.data[0]?.scenes[0]?.characters).toEqual(["elysia", "marian", "serena"]);
   });
 });
