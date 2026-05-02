@@ -997,7 +997,9 @@ export class RuleGuardAgent implements PipelineAgent {
       ...speechResult.violations.map((v) => ({
         type: "speech_level_violation" as const,
         position: v.position,
-        detail: `[화계 위반] ${v.speaker}->${v.listener}: "${v.dialogueText.slice(0, 30)}..." 감지=${v.detectedLevel}, 기대=${v.expectedLevel}`,
+        detail: v.kind === "register"
+          ? `[관계 말투 위반] ${v.speaker}->${v.listener}: 금지 표현 "${v.detectedAddress}" 사용`
+          : `[화계 위반] ${v.speaker}->${v.listener}: "${v.dialogueText.slice(0, 30)}..." 감지=${v.detectedLevel}, 기대=${v.expectedLevel}`,
         severity: "warning" as const,
       })),
       ...povIssues,

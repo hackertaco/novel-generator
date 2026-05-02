@@ -7,6 +7,8 @@ import {
   getCharacterReferenceVariants,
   resolveCharacterReference,
   getAddressHintForPair,
+  inferRelationTaxonomies,
+  getDialoguePlaybookForPair,
 } from "@/lib/schema/character";
 
 describe("CharacterVoiceSchema", () => {
@@ -190,6 +192,41 @@ describe("CharacterSchema", () => {
     expect(marianHint?.speech_level).toBe("casual");
     expect(serenaHint?.address).toBe("언니");
     expect(serenaHint?.speech_level).toBe("polite");
+  });
+
+
+
+  it("infers broad relation taxonomy and dialogue playbook from hierarchy and relationship text", () => {
+    const mistress = CharacterSchema.parse({
+      id: "elysia",
+      name: "엘리시아",
+      role: "주인공",
+      social_rank: "noble",
+      introduction_chapter: 1,
+      voice: { tone: "차갑다", speech_patterns: [], sample_dialogues: [], personality_core: "차갑다" },
+      backstory: "배경",
+      arc_summary: "아크",
+      state: { level: 1, status: "normal", relationships: { marian: "신뢰하는 시녀" }, inventory: [], secrets_known: [] },
+    });
+    const maid = CharacterSchema.parse({
+      id: "marian",
+      name: "마리안",
+      role: "시녀",
+      social_rank: "servant",
+      introduction_chapter: 1,
+      voice: { tone: "다정하다", speech_patterns: [], sample_dialogues: [], personality_core: "다정하다" },
+      backstory: "배경",
+      arc_summary: "아크",
+      state: { level: 1, status: "normal", relationships: { elysia: "모시는 아가씨" }, inventory: [], secrets_known: [] },
+    });
+
+    const taxonomies = inferRelationTaxonomies(maid, mistress);
+    const playbook = getDialoguePlaybookForPair(maid, mistress);
+
+    expect(taxonomies).toContain("servant_to_mistress");
+    expect(taxonomies).toContain("trusted_attendant");
+    expect(playbook.forbiddenPhrases).toContain("왜 그래");
+    expect(playbook.preferredPatterns).toContain("왜 그러세요");
   });
 
 describe("character reference helpers", () => {

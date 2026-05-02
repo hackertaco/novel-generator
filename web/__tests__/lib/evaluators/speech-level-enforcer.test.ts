@@ -8,6 +8,7 @@ import {
   type SocialRank,
 } from "@/lib/evaluators/speech-level-enforcer";
 import type { NovelSeed } from "@/lib/schema/novel";
+import type { CharacterAddressHint } from "@/lib/schema/character";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -18,7 +19,7 @@ function makeSeed(characters: Array<{
   name: string;
   rank: SocialRank;
   introChapter?: number;
-  address_hints?: Array<{ to: string; address: string; speech_level?: "formal" | "polite" | "casual" | "intimate" }>;
+  address_hints?: CharacterAddressHint[];
 }>): NovelSeed {
   return {
     title: "테스트 소설",
@@ -237,6 +238,38 @@ describe("enforceSpeechLevels", () => {
       ]),
     );
     expect(result.text).toContain('"언니, 잠깐만요"');
+  });
+
+
+
+  it("catches servant-to-lady mixed-tone casual phrases even when the address is correct", () => {
+    const seed = makeSeed([
+      { id: "lady", name: "엘리시아", rank: "noble" },
+      { id: "maid", name: "마리안", rank: "servant", address_hints: [{ to: "lady", relation: "servant_to_mistress", address: "아가씨", speech_level: "polite" }] },
+    ]);
+    const text = '엘리시아를 본 마리안이 재촉했다. "아가씨, 왜 그래? 숨소리가 이상해서 왔는데."';
+    const result = enforceSpeechLevels(text, seed, 1);
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "register", detectedAddress: "왜 그래", suggestedReplacement: "왜 그러세요" }),
+      ]),
+    );
+    expect(result.text).toContain('"아가씨, 왜 그러세요? 숨소리가 이상해서 왔는데."');
+  });
+
+  it("flags overly bureaucratic sibling register for younger-to-elder speech", () => {
+    const seed = makeSeed([
+      { id: "older", name: "세레나", rank: "noble" },
+      { id: "younger", name: "엘리시아", rank: "noble", address_hints: [{ to: "older", relation: "younger_to_elder_sibling", address: "언니", speech_level: "polite" }] },
+    ]);
+    const text = '세레나를 본 엘리시아가 또렷하게 말했다. "언니, 세레나의 배려는 감사히 받되, 제가 확인하겠습니다."';
+    const result = enforceSpeechLevels(text, seed, 1);
+    expect(result.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "register", detectedAddress: "세레나의 배려는 감사히 받되" }),
+      ]),
+    );
+    expect(result.text).toContain('"언니, 언니가 신경 써 주는 건 고마워요. 그래도, 제가 확인할게요."');
   });
 
   it("same rank dialogue using haeyo → no violations", () => {

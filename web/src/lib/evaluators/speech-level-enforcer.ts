@@ -13,7 +13,7 @@ import type { ChapterBlueprint } from "@/lib/schema/planning";
 import type { Character } from "@/lib/schema/character";
 import type { DirectionDesign } from "@/lib/schema/direction";
 import { getAddressEntriesForCharacters } from "@/lib/schema/direction";
-import { getAddressHintForPair } from "@/lib/schema/character";
+import { getAddressHintForPair, getDialoguePlaybookForPair } from "@/lib/schema/character";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,9 +51,10 @@ export interface SpeechViolation {
   /** Speech level actually detected */
   detectedLevel: SpeechLevel;
   /** violation kind */
-  kind?: "speech_level" | "address";
+  kind?: "speech_level" | "address" | "register";
   expectedAddress?: string;
   detectedAddress?: string;
+  suggestedReplacement?: string;
 }
 
 
@@ -97,6 +98,61 @@ function getPairRule(
     }
   }
   return {};
+}
+
+const RELATION_FORBIDDEN_REPLACEMENTS: Record<string, Record<string, string>> = {
+  servant_to_mistress: {
+    "왜 그래": "왜 그러세요",
+    "알겠어": "알겠어요",
+    "내가 볼게": "제가 볼게요",
+    "괜찮아?": "괜찮으세요?",
+    "하지 마": "하지 마세요",
+  },
+  trusted_attendant: {
+    "왜 그래": "왜 그러세요",
+    "알겠어": "알겠어요",
+    "내가 볼게": "제가 볼게요",
+  },
+  younger_to_elder_sibling: {
+    "제가 판단하는 편이 익숙해서요": "그래도 이건 제가 직접 보는 게 편해요",
+    "확인하겠습니다": "확인할게요",
+  },
+  public_masked_hostility: {
+    "확인하겠습니다": "확인할게요",
+  },
+};
+
+const RELATION_FORBIDDEN_REGEX_RULES: Array<{
+  taxonomy: string;
+  regex: RegExp;
+  replacement: string;
+}> = [
+  {
+    taxonomy: "younger_to_elder_sibling",
+    regex: /[가-힣]+의 배려는 감사히 받되/,
+    replacement: "언니가 신경 써 주는 건 고마워요. 그래도",
+  },
+];
+
+function findForbiddenRegister(dialogue: string, speaker: Character, listener: Character): { phrase: string; replacement?: string } | null {
+  const playbook = getDialoguePlaybookForPair(speaker, listener);
+  for (const taxonomy of playbook.taxonomies) {
+    for (const rule of RELATION_FORBIDDEN_REGEX_RULES) {
+      if (rule.taxonomy === taxonomy) {
+        const match = dialogue.match(rule.regex);
+        if (match) {
+          return { phrase: match[0], replacement: rule.replacement };
+        }
+      }
+    }
+    const replacements = RELATION_FORBIDDEN_REPLACEMENTS[taxonomy] || {};
+    for (const phrase of playbook.forbiddenPhrases) {
+      if (dialogue.includes(phrase)) {
+        return { phrase, replacement: replacements[phrase] };
+      }
+    }
+  }
+  return null;
 }
 
 function detectAddressMention(dialogue: string, listener: Character): string | null {
@@ -561,6 +617,23 @@ export function detectSpeechViolations(
         });
       }
     }
+
+    if (speakerChar && listenerChar) {
+      const forbiddenRegister = findForbiddenRegister(dlg.innerText, speakerChar, listenerChar);
+      if (forbiddenRegister) {
+        violations.push({
+          position: dlg.position,
+          dialogueText: dlg.fullMatch,
+          speaker,
+          listener,
+          expectedLevel,
+          detectedLevel: detectedLevel || expectedLevel,
+          kind: "register",
+          detectedAddress: forbiddenRegister.phrase,
+          suggestedReplacement: forbiddenRegister.replacement,
+        });
+      }
+    }
   }
 
   return violations;
@@ -631,12 +704,23 @@ const POLITE_TO_CASUAL: [RegExp, string][] = [
 ];
 
 const FORMAL_TO_CASUAL: [RegExp, string][] = [
-  [/했습니다([\s""\u201D.!?\u2026]*)$/, "했어$1"],
-  [/됐습니다([\s""\u201D.!?\u2026]*)$/, "됐어$1"],
-  [/왔습니다([\s""\u201D.!?\u2026]*)$/, "왔어$1"],
-  [/갔습니다([\s""\u201D.!?\u2026]*)$/, "갔어$1"],
-  [/있습니다([\s""\u201D.!?\u2026]*)$/, "있어$1"],
-  [/없습니다([\s""\u201D.!?\u2026]*)$/, "없어$1"],
+  [/했습니다([\s""”.!?…]*)$/, "했어$1"],
+  [/됐습니다([\s""”.!?…]*)$/, "됐어$1"],
+  [/왔습니다([\s""”.!?…]*)$/, "왔어$1"],
+  [/갔습니다([\s""”.!?…]*)$/, "갔어$1"],
+  [/있습니다([\s""”.!?…]*)$/, "있어$1"],
+  [/없습니다([\s""”.!?…]*)$/, "없어$1"],
+];
+
+const FORMAL_TO_POLITE: [RegExp, string][] = [
+  [/했습니다([\s""”.!?…]*)$/, "했어요$1"],
+  [/됐습니다([\s""”.!?…]*)$/, "됐어요$1"],
+  [/왔습니다([\s""”.!?…]*)$/, "왔어요$1"],
+  [/갔습니다([\s""”.!?…]*)$/, "갔어요$1"],
+  [/있습니다([\s""”.!?…]*)$/, "있어요$1"],
+  [/없습니다([\s""”.!?…]*)$/, "없어요$1"],
+  [/하겠습니다([\s""”.!?…]*)$/, "할게요$1"],
+  [/겠습니다([\s""”.!?…]*)$/, "겠어요$1"],
 ];
 
 const POLITE_TO_FORMAL: [RegExp, string][] = [
@@ -656,6 +740,7 @@ function getReplacementMap(
   if (from === "hae" && to === "hapsyo") return CASUAL_TO_FORMAL;
   if (from === "haeyo" && to === "hae") return POLITE_TO_CASUAL;
   if (from === "haeyo" && to === "hapsyo") return POLITE_TO_FORMAL;
+  if (from === "hapsyo" && to === "haeyo") return FORMAL_TO_POLITE;
   if (from === "hapsyo" && to === "hae") return FORMAL_TO_CASUAL;
   if (from === "haera" && to === "haeyo") return CASUAL_TO_POLITE;
   if (from === "haera" && to === "hapsyo") return CASUAL_TO_FORMAL;
@@ -677,7 +762,11 @@ export function fixSpeechViolations(
   if (violations.length === 0) return text;
 
   // Sort violations by position descending so replacements do not shift offsets
-  const sorted = [...violations].sort((a, b) => b.position - a.position);
+  const kindPriority: Record<string, number> = { address: 0, register: 1, speech_level: 2 };
+  const sorted = [...violations].sort((a, b) => {
+    if (b.position !== a.position) return b.position - a.position;
+    return (kindPriority[a.kind || "speech_level"] ?? 9) - (kindPriority[b.kind || "speech_level"] ?? 9);
+  });
 
   let result = text;
 
@@ -689,6 +778,18 @@ export function fixSpeechViolations(
       const innerText = quoteMatch[1];
       if (!innerText.includes(v.detectedAddress) || innerText.includes(v.expectedAddress)) continue;
       const newInner = innerText.replace(v.detectedAddress, v.expectedAddress);
+      const newDialogue = fullMatch[0] + newInner + fullMatch[fullMatch.length - 1];
+      result = result.slice(0, v.position) + newDialogue + result.slice(v.position + fullMatch.length);
+      continue;
+    }
+
+    if (v.kind === "register" && v.detectedAddress && v.suggestedReplacement) {
+      const quoteMatch = result.slice(v.position).match(/^["“「]([^"”」]*?)["”」]/);
+      if (!quoteMatch) continue;
+      const fullMatch = quoteMatch[0];
+      const innerText = quoteMatch[1];
+      if (!innerText.includes(v.detectedAddress)) continue;
+      const newInner = innerText.replace(v.detectedAddress, v.suggestedReplacement);
       const newDialogue = fullMatch[0] + newInner + fullMatch[fullMatch.length - 1];
       result = result.slice(0, v.position) + newDialogue + result.slice(v.position + fullMatch.length);
       continue;

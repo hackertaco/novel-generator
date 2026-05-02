@@ -11,6 +11,7 @@ import type { NovelSeed } from "@/lib/schema/novel";
 import { getForeshadowingActions } from "@/lib/schema/novel";
 import { getCharacterReferenceVariants } from "@/lib/schema/character";
 import { getAddressEntriesForCharacters, formatAddressMatrixForPrompt } from "@/lib/schema/direction";
+import { getDialoguePlaybookForPair } from "@/lib/schema/character";
 import type { DirectionDesign } from "@/lib/schema/direction";
 import type { ChapterBlueprint, SceneSpec } from "@/lib/schema/planning";
 import type { TokenUsage } from "@/lib/agents/types";
@@ -178,6 +179,14 @@ ${chapterOutline.one_liner}${keyPtsStr}
   const addressEntries = extras?.directionDesign
     ? getAddressEntriesForCharacters(extras.directionDesign, sceneCharNames)
     : [];
+  const pairPlaybooks = sceneChars.length >= 2
+    ? sceneChars.flatMap((from) =>
+        sceneChars
+          .filter((to) => to && from && to.id !== from.id)
+          .map((to) => ({ from: from!, to: to!, playbook: getDialoguePlaybookForPair(from!, to!) }))
+          .filter((entry) => entry.playbook.taxonomies.length > 0 || entry.playbook.forbiddenPhrases.length > 0)
+      )
+    : [];
 
   if (sceneChars.length > 0) {
     parts.push("# 이 씬의 캐릭터 (말투를 반드시 구분하세요!)");
@@ -231,6 +240,22 @@ ${dialogues.map((d) => `  "${d}"`).join("\n") || '  (없음)'}${stateBlock}${arc
 - 각 캐릭터의 어휘 수준, 존댓말/반말, 감정 표현 방식이 달라야 합니다
 - 같은 상황에서도 캐릭터마다 다르게 반응해야 합니다
 `);
+    }
+    if (addressEntries.length > 0) {
+      parts.push(`## 호칭 규칙
+${formatAddressMatrixForPrompt(addressEntries)}
+- 위 호칭/화계는 장면 전체에서 유지하세요.`);
+    }
+
+    if (pairPlaybooks.length > 0) {
+      parts.push("## 관계별 대화 플레이북");
+      for (const entry of pairPlaybooks.slice(0, 8)) {
+        const taxonomyText = entry.playbook.taxonomies.length > 0 ? entry.playbook.taxonomies.join(", ") : "기본 관계";
+        const forbiddenText = entry.playbook.forbiddenPhrases.length > 0 ? entry.playbook.forbiddenPhrases.join(", ") : "없음";
+        const preferredText = entry.playbook.preferredPatterns.length > 0 ? entry.playbook.preferredPatterns.join(", ") : "없음";
+        parts.push(`- ${entry.from.name}→${entry.to.name} [${taxonomyText}]\n  톤: ${entry.playbook.preferredTone}\n  금지 표현: ${forbiddenText}\n  선호 표현: ${preferredText}${entry.playbook.note ? `\n  메모: ${entry.playbook.note}` : ""}`);
+      }
+      parts.push("- 금지 표현을 기계적으로 복붙하지 말고, 그 말투 영역 자체를 피하세요.");
     }
 
     const sceneCharNames = sceneChars.map((char) => char!.name);

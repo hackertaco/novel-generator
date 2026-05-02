@@ -1,6 +1,7 @@
 import { getAgent } from "./llm-agent";
 import { getFinalRewriterSystemPrompt } from "@/lib/prompts/final-rewriter-prompt";
 import { sanitize } from "./rule-guard";
+import { enforceSpeechLevels } from "@/lib/evaluators/speech-level-enforcer";
 import { buildChapterQualityRepairPrompt, detectChapterQualityIssues, formatChapterQualityIssuesForPrompt } from "./chapter-quality-validator";
 import { accumulateUsage } from "./pipeline";
 import type { PipelineAgent, ChapterContext, LifecycleEvent } from "./pipeline";
@@ -154,7 +155,7 @@ export class FinalRewriterAgent implements PipelineAgent {
         maxTokens: 8192,
         taskId: `final-rewriter-ch${ctx.chapterNumber}-second-pass`,
       });
-      return { text: sanitize(secondPass.data), extraUsage: secondPass.usage };
+      return { text: enforceSpeechLevels(sanitize(secondPass.data), ctx.seed, ctx.chapterNumber, ctx.blueprint, ctx.directionDesign).text, extraUsage: secondPass.usage };
     }
 
     function getCastViolations(candidateText: string) {
@@ -178,15 +179,16 @@ export class FinalRewriterAgent implements PipelineAgent {
     // (looser than Polisher's 70% floor because the editor may add spatial descriptions)
     const originalText = ctx.text;
     const cleaned = sanitize(collected);
+    const speechChecked = enforceSpeechLevels(cleaned, ctx.seed, ctx.chapterNumber, ctx.blueprint, ctx.directionDesign).text;
     const minLen = originalText.length * 0.7;
     const maxLen = originalText.length * 1.3;
-    if (cleaned.length >= minLen && cleaned.length <= maxLen) {
+    if (speechChecked.length >= minLen && speechChecked.length <= maxLen) {
       let acceptRewrite = true;
       const originalQualityIssues = detectChapterQualityIssues(originalText, { blueprint: ctx.blueprint, seedCharacterNames: ctx.seed.characters.map((character) => character.name) });
-      const rewrittenQualityIssues = detectChapterQualityIssues(cleaned, { blueprint: ctx.blueprint, seedCharacterNames: ctx.seed.characters.map((character) => character.name) });
+      const rewrittenQualityIssues = detectChapterQualityIssues(speechChecked, { blueprint: ctx.blueprint, seedCharacterNames: ctx.seed.characters.map((character) => character.name) });
       if (ctx.blueprint) {
         const originalCount = getCastViolations(originalText).length;
-        const rewrittenCount = getCastViolations(cleaned).length;
+        const rewrittenCount = getCastViolations(speechChecked).length;
 
         if (rewrittenCount > originalCount) {
           acceptRewrite = false;
@@ -198,11 +200,11 @@ export class FinalRewriterAgent implements PipelineAgent {
       }
 
       if (acceptRewrite) {
-        let acceptedText = cleaned;
+        let acceptedText = speechChecked;
         let acceptedIssues = rewrittenQualityIssues;
 
         if (rewrittenQualityIssues.length > 0 && rewrittenQualityIssues.length >= originalQualityIssues.length) {
-          const secondPass = await runSecondPassIfNeeded(cleaned);
+          const secondPass = await runSecondPassIfNeeded(speechChecked);
           ctx.totalUsage = accumulateUsage(ctx.totalUsage, secondPass.extraUsage);
           const secondIssues = detectChapterQualityIssues(secondPass.text, { blueprint: ctx.blueprint, seedCharacterNames: ctx.seed.characters.map((character) => character.name) });
           const secondMinLen = originalText.length * 0.7;

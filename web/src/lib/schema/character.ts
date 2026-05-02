@@ -2,9 +2,27 @@ import { z } from "zod";
 
 // --- Schemas ---
 
+export const RelationTaxonomyEnum = z.enum([
+  "older_sibling",
+  "younger_sibling",
+  "serves",
+  "served_by",
+  "guardian",
+  "ward",
+  "younger_to_elder_sibling",
+  "elder_to_younger_sibling",
+  "servant_to_mistress",
+  "mistress_to_servant",
+  "formal_fiance_under_tension",
+  "trusted_attendant",
+  "public_masked_hostility",
+]);
+
+export type RelationTaxonomy = z.infer<typeof RelationTaxonomyEnum>;
+
 export const CharacterAddressHintSchema = z.object({
   to: z.string().describe("상대 캐릭터 id 또는 이름"),
-  relation: z.enum(["older_sibling", "younger_sibling", "serves", "served_by", "guardian", "ward"]).optional().describe("관계 힌트"),
+  relation: RelationTaxonomyEnum.optional().describe("관계 힌트"),
   address: z.string().optional().describe("이 상대를 직접 부를 때 기본 호칭"),
   speech_level: z.enum(["formal", "polite", "casual", "intimate"]).optional().describe("이 상대에게 기본적으로 사용하는 화계"),
   note: z.string().optional().describe("조건부 메모"),
@@ -232,4 +250,104 @@ export function resolveCharacterReference<T extends Pick<Character, "id" | "name
       variant === normalized || normalizeCharacterRefNoSpace(variant) === compact
     )
   );
+}
+
+
+export interface DialoguePlaybook {
+  taxonomies: RelationTaxonomy[];
+  preferredTone: string;
+  forbiddenPhrases: string[];
+  preferredPatterns: string[];
+  note?: string;
+}
+
+function relationTextBetween(from: Pick<Character, "state">, to: Pick<Character, "id" | "name">): string {
+  const rel = from.state.relationships || {};
+  return String(rel[to.id] || rel[to.name] || rel[to.name.split(/\s+/)[0] || ""] || "");
+}
+
+export function inferRelationTaxonomies<T extends Character>(
+  from: T,
+  to: Pick<Character, "id" | "name" | "social_rank" | "gender">,
+): RelationTaxonomy[] {
+  const tags: RelationTaxonomy[] = [];
+  const explicit = getAddressHintForPair(from, to as Pick<Character, "id" | "name">);
+  if (explicit?.relation) tags.push(explicit.relation);
+
+  const relText = relationTextBetween(from, to);
+  if (/(언니|누나|오빠|형)/.test(relText)) tags.push("younger_to_elder_sibling");
+  if (/(동생)/.test(relText)) tags.push("elder_to_younger_sibling");
+  if (/(시녀|하녀|시종|집사|측근|모시)/.test(relText)) tags.push("trusted_attendant");
+  if (/(약혼|정략혼|혼인)/.test(relText)) tags.push("formal_fiance_under_tension");
+  if (/(경계|불신|대치|위선|견제|적대)/.test(relText)) tags.push("public_masked_hostility");
+
+  if (from.social_rank === "servant" && ["noble", "gentry", "royal"].includes(to.social_rank)) {
+    tags.push("servant_to_mistress");
+  }
+  if (["noble", "gentry", "royal"].includes(from.social_rank) && to.social_rank === "servant") {
+    tags.push("mistress_to_servant");
+  }
+
+  return [...new Set(tags)];
+}
+
+export function getDialoguePlaybookForPair<T extends Character>(
+  from: T,
+  to: Pick<Character, "id" | "name" | "social_rank" | "gender">,
+): DialoguePlaybook {
+  const taxonomies = inferRelationTaxonomies(from, to);
+  const forbidden = new Set<string>();
+  const preferred = new Set<string>();
+  let preferredTone = "상대와의 관계에 맞는 기본 말투를 유지하되, 공손함과 감정의 미세한 온도를 같이 살릴 것";
+  const notes: string[] = [];
+
+  for (const tag of taxonomies) {
+    switch (tag) {
+      case "servant_to_mistress":
+        preferredTone = "시녀/하인으로서 존대를 유지하되, 걱정은 다정하게 표현할 것";
+        ["왜 그래", "알겠어", "내가 볼게", "괜찮아?", "하지 마"].forEach((p) => forbidden.add(p));
+        ["왜 그러세요", "알겠어요", "제가 볼게요", "괜찮으세요", "하지 마세요"].forEach((p) => preferred.add(p));
+        notes.push("호칭이 맞아도 직설 반말 표현은 금지");
+        break;
+      case "mistress_to_servant":
+        preferredTone = "상급자의 권위를 잃지 않되, 이름을 부르며 짧고 자연스럽게 지시할 것";
+        ["배려는 감사히 받되", "판단하는 편이 익숙해서요"].forEach((p) => forbidden.add(p));
+        ["마리안, 내가 할게", "잠깐 나가 있어 줘"].forEach((p) => preferred.add(p));
+        break;
+      case "younger_to_elder_sibling":
+        preferredTone = "언니 호칭을 기본으로, 가족 사이의 부드러운 존대와 숨은 감정을 섞을 것";
+        ["배려는 감사히 받되", "제가 판단하는 편이 익숙해서요", "확인하겠습니다"].forEach((p) => forbidden.add(p));
+        ["언니가 신경 써 주는 건 고마워요", "그래도 이건 제가 볼게요"].forEach((p) => preferred.add(p));
+        notes.push("공문서/면담체처럼 지나치게 딱딱한 문어체 금지");
+        break;
+      case "elder_to_younger_sibling":
+        preferredTone = "윗형제의 여유와 친근함을 유지하되, 감시/통제 의도가 있으면 다정한 말 속에 숨길 것";
+        ["배려는 감사히 받되"].forEach((p) => forbidden.add(p));
+        ["걱정돼서 그러지", "너무 무리하지 말아"].forEach((p) => preferred.add(p));
+        break;
+      case "formal_fiance_under_tension":
+        preferredTone = "격식 있는 약혼 관계를 유지하되, 예의 속에서 탐색과 경계를 드러낼 것";
+        ["배려는 감사히 받되"].forEach((p) => forbidden.add(p));
+        ["와 주셔서 영광이에요", "오늘은 유난히 다정하시네요"].forEach((p) => preferred.add(p));
+        break;
+      case "public_masked_hostility":
+        preferredTone = "겉으로는 부드럽고 예의를 지키지만, 속뜻은 선 긋기와 탐색으로 흐르게 할 것";
+        ["확인하겠습니다"].forEach((p) => forbidden.add(p));
+        ["고마워요", "그래도 이번엔 제가 볼게요"].forEach((p) => preferred.add(p));
+        break;
+      case "trusted_attendant":
+        preferredTone = "친밀함은 허용하되, 신분선을 넘는 반말이나 무례함은 금지";
+        ["왜 그래"].forEach((p) => forbidden.add(p));
+        ["괜찮으세요", "제가 옆에 있을게요"].forEach((p) => preferred.add(p));
+        break;
+    }
+  }
+
+  return {
+    taxonomies,
+    preferredTone,
+    forbiddenPhrases: [...forbidden],
+    preferredPatterns: [...preferred],
+    note: notes.length > 0 ? notes.join(" / ") : undefined,
+  };
 }
