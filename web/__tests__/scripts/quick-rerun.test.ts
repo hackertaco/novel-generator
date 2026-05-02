@@ -239,6 +239,8 @@ describe("quick-rerun", () => {
       summary: string;
       safeguardSummary: Record<string, number>;
       artifactVerification: { ok: boolean; checks: Array<{ kind: string; exists: boolean }> };
+      usageTotals: { prompt_tokens: number; completion_tokens: number; total_tokens: number; cost_usd: number };
+      durationTotalsMs: number;
       factExtractionFallbacks: {
         total: number;
         byKind: Record<string, number>;
@@ -278,6 +280,8 @@ describe("quick-rerun", () => {
     expect(report.safeguardSummary["final-cast-hard-repair"]).toBe(1);
     expect(report.artifactVerification.ok).toBe(true);
     expect(report.artifactVerification.checks.some((check) => check.kind === "report" && check.exists)).toBe(true);
+    expect(report.usageTotals).toEqual({ prompt_tokens: 2, completion_tokens: 2, total_tokens: 4, cost_usd: 0.002 });
+    expect(report.durationTotalsMs).toBe(50);
     expect(report.factExtractionFallbacks.total).toBe(1);
     expect(report.factExtractionFallbacks.byKind.json_parse_fallback).toBe(1);
     expect(report.factExtractionFallbacks.chapters).toEqual([
@@ -353,5 +357,11 @@ describe("quick-rerun", () => {
     expect(chapterLog).toContain("ch2 failure attempt=2 error=upstream timeout");
     expect(chapterLog).toContain("ch2 failure attempt=3 error=upstream timeout");
     expect(chapterLog).toContain("summary 2화 중 1화 성공, 2화 실패");
+    const report = JSON.parse(fs.readFileSync(path.join(outDir, "report.json"), "utf-8")) as {
+      usageTotals: { prompt_tokens: number; completion_tokens: number; total_tokens: number; cost_usd: number };
+      durationTotalsMs: number;
+    };
+    expect(report.usageTotals).toEqual({ prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, cost_usd: 0.001 });
+    expect(report.durationTotalsMs).toBe(25);
   });
 });

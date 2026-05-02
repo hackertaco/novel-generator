@@ -10,6 +10,7 @@ import { pathToFileURL } from "url";
 import type { NovelSeed } from "../src/lib/schema/novel";
 import type { ChapterSummary } from "../src/lib/schema/chapter";
 import type { MasterPlan } from "../src/lib/schema/planning";
+import type { TokenUsage } from "../src/lib/agents/types";
 import type { ChapterResult, HarnessEvent } from "../src/lib/harness";
 import { NovelHarness, getFastConfig } from "../src/lib/harness";
 import { computeDeterministicScores } from "../src/lib/evaluators/deterministic-scorer";
@@ -42,6 +43,8 @@ export interface ChapterRunStatus {
   success: boolean;
   attempts: number;
   score?: number;
+  usage?: TokenUsage;
+  durationMs?: number;
   errorMessages: string[];
   attemptDetails: ChapterRunAttempt[];
   safeguardStages: string[];
@@ -52,6 +55,8 @@ export interface ChapterRunAttempt {
   attempt: number;
   success: boolean;
   score?: number;
+  usage?: TokenUsage;
+  durationMs?: number;
   stageHistory: string[];
   safeguardStages: string[];
   pipelineWarnings: string[];
@@ -114,6 +119,8 @@ export interface QuickRerunReport {
   worldStateEntries: number;
   factExtractionFallbacks: FactExtractionFallbackSummary;
   lowScoreChapters: LowScoreChapterEntry[];
+  usageTotals: TokenUsage;
+  durationTotalsMs: number;
 }
 
 export interface QuickRerunResult {
@@ -164,6 +171,8 @@ interface RunChapterAttemptResult {
   blueprintPath?: string;
   chapterPath?: string;
   score?: number;
+  usage?: TokenUsage;
+  durationMs?: number;
 }
 
 const SAFEGUARD_STAGES = new Set([
@@ -337,6 +346,8 @@ async function runChapterAttempt({
     blueprintPath,
     chapterPath,
     score,
+    usage: chapterResult?.usage,
+    durationMs: chapterResult?.durationMs,
   };
 }
 
@@ -476,6 +487,19 @@ function summarizeLowScoreChapters(
     }));
 }
 
+function sumUsage(statuses: ChapterRunStatus[]): TokenUsage {
+  return statuses.reduce<TokenUsage>((acc, status) => ({
+    prompt_tokens: acc.prompt_tokens + (status.usage?.prompt_tokens || 0),
+    completion_tokens: acc.completion_tokens + (status.usage?.completion_tokens || 0),
+    total_tokens: acc.total_tokens + (status.usage?.total_tokens || 0),
+    cost_usd: acc.cost_usd + (status.usage?.cost_usd || 0),
+  }), { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 });
+}
+
+function sumDurations(statuses: ChapterRunStatus[]): number {
+  return statuses.reduce((acc, status) => acc + (status.durationMs || 0), 0);
+}
+
 function writeReport(
   outDir: string,
   seed: NovelSeed,
@@ -504,6 +528,8 @@ function writeReport(
     worldStateEntries: worldState.length,
     factExtractionFallbacks,
     lowScoreChapters: summarizeLowScoreChapters(statuses, factExtractionFallbacks),
+    usageTotals: sumUsage(statuses),
+    durationTotalsMs: sumDurations(statuses),
   };
 
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
@@ -577,6 +603,8 @@ export async function runQuickRerun({
         attempt,
         success: attemptResult.success,
         score: attemptResult.score,
+        usage: attemptResult.usage,
+        durationMs: attemptResult.durationMs,
         stageHistory: attemptResult.stageHistory,
         safeguardStages: attemptResult.safeguardStages,
         pipelineWarnings: attemptResult.pipelineWarnings,
@@ -600,6 +628,8 @@ export async function runQuickRerun({
           success: true,
           attempts: attempt,
           score: score.overall,
+          usage: result.usage,
+          durationMs: result.durationMs,
           errorMessages: attemptResult.errorMessages,
           attemptDetails,
           safeguardStages: attemptDetails.flatMap((detail) => detail.safeguardStages),
