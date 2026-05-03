@@ -311,6 +311,20 @@ export type NovelSeed = z.infer<typeof NovelSeedSchema>;
 
 // --- Helper Functions ---
 
+
+function chapterInRange(chapterRange: string, chapter: number): boolean {
+  const trimmed = chapterRange.trim();
+  if (trimmed.includes('-')) {
+    const [startStr, endStr] = trimmed.split('-');
+    const start = parseInt(startStr, 10);
+    const end = parseInt(endStr, 10);
+    if (Number.isNaN(start) || Number.isNaN(end)) return false;
+    return chapter >= start && chapter <= end;
+  }
+  const single = parseInt(trimmed, 10);
+  return !Number.isNaN(single) && chapter === single;
+}
+
 /**
  * Get character by ID from the novel seed.
  */
@@ -352,21 +366,17 @@ export function getForeshadowingActions(
 
 // --- Reveal Timeline Helpers ---
 
-/**
- * Parse a chapter_range string (e.g., "1-10", "15", "40-60") and check
- * whether a given chapter number falls within it.
- */
-function chapterInRange(chapterRange: string, chapter: number): boolean {
-  const trimmed = chapterRange.trim();
-  if (trimmed.includes("-")) {
-    const [startStr, endStr] = trimmed.split("-");
-    const start = parseInt(startStr, 10);
-    const end = parseInt(endStr, 10);
-    if (isNaN(start) || isNaN(end)) return false;
-    return chapter >= start && chapter <= end;
+export function getCertaintyCeilingForChapter(seed: NovelSeed, chapter: number): CertaintyCeiling | undefined {
+  let matched: CertaintyCeiling | undefined;
+  for (const entry of seed.certainty_ceiling_by_phase || []) {
+    if (chapterInRange(entry.chapter_range, chapter)) matched = entry;
   }
-  const single = parseInt(trimmed, 10);
-  return !isNaN(single) && chapter === single;
+  return matched;
+}
+
+export function getOpeningRailsForChapter(seed: NovelSeed, chapter: number): string[] {
+  if (chapter <= 5) return seed.must_happen_opening_events || [];
+  return [];
 }
 
 export interface ActiveThreadReveal {

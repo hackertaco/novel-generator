@@ -152,6 +152,16 @@ ${chapterNumber}화 — ${blueprint.one_liner}
   if (seed.world.rules.length > 0) {
     worldParts.push(`세계 규칙: ${seed.world.rules.slice(0, 3).join("; ")}`);
   }
+  if ((seed.world.protocol_rules || []).length > 0) {
+    worldParts.push(`궁정/예법 규칙: ${(seed.world.protocol_rules || []).slice(0, 3).join("; ")}`);
+  }
+  if ((seed.world.public_behavior_constraints || []).length > 0) {
+    worldParts.push(`공적 행동 제약: ${(seed.world.public_behavior_constraints || []).slice(0, 3).join("; ")}`);
+  }
+  if ((seed.world.symbolic_objects || []).length > 0) {
+    const symbolic = (seed.world.symbolic_objects || []).slice(0, 3).map((obj) => `${obj.name}(${obj.significance})`);
+    worldParts.push(`상징물: ${symbolic.join(", ")}`);
+  }
   if (worldParts.length > 0) {
     parts.push(`# 세계관\n${worldParts.join("\n")}\n`);
   }
@@ -225,7 +235,8 @@ ${chapterOutline.one_liner}${keyPtsStr}
   → 한 회차에 misbelief를 완전히 뒤집지 말 것. 점진적 흔들림만.`
         : "";
 
-      parts.push(`**${char.name}** (${char.role}, ${genderLabel}) — 대명사: "${pronoun}"
+      const titleBits = [char.role, genderLabel, (char as { public_title?: string }).public_title, (char as { house?: string }).house, (char as { faction?: string }).faction].filter(Boolean);
+      parts.push(`**${char.name}** (${titleBits.join(", ")}) — 대명사: "${pronoun}"
 성격: ${char.voice.personality_core}
 말투: ${char.voice.tone}
 ${speechPatterns.length > 0 ? `말투 특징: ${speechPatterns.join(", ")}` : ""}
@@ -308,6 +319,21 @@ ${futureCharacters.map((char) => `- ${char.name} (${char.introduction_chapter}�
       }
     }
   }
+
+  const sceneConstraintLines: string[] = [];
+  const locationHints = [scene.where_detail, scene.purpose, blueprint.one_liner].filter(Boolean).join(" ");
+  for (const [room, rule] of Object.entries(seed.world.room_access_rules || {})) {
+    if (locationHints.includes(room)) {
+      sceneConstraintLines.push(`- ${room}: ${rule}`);
+    }
+  }
+  if (sceneConstraintLines.length > 0) {
+    parts.push(`# 이 씬의 출입/예법 제약
+${sceneConstraintLines.join("\n")}
+- 이 제약을 어기는 행동이나 출입은 이유 없이 쓰지 마세요.
+`);
+  }
+
 
   // Previous context: hierarchical memory (preferred) or chapter summaries (fallback)
   if (extras?.memoryContext) {

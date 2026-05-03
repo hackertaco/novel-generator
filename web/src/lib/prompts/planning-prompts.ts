@@ -1,6 +1,6 @@
 // src/lib/prompts/planning-prompts.ts
 import type { NovelSeed } from "@/lib/schema/novel";
-import { getActiveThreadsForChapter, formatThreadRevealsForPrompt } from "@/lib/schema/novel";
+import { getActiveThreadsForChapter, formatThreadRevealsForPrompt, getCertaintyCeilingForChapter, getOpeningRailsForChapter } from "@/lib/schema/novel";
 import type { PartPlan, ArcPlan } from "@/lib/schema/planning";
 import type { DirectionDesign } from "@/lib/schema/direction";
 import {
@@ -261,9 +261,14 @@ ${seed.narrative_baseline
   : "(명시된 narrative_baseline 없음)"}
 
 ## opening / payoff rails
-- opening 필수 사건: ${(seed.must_happen_opening_events || []).join(" / ") || "없음"}
+${(() => {
+  const chapterNum = targetChapter ?? arc.start_chapter;
+  const currentCeiling = getCertaintyCeilingForChapter(seed, chapterNum);
+  const openingRails = getOpeningRailsForChapter(seed, chapterNum);
+  return `- opening 필수 사건: ${openingRails.join(" / ") || "없음"}
 - payoff cadence: ${seed.payoff_cadence ? `micro ${seed.payoff_cadence.micro_payoff_every_chapters}화 / relationship ${seed.payoff_cadence.relationship_payoff_every_chapters}화 / revelation ${seed.payoff_cadence.revelation_payoff_every_chapters}화` : "없음"}
-- certainty ceiling: ${(seed.certainty_ceiling_by_phase || []).map((c) => `${c.chapter_range}:${c.max_certainty}`).join(" / ") || "없음"}
+- 현재 certainty ceiling: ${currentCeiling ? `${currentCeiling.chapter_range}:${currentCeiling.max_certainty}${currentCeiling.notes ? ` (${currentCeiling.notes})` : ""}` : "없음"}`;
+})()}
 
 ## 이 화에서의 감정/비밀 공개 상태
 ${(() => {
