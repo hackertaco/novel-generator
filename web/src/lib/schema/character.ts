@@ -20,6 +20,21 @@ export const RelationTaxonomyEnum = z.enum([
 
 export type RelationTaxonomy = z.infer<typeof RelationTaxonomyEnum>;
 
+export const KinshipDirectionEnum = z.enum(["elder_sibling", "younger_sibling", "none"]);
+export type KinshipDirection = z.infer<typeof KinshipDirectionEnum>;
+
+export const ServiceDirectionEnum = z.enum(["serves", "served_by", "none"]);
+export type ServiceDirection = z.infer<typeof ServiceDirectionEnum>;
+
+export const RomanceRoleEnum = z.enum(["primary", "rival", "latent", "none"]);
+export type RomanceRole = z.infer<typeof RomanceRoleEnum>;
+
+export const PublicFaceEnum = z.enum(["warm", "formal", "hostile_masked", "cold", "devoted", "neutral"]);
+export type PublicFace = z.infer<typeof PublicFaceEnum>;
+
+export const PrivateTruthEnum = z.enum(["trusting", "suspicious", "hostile", "devoted", "utilitarian", "neutral"]);
+export type PrivateTruth = z.infer<typeof PrivateTruthEnum>;
+
 export const CharacterAddressHintSchema = z.object({
   to: z.string().describe("상대 캐릭터 id 또는 이름"),
   relation: RelationTaxonomyEnum.optional().describe("관계 힌트"),
@@ -29,6 +44,44 @@ export const CharacterAddressHintSchema = z.object({
 });
 
 export type CharacterAddressHint = z.infer<typeof CharacterAddressHintSchema>;
+
+export const RelationshipFactSchema = z.object({
+  target: z.string().describe("상대 캐릭터 id 또는 이름"),
+  kinship: KinshipDirectionEnum.default("none").describe("친족 방향 truth"),
+  service: ServiceDirectionEnum.default("none").describe("주종 방향 truth"),
+  romance_role: RomanceRoleEnum.default("none").describe("로맨스 축에서 이 상대가 어떤 역할인지"),
+  public_face: PublicFaceEnum.default("neutral").describe("공적/겉보기 관계의 얼굴"),
+  private_truth: PrivateTruthEnum.default("neutral").describe("실제 속내/관계 진실"),
+  trust_level: z.number().int().min(-2).max(2).default(0).describe("신뢰도 방향값 (-2~+2)"),
+  hostility_mode: z.string().optional().describe("적대/경계의 방식 (예: jealous, masked, political)"),
+  address_default: z.string().optional().describe("이 상대를 기본적으로 부르는 호칭"),
+  speech_mode_default: z.enum(["formal", "polite", "casual", "intimate"]).optional().describe("이 상대에게 기본적으로 사용하는 화계"),
+  preferred_register: z.string().optional().describe("이 관계에서 선호되는 말투 설명"),
+  forbidden_register: z.array(z.string()).default([]).describe("이 관계에서 피해야 하는 어조/문구"),
+  preferred_patterns: z.array(z.string()).default([]).describe("이 관계에서 자주 쓰는 자연스러운 표현 예"),
+  note: z.string().optional().describe("추가 메모"),
+});
+
+export type RelationshipFact = z.infer<typeof RelationshipFactSchema>;
+
+export const IntentProfileSchema = z.object({
+  surface_goal: z.string().describe("겉으로 드러난 현재 목표"),
+  hidden_goal: z.string().describe("숨기고 있는 진짜 목표"),
+  core_fear: z.string().describe("핵심 두려움"),
+  leverage_points: z.array(z.string()).default([]).describe("이 인물을 움직일 수 있는 압박/미끼"),
+  taboo_actions: z.array(z.string()).default([]).describe("아무리 급해도 쉽게 넘지 못하는 금기 행동"),
+});
+
+export type IntentProfile = z.infer<typeof IntentProfileSchema>;
+
+export const AccessProfileSchema = z.object({
+  knowledge_domains: z.array(z.string()).default([]).describe("자연스럽게 알고 있을 법한 지식 영역"),
+  forbidden_knowledge: z.array(z.string()).default([]).describe("알고 있으면 이상해지는 금지 지식"),
+  access_rights: z.array(z.string()).default([]).describe("출입/열람 가능한 장소/기록/권한"),
+  surveillance_risk: z.array(z.string()).default([]).describe("이 인물이 감시되거나 오해받기 쉬운 행동/장소"),
+});
+
+export type AccessProfile = z.infer<typeof AccessProfileSchema>;
 
 export const CharacterVoiceSchema = z.object({
   tone: z.string().describe("Overall tone (e.g., '냉소적, 하지만 속정 있음')"),
@@ -121,6 +174,10 @@ export const CharacterSchema = z.object({
     .enum(["royal", "noble", "gentry", "commoner", "servant", "slave", "outcast"])
     .default("commoner")
     .describe("사회적 신분 — 대화/행동 제약을 결정. royal: 왕족, noble: 귀족, gentry: 사대부/기사, commoner: 평민, servant: 하인/시녀, slave: 노예, outcast: 추방자"),
+  house: z.string().optional().describe("소속 가문/집안"),
+  faction: z.string().optional().describe("소속 파벌/진영"),
+  public_title: z.string().optional().describe("공적 자리에서 주로 불리는 칭호"),
+  court_position: z.string().optional().describe("궁정/가문 내 공식 위치나 직함"),
   introduction_chapter: z
     .preprocess((v) => {
       if (typeof v === "number") return v;
@@ -141,6 +198,12 @@ export const CharacterSchema = z.object({
   address_hints: z.array(CharacterAddressHintSchema).optional().describe(
     "관계별 호칭/화계 힌트. 예: 시녀→아가씨, 동생→언니 같은 비대칭 규칙"
   ),
+  relationship_facts: z.array(RelationshipFactSchema).optional().describe(
+    "자유서술 relationships를 보조/대체하는 구조화된 관계 truth"
+  ),
+  masking_habit: z.string().optional().describe("공적 얼굴과 사적 진실 사이를 어떻게 숨기는지"),
+  intent_profile: IntentProfileSchema.optional().describe("현재 욕망/두려움/leverage truth"),
+  access_profile: AccessProfileSchema.optional().describe("지식/출입/감시 위험 truth"),
   internal_arc: z
     .object({
       want: z
@@ -190,6 +253,18 @@ export type Character = z.infer<typeof CharacterSchema>;
 
 function normalizeRelationLookup(value: string): string {
   return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+export function getRelationshipFactForPair<T extends Pick<Character, "id" | "name"> & { relationship_facts?: RelationshipFact[] }>(
+  from: T,
+  to: Pick<Character, "id" | "name">,
+): RelationshipFact | undefined {
+  const targets = new Set([
+    normalizeRelationLookup(to.id),
+    normalizeRelationLookup(to.name),
+    normalizeRelationLookup(to.name.split(/\s+/)[0] || to.name),
+  ]);
+  return (from.relationship_facts || []).find((fact) => targets.has(normalizeRelationLookup(fact.target)));
 }
 
 export function getAddressHintForPair<T extends Pick<Character, "id" | "name"> & { address_hints?: CharacterAddressHint[] }>(
@@ -273,6 +348,16 @@ export function inferRelationTaxonomies<T extends Character>(
   const tags: RelationTaxonomy[] = [];
   const explicit = getAddressHintForPair(from, to as Pick<Character, "id" | "name">);
   if (explicit?.relation) tags.push(explicit.relation);
+  const structured = getRelationshipFactForPair(from as T & { relationship_facts?: RelationshipFact[] }, to as Pick<Character, "id" | "name">);
+  if (structured) {
+    if (structured.kinship === "elder_sibling") tags.push("younger_to_elder_sibling");
+    if (structured.kinship === "younger_sibling") tags.push("elder_to_younger_sibling");
+    if (structured.service === "serves") tags.push("servant_to_mistress");
+    if (structured.service === "served_by") tags.push("mistress_to_servant");
+    if (structured.romance_role !== "none") tags.push("formal_fiance_under_tension");
+    if (structured.public_face === "hostile_masked") tags.push("public_masked_hostility");
+    if (structured.private_truth === "devoted") tags.push("trusted_attendant");
+  }
 
   const relText = relationTextBetween(from, to);
   if (/(언니|누나|오빠|형)/.test(relText)) tags.push("younger_to_elder_sibling");
@@ -296,10 +381,12 @@ export function getDialoguePlaybookForPair<T extends Character>(
   to: Pick<Character, "id" | "name" | "social_rank" | "gender">,
 ): DialoguePlaybook {
   const taxonomies = inferRelationTaxonomies(from, to);
-  const forbidden = new Set<string>();
-  const preferred = new Set<string>();
-  let preferredTone = "상대와의 관계에 맞는 기본 말투를 유지하되, 공손함과 감정의 미세한 온도를 같이 살릴 것";
+  const structured = getRelationshipFactForPair(from as T & { relationship_facts?: RelationshipFact[] }, to as Pick<Character, "id" | "name">);
+  const forbidden = new Set<string>(structured?.forbidden_register || []);
+  const preferred = new Set<string>(structured?.preferred_patterns || []);
+  let preferredTone = structured?.preferred_register || "상대와의 관계에 맞는 기본 말투를 유지하되, 공손함과 감정의 미세한 온도를 같이 살릴 것";
   const notes: string[] = [];
+  if (structured?.note) notes.push(structured.note);
 
   for (const tag of taxonomies) {
     switch (tag) {

@@ -8,7 +8,7 @@
 
 import { getAgent } from "@/lib/agents/llm-agent";
 import { DirectionDesignSchema, type DirectionDesign } from "@/lib/schema/direction";
-import { getAddressHintForPair } from "@/lib/schema/character";
+import { getAddressHintForPair, getRelationshipFactForPair } from "@/lib/schema/character";
 import type { NovelSeed } from "@/lib/schema/novel";
 import type { TokenUsage } from "@/lib/agents/types";
 
@@ -52,6 +52,15 @@ function inferAddressEntry(
   const explicit = getAddressHintForPair(from, to);
   if (explicit?.address && explicit?.speech_level) {
     return { address: explicit.address, speech_level: explicit.speech_level, note: explicit.note };
+  }
+
+  const structured = getRelationshipFactForPair(from, to);
+  if (structured?.address_default && structured?.speech_mode_default) {
+    return {
+      address: structured.address_default,
+      speech_level: structured.speech_mode_default,
+      note: structured.note || structured.preferred_register,
+    };
   }
 
   const relation = relationTextBetween(from, to);

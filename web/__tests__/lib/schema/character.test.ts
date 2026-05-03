@@ -7,6 +7,7 @@ import {
   getCharacterReferenceVariants,
   resolveCharacterReference,
   getAddressHintForPair,
+  getRelationshipFactForPair,
   inferRelationTaxonomies,
   getDialoguePlaybookForPair,
 } from "@/lib/schema/character";
@@ -227,6 +228,62 @@ describe("CharacterSchema", () => {
     expect(taxonomies).toContain("trusted_attendant");
     expect(playbook.forbiddenPhrases).toContain("왜 그래");
     expect(playbook.preferredPatterns).toContain("왜 그러세요");
+  });
+
+
+
+  it("parses structured relationship/access/intent truth", () => {
+    const character = CharacterSchema.parse({
+      id: "elysia",
+      name: "엘리시아 크레센트",
+      role: "주인공",
+      gender: "female",
+      social_rank: "noble",
+      house: "크레센트 공작가",
+      faction: "황태자파",
+      public_title: "크레센트 공작 영애",
+      court_position: "공작가 적녀",
+      introduction_chapter: 1,
+      voice: { tone: "차갑다", speech_patterns: [], sample_dialogues: [], personality_core: "차갑다" },
+      backstory: "배경",
+      arc_summary: "아크",
+      relationship_facts: [
+        {
+          target: "serena",
+          kinship: "elder_sibling",
+          service: "none",
+          romance_role: "rival",
+          public_face: "warm",
+          private_truth: "hostile",
+          trust_level: -2,
+          address_default: "언니",
+          speech_mode_default: "polite",
+          preferred_register: "부드럽지만 선 긋는 자매 존대",
+          forbidden_register: ["배려는 감사히 받되"],
+          preferred_patterns: ["언니가 신경 써 주는 건 고마워요"],
+        }
+      ],
+      masking_habit: "미소로 적의를 가린다",
+      intent_profile: {
+        surface_goal: "완벽한 적녀로 보이기",
+        hidden_goal: "복수 준비",
+        core_fear: "같은 방식으로 또 죽는 것",
+        leverage_points: ["가문 체면"],
+        taboo_actions: ["공개 파혼 선언"],
+      },
+      access_profile: {
+        knowledge_domains: ["가문 예법"],
+        forbidden_knowledge: ["황실 밀약 전문"],
+        access_rights: ["자신의 방"],
+        surveillance_risk: ["안색이 무너지는 것"],
+      },
+      state: { level: 1, status: "normal", relationships: {}, inventory: [], secrets_known: [] },
+    });
+
+    expect(character.relationship_facts?.[0].address_default).toBe("언니");
+    expect(character.intent_profile?.hidden_goal).toBe("복수 준비");
+    expect(character.access_profile?.access_rights).toContain("자신의 방");
+    expect(getRelationshipFactForPair(character, { id: "serena", name: "세레나 크레센트" })?.private_truth).toBe("hostile");
   });
 
 describe("character reference helpers", () => {

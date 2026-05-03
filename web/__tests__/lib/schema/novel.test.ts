@@ -22,12 +22,35 @@ function createTestSeed() {
       key_locations: {},
       factions: {},
       rules: ["규칙 1"],
+      protocol_rules: ["공적 자리에서는 예법을 지킨다"],
+      room_access_rules: { study: "직계만" },
+      public_behavior_constraints: ["공개 식사 자리에서 먼저 자리를 뜨지 않는다"],
+      punishment_rules: ["예법 위반은 체면 손상"],
+      evidence_classes: { weak: ["시선"], medium: ["전갈"], strong: ["문서"] },
+      symbolic_objects: [{ name: "은잔", significance: "독살 기억", suspicion_weight: "high", romance_weight: "low" }],
     },
     romance_core: {
       primary_pair: ["mc", "ally"],
       mode: "dangerous_courtship",
       obstacle: "서로를 완전히 믿을 수 없는 상황",
       promise: "경계 속에서도 점점 서로를 신경 쓰게 된다",
+      early_romance_modes: ["memory"],
+      forbidden_early_romance_shortcuts: ["즉시 확신"],
+    },
+    narrative_baseline: {
+      default_pov_mode: "close_third",
+      interiority_bias: "high",
+      sensory_bias: ["냉기"],
+      tone_guardrails: ["시녀 반말 금지"],
+    },
+    certainty_ceiling_by_phase: [{ chapter_range: "1-5", max_certainty: "suspicion" }],
+    must_happen_opening_events: ["회귀 인식"],
+    must_happen_part_events: [{ part_id: "part_1", events: ["첫 단서 발견"] }],
+    payoff_cadence: {
+      micro_payoff_every_chapters: 3,
+      relationship_payoff_every_chapters: 4,
+      revelation_payoff_every_chapters: 6,
+      notes: ["주기적으로 보상"],
     },
     characters: [
       {
@@ -115,6 +138,9 @@ describe("NovelSeedSchema", () => {
     expect(result.foreshadowing).toHaveLength(1);
     expect(result.style.pov).toBe("1인칭");
     expect(result.romance_core?.mode).toBe("dangerous_courtship");
+    expect(result.narrative_baseline?.default_pov_mode).toBe("close_third");
+    expect(result.world.evidence_classes?.strong).toContain("문서");
+    expect(result.must_happen_opening_events).toContain("회귀 인식");
   });
 });
 

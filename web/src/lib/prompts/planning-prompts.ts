@@ -21,7 +21,10 @@ export function getMasterPlanPrompt(seed: NovelSeed): string {
 능력 체계: ${seed.world.magic_system || "없음"}
 주요 장소: ${Object.entries(seed.world.key_locations).map(([k, v]) => `${k}: ${v}`).join(", ")}
 진영: ${Object.entries(seed.world.factions).map(([k, v]) => `${k}: ${v}`).join(", ")}
-세계 규칙: ${seed.world.rules.join("; ")}`;
+세계 규칙: ${seed.world.rules.join("; ")}
+궁정/예법 규칙: ${(seed.world.protocol_rules || []).join("; ")}
+공적 행동 제약: ${(seed.world.public_behavior_constraints || []).join("; ")}
+증거 강도: ${seed.world.evidence_classes ? `weak=${seed.world.evidence_classes.weak.join(", ")} / medium=${seed.world.evidence_classes.medium.join(", ")} / strong=${seed.world.evidence_classes.strong.join(", ")}` : "없음"}`;
 
   const characterInfo = seed.characters
     .map((c) => `- ${c.name} (${c.role}): ${c.arc_summary}`)
@@ -244,8 +247,23 @@ ${seed.romance_core
   ? `- 메인 쌍: ${seed.romance_core.primary_pair.join(" ↔ ")}
 - 모드: ${seed.romance_core.mode}
 - 장애물: ${seed.romance_core.obstacle}
-- 독자 약속: ${seed.romance_core.promise}`
+- 독자 약속: ${seed.romance_core.promise}
+- 초반 허용 방식: ${(seed.romance_core.early_romance_modes || []).join(", ")}
+- 초반 금지 지름길: ${(seed.romance_core.forbidden_early_romance_shortcuts || []).join(", ")}`
   : "(명시된 romance_core 없음 — 장르/스레드 문맥에 맞춰 추정)"}
+
+## 서사 baseline
+${seed.narrative_baseline
+  ? `- POV: ${seed.narrative_baseline.default_pov_mode}
+- 내면 밀착도: ${seed.narrative_baseline.interiority_bias}
+- 감각 편향: ${(seed.narrative_baseline.sensory_bias || []).join(", ")}
+- 톤 가드레일: ${(seed.narrative_baseline.tone_guardrails || []).join(" / ")}`
+  : "(명시된 narrative_baseline 없음)"}
+
+## opening / payoff rails
+- opening 필수 사건: ${(seed.must_happen_opening_events || []).join(" / ") || "없음"}
+- payoff cadence: ${seed.payoff_cadence ? `micro ${seed.payoff_cadence.micro_payoff_every_chapters}화 / relationship ${seed.payoff_cadence.relationship_payoff_every_chapters}화 / revelation ${seed.payoff_cadence.revelation_payoff_every_chapters}화` : "없음"}
+- certainty ceiling: ${(seed.certainty_ceiling_by_phase || []).map((c) => `${c.chapter_range}:${c.max_certainty}`).join(" / ") || "없음"}
 
 ## 이 화에서의 감정/비밀 공개 상태
 ${(() => {

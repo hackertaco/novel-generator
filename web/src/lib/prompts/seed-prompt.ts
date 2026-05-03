@@ -33,6 +33,23 @@ world:
   rules:
     - "세계관 규칙 1"
     - "세계관 규칙 2"
+  protocol_rules:
+    - "공적 자리에서는 황태자에게 반드시 전하라 부른다"
+  room_access_rules:
+    study: "공작 직계 + 허가받은 시종만 출입 가능"
+  public_behavior_constraints:
+    - "약혼녀는 공개 식사 자리에서 먼저 자리를 뜨지 않는다"
+  punishment_rules:
+    - "귀족이 공적 자리에서 예법을 어기면 가문 체면이 손상된다"
+  evidence_classes:
+    weak: ["시선", "향", "타이밍"]
+    medium: ["전갈", "물건", "목격"]
+    strong: ["문서", "자백", "현장 포착"]
+  symbolic_objects:
+    - name: "은잔"
+      significance: "독살 기억과 경계심을 환기하는 물건"
+      suspicion_weight: high
+      romance_weight: low
 
 characters:
   - id: "mc"
@@ -50,9 +67,74 @@ characters:
       personality_core: "핵심 성격"
     backstory: "배경 스토리"
     arc_summary: "캐릭터 성장 아크"
+    house: "소속 가문"
+    faction: "소속 진영"
+    public_title: "공적 칭호"
+    court_position: "궁정/가문 내 위치"
+    relationship_facts:
+      - target: "target_id"
+        kinship: none
+        service: none
+        romance_role: none
+        public_face: formal
+        private_truth: suspicious
+        trust_level: 0
+        address_default: "기본 호칭"
+        speech_mode_default: polite
+        preferred_register: "이 관계에서 자연스러운 말투 설명"
+        forbidden_register: ["금지 어조 1"]
+        preferred_patterns: ["자주 쓰는 자연스러운 표현"]
+    masking_habit: "공적 얼굴과 속마음을 어떻게 분리하는지"
+    intent_profile:
+      surface_goal: "겉으로 드러난 목표"
+      hidden_goal: "숨기고 있는 목표"
+      core_fear: "핵심 두려움"
+      leverage_points: ["움직이게 하는 압박"]
+      taboo_actions: ["쉽게 넘지 못하는 금기"]
+    access_profile:
+      knowledge_domains: ["자연스럽게 아는 영역"]
+      forbidden_knowledge: ["알고 있으면 이상한 지식"]
+      access_rights: ["출입/열람 가능한 곳"]
+      surveillance_risk: ["감시/오해받기 쉬운 행동"]
     state:
       level: 1
       relationships: {}
+
+romance_core:
+  primary_pair: ["mc", "ml"]
+  mode: "dangerous_courtship"
+  obstacle: "쉽게 신뢰할 수 없는 정치적/개인적 장애물"
+  promise: "위험한 관계 속에서도 서로를 의식하게 된다"
+  early_romance_modes: ["social_pressure", "memory", "formal etiquette tension"]
+  forbidden_early_romance_shortcuts: ["즉시 확신", "빠른 고백"]
+
+narrative_baseline:
+  default_pov_mode: "close_third"
+  interiority_bias: high
+  sensory_bias: ["손끝의 냉기", "잔 표면의 떨림"]
+  tone_guardrails: ["시녀가 주인에게 친구처럼 반말하지 않는다"]
+
+certainty_ceiling_by_phase:
+  - chapter_range: "1-5"
+    max_certainty: suspicion
+    notes: "시선, 향, 타이밍만으로 공모를 확정하지 않는다"
+
+must_happen_opening_events:
+  - "독살/회귀 인식"
+  - "첫 대치 식사"
+  - "첫 관계 압박 장면"
+
+must_happen_part_events:
+  - part_id: "part_1"
+    events:
+      - "첫 단서/유품 발견"
+      - "첫 공개 충돌"
+
+payoff_cadence:
+  micro_payoff_every_chapters: 3
+  relationship_payoff_every_chapters: 4
+  revelation_payoff_every_chapters: 6
+  notes: ["떡밥만 던지지 말고 관계/정보 보상을 섞을 것"]
 
 arcs:
   - id: "arc_1"
@@ -237,6 +319,7 @@ style:
    - 6화 이후: 나머지 캐릭터 점진적 소개
    - 절대로 1화에 3명 이상의 캐릭터를 배정하지 말 것. 독자는 인물과 친해질 시간이 필요하다.
 3. relationships는 반드시 객체(object)로: {"캐릭터id": "관계설명"} 형태. 배열 금지!
+3-1. 하지만 자유서술 relationships만으로 끝내지 말고, **relationship_facts**에 방향성 있는 구조 truth를 같이 넣으세요. 언니/동생, 주인/시녀, 약혼/정략 관계는 반드시 비대칭 구조로 명시해야 합니다.
 4. **아크 크기 (절대 준수)**: 각 아크는 반드시 8~15화! 20화 이상의 아크는 금지! 60화에 최소 5개 아크가 있어야 합니다.
 5. **복선 규칙**: 최소 5개 이상. 심기~회수 사이에 힌트 3개 이상 (5~8화 간격). 회수가 같은 화에 몰리면 안 됨. 다른 아크에서 회수.
 6. 챕터 아웃라인은 처음 10화까지만 상세하게 (key_points, characters_involved 등)
@@ -284,6 +367,10 @@ style:
    - story_threads에 emotion 타입 스레드가 있다면, chapter_outlines의 advances_thread에 **반드시 포함**시키세요.
    - emotion 스레드의 reveal_timeline이 "1-10화 hinted"이면, 1~10화 중 최소 3개 화에서 advances_thread에 해당 ID가 있어야 합니다.
    - 감정 비트는 key_points에 별도 항목으로 넣으세요. 정치/사건 key_point에 감정을 섞지 말고.
+14-1. **추가 seed truth (반드시 포함)**:
+   - romance_core, narrative_baseline, certainty_ceiling_by_phase, must_happen_opening_events, must_happen_part_events, payoff_cadence를 빠뜨리지 마세요.
+   - 주요 인물은 social_rank, gender, house, faction, public_title, court_position을 가능하면 채우세요.
+   - relationship_facts, intent_profile, access_profile, masking_habit은 핵심 인물에 우선 채우세요.
 15. **개연성 검증 (매우 중요! 설정이 말이 되어야 합니다!)**:
    - 캐릭터가 위장/사칭한다면: 왜 안 들키는지 설정에 근거가 있어야 함 (예: 변방 출신이라 얼굴을 아는 사람이 없다, 기록이 소실됐다)
    - 캐릭터가 위험한 선택을 한다면: 그래야만 하는 이유가 backstory나 arc_summary에 명시되어야 함

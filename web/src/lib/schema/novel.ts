@@ -66,9 +66,62 @@ export const RomanceCoreSchema = z.object({
   mode: z.string().describe("로맨스 모드 (예: dangerous_courtship, slow_burn, enemies_to_lovers)"),
   obstacle: z.string().describe("두 사람이 쉽게 이어질 수 없는 핵심 장애물"),
   promise: z.string().describe("독자가 기대해야 하는 로맨스 감정/관계 보상"),
+  early_romance_modes: z.array(z.string()).default([]).describe("초반부에 허용되는 로맨스 체감 방식"),
+  forbidden_early_romance_shortcuts: z.array(z.string()).default([]).describe("초반부에 금지해야 하는 로맨스 지름길"),
 });
 
 export type RomanceCore = z.infer<typeof RomanceCoreSchema>;
+
+export const SymbolicObjectSchema = z.object({
+  name: z.string().describe("중요 소품/상징물 이름"),
+  significance: z.string().describe("이 물건이 상징하거나 밀어주는 서사 기능"),
+  owner_history: z.string().optional().describe("누구의 것이었고 왜 중요한지"),
+  suspicion_weight: z.enum(["low", "medium", "high"]).default("low").describe("의심/음모 추적에서의 비중"),
+  romance_weight: z.enum(["low", "medium", "high"]).default("low").describe("로맨스 압박/기억에서의 비중"),
+});
+
+export type SymbolicObject = z.infer<typeof SymbolicObjectSchema>;
+
+export const EvidenceClassesSchema = z.object({
+  weak: z.array(z.string()).default([]).describe("얇은 단서 — 의심은 가능하지만 확정은 금지"),
+  medium: z.array(z.string()).default([]).describe("중간 단서 — 관계/음모 가능성을 강하게 의심 가능"),
+  strong: z.array(z.string()).default([]).describe("강한 단서 — 사실/공모를 확정해도 되는 수준"),
+});
+
+export type EvidenceClasses = z.infer<typeof EvidenceClassesSchema>;
+
+export const NarrativeBaselineSchema = z.object({
+  default_pov_mode: z.enum(["close_third", "limited_third", "first_person"]).default("close_third"),
+  interiority_bias: z.enum(["low", "medium", "high"]).default("high"),
+  sensory_bias: z.array(z.string()).default([]).describe("자주 써야 하는 감각 앵커 축"),
+  tone_guardrails: z.array(z.string()).default([]).describe("문체/말투에서 반드시 지켜야 하는 가드레일"),
+});
+
+export type NarrativeBaseline = z.infer<typeof NarrativeBaselineSchema>;
+
+export const PartEventRailSchema = z.object({
+  part_id: z.string().describe("대상 part id"),
+  events: z.array(z.string()).default([]).describe("이 part에서 반드시 벌어져야 하는 사건 rails"),
+});
+
+export type PartEventRail = z.infer<typeof PartEventRailSchema>;
+
+export const PayoffCadenceSchema = z.object({
+  micro_payoff_every_chapters: z.number().int().positive().describe("작은 보상 cadence"),
+  relationship_payoff_every_chapters: z.number().int().positive().describe("관계/감정 보상 cadence"),
+  revelation_payoff_every_chapters: z.number().int().positive().describe("진실/음모 보상 cadence"),
+  notes: z.array(z.string()).default([]).describe("보상 리듬 메모"),
+});
+
+export type PayoffCadence = z.infer<typeof PayoffCadenceSchema>;
+
+export const CertaintyCeilingSchema = z.object({
+  chapter_range: z.string().describe("챕터 범위"),
+  max_certainty: z.enum(["suspicion", "partial", "confirmed"]).default("suspicion"),
+  notes: z.string().optional().describe("이 구간에서 허용되는 추론 상한 메모"),
+});
+
+export type CertaintyCeiling = z.infer<typeof CertaintyCeilingSchema>;
 
 export const PlotPointSchema = z.union([
   z.string(), // backward compat: plain string
@@ -185,6 +238,12 @@ export const WorldSettingSchema = z.object({
     .array(z.string())
     .default([])
     .describe("World rules and constraints"),
+  protocol_rules: z.array(z.string()).optional().describe("궁정/귀족 사회의 예법/호칭/행동 규칙"),
+  room_access_rules: z.preprocess(arrayToRecord, z.record(z.string(), z.string())).optional().describe("장소/기록별 접근 권한 규칙"),
+  public_behavior_constraints: z.array(z.string()).optional().describe("공적 자리에서 지켜야 하는 제약"),
+  punishment_rules: z.array(z.string()).optional().describe("예법/질서 위반 시 따르는 처벌/제재"),
+  evidence_classes: EvidenceClassesSchema.optional().describe("이 세계에서 단서 강도를 어떻게 판단할지"),
+  symbolic_objects: z.array(SymbolicObjectSchema).optional().describe("위험/기억/로맨스 압박을 밀어주는 핵심 물건"),
 });
 
 export type WorldSetting = z.infer<typeof WorldSettingSchema>;
@@ -213,6 +272,11 @@ export const NovelSeedSchema = z.object({
   // Story threads (main plot + sub plots)
   story_threads: z.array(StoryThreadSchema).default([]).describe("메인 스레드 + 서브 스레드. 각 화는 최소 1개 스레드를 진전시켜야 함"),
   romance_core: RomanceCoreSchema.optional().describe("로맨스 판타지일 때 메인 로맨스 축의 장르 약속"),
+  narrative_baseline: NarrativeBaselineSchema.optional().describe("POV/감각/톤 baseline truth"),
+  certainty_ceiling_by_phase: z.array(CertaintyCeilingSchema).optional().describe("챕터 구간별 추론 확신 상한선"),
+  must_happen_opening_events: z.array(z.string()).optional().describe("초반부에서 반드시 벌어져야 하는 사건 rails"),
+  must_happen_part_events: z.array(PartEventRailSchema).optional().describe("part별 필수 사건 rails"),
+  payoff_cadence: PayoffCadenceSchema.optional().describe("독자 보상 cadence truth"),
 
   // Plot structure
   arcs: z.array(PlotArcSchema).default([]),

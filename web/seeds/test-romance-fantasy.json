@@ -23,6 +23,71 @@
       "마법사 서열은 마나량과 속성 희귀도로 결정",
       "귀족 간 정략결혼이 일반적. 파혼은 가문의 수치",
       "회귀 사실을 들키면 이단 심판 대상"
+    ],
+    "protocol_rules": [
+      "황태자와 황족은 공적 자리에서 반드시 전하로 호칭한다",
+      "공작가 적녀는 시녀 앞에서 약점을 길게 드러내지 않는다",
+      "정략 약혼 관계에서는 공개 식사와 인사 예법을 어기면 가문 체면이 손상된다",
+      "시녀는 주인을 부를 때 아가씨 호칭과 존댓말을 유지한다",
+      "귀족 여성은 공적 자리에서 노골적인 반말과 감정 폭발을 자제한다"
+    ],
+    "room_access_rules": {
+      "공작가 서재": "공작 직계와 허가받은 시녀만 출입 가능",
+      "소응접실": "공식 손님 접견 시 적녀와 지정 시녀가 먼저 동선을 점검할 수 있다",
+      "약방 기록장": "가주 허가 또는 전속 시녀 지시가 있어야 열람 가능"
+    },
+    "public_behavior_constraints": [
+      "약혼녀는 공개 접견에서 지나친 친밀함이나 공개적 파혼 언급을 피해야 한다",
+      "이복자매는 공적 자리에서 노골적인 적대를 드러내지 않는다",
+      "황족 방문 시 접객 순서와 차/다과 제공 순서는 예법에 맞아야 한다"
+    ],
+    "punishment_rules": [
+      "귀족이 공적 자리에서 예법을 크게 어기면 가문 전체의 평판 손실로 이어진다",
+      "시녀가 주인에게 무례한 반말을 쓰면 즉시 교체 또는 체벌 사유가 된다",
+      "회귀나 이단 마법 의혹은 황실 심문과 마법탑 조사 대상이 된다"
+    ],
+    "evidence_classes": {
+      "weak": [
+        "시선",
+        "향",
+        "타이밍",
+        "짧은 손짓"
+      ],
+      "medium": [
+        "전갈",
+        "수상한 물건",
+        "사적인 목격",
+        "출입 흔적"
+      ],
+      "strong": [
+        "문서",
+        "자백",
+        "현장 포착",
+        "숨겨진 장부"
+      ]
+    },
+    "symbolic_objects": [
+      {
+        "name": "은잔",
+        "significance": "독살의 기억과 경계심을 환기하는 물건",
+        "owner_history": "공작가 식당에서 반복적으로 쓰이는 찻잔",
+        "suspicion_weight": "high",
+        "romance_weight": "low"
+      },
+      {
+        "name": "약혼 반지 케이스",
+        "significance": "라엘과의 관계를 사회적 압박으로 체감시키는 상징물",
+        "owner_history": "라엘과의 약혼 증표를 담은 케이스",
+        "suspicion_weight": "medium",
+        "romance_weight": "high"
+      },
+      {
+        "name": "은시계",
+        "significance": "시간 속성 마법과 어머니의 유품을 연결하는 단서",
+        "owner_history": "엘리시아의 어머니가 남긴 유품",
+        "suspicion_weight": "high",
+        "romance_weight": "medium"
+      }
     ]
   },
   "characters": [
@@ -61,7 +126,131 @@
           "마리안": "유일한 충복 시녀"
         },
         "inventory": [],
-        "secrets_known": ["자신의 회귀 사실", "세레나의 독살 계획", "라엘과 세레나의 밀통"]
+        "secrets_known": [
+          "자신의 회귀 사실",
+          "세레나의 독살 계획",
+          "라엘과 세레나의 밀통"
+        ]
+      },
+      "gender": "female",
+      "social_rank": "noble",
+      "house": "크레센트 공작가",
+      "faction": "크레센트 공작가",
+      "public_title": "크레센트 공작 영애",
+      "court_position": "공작가 적녀",
+      "address_hints": [
+        {
+          "to": "serena",
+          "relation": "younger_to_elder_sibling",
+          "address": "언니",
+          "speech_level": "polite",
+          "note": "공적 자리에서는 부드러운 존대, 사적 독백은 예외"
+        },
+        {
+          "to": "marian",
+          "relation": "mistress_to_servant",
+          "address": "마리안",
+          "speech_level": "casual",
+          "note": "짧고 낮은 권위체, 지나친 문어체 금지"
+        },
+        {
+          "to": "rael",
+          "relation": "formal_fiance_under_tension",
+          "address": "황태자 전하",
+          "speech_level": "formal",
+          "note": "공식 약혼 관계의 격식을 유지"
+        }
+      ],
+      "relationship_facts": [
+        {
+          "target": "serena",
+          "kinship": "elder_sibling",
+          "service": "none",
+          "romance_role": "rival",
+          "public_face": "warm",
+          "private_truth": "hostile",
+          "trust_level": -2,
+          "hostility_mode": "jealous_masked",
+          "address_default": "언니",
+          "speech_mode_default": "polite",
+          "preferred_register": "부드럽지만 선 긋는 자매 존대",
+          "forbidden_register": [
+            "세레나의 배려는 감사히 받되",
+            "제가 판단하는 편이 익숙해서요"
+          ],
+          "preferred_patterns": [
+            "언니가 신경 써 주는 건 고마워요",
+            "그래도 이번엔 제가 볼게요"
+          ]
+        },
+        {
+          "target": "marian",
+          "kinship": "none",
+          "service": "served_by",
+          "romance_role": "none",
+          "public_face": "devoted",
+          "private_truth": "devoted",
+          "trust_level": 2,
+          "address_default": "마리안",
+          "speech_mode_default": "casual",
+          "preferred_register": "짧고 자연스러운 주인-측근 말투",
+          "preferred_patterns": [
+            "마리안, 이건 내가 할게",
+            "잠깐 나가 있어 줘"
+          ]
+        },
+        {
+          "target": "rael",
+          "kinship": "none",
+          "service": "none",
+          "romance_role": "primary",
+          "public_face": "formal",
+          "private_truth": "suspicious",
+          "trust_level": -2,
+          "hostility_mode": "dangerous_courtship",
+          "address_default": "황태자 전하",
+          "speech_mode_default": "formal",
+          "preferred_register": "격식 있는 약혼자 응대 속 탐색과 경계",
+          "preferred_patterns": [
+            "와 주셔서 영광이에요, 전하",
+            "오늘은 유난히 다정하시네요"
+          ]
+        }
+      ],
+      "masking_habit": "불안과 분노를 미소와 예법으로 덮는다",
+      "intent_profile": {
+        "surface_goal": "완벽한 적녀와 약혼녀로 보이기",
+        "hidden_goal": "세레나와 라엘의 계획을 뒤집을 증거를 쌓기",
+        "core_fear": "같은 방식으로 또 당한 채 죽는 것",
+        "leverage_points": [
+          "가문의 체면",
+          "약혼 예법",
+          "세레나의 조급함"
+        ],
+        "taboo_actions": [
+          "공개 석상에서 약혼 파기 선언",
+          "마리안을 위험에 바로 밀어 넣기"
+        ]
+      },
+      "access_profile": {
+        "knowledge_domains": [
+          "가문 예법",
+          "약혼 절차",
+          "어머니의 취향과 유품 위치"
+        ],
+        "forbidden_knowledge": [
+          "황실 내부 밀약 문서의 전문",
+          "라엘과 세레나의 실제 대화 내용"
+        ],
+        "access_rights": [
+          "공작가 식당",
+          "자신의 방",
+          "어머니의 유품 일부"
+        ],
+        "surveillance_risk": [
+          "식탁에서 안색이 무너지는 것",
+          "접객 순서를 갑자기 바꾸는 것"
+        ]
       }
     },
     {
@@ -98,7 +287,72 @@
           "세레나": "형의 여자. 경계 대상"
         },
         "inventory": [],
-        "secrets_known": ["어둠 속성 마법 보유", "라엘의 약점"]
+        "secrets_known": [
+          "어둠 속성 마법 보유",
+          "라엘의 약점"
+        ]
+      },
+      "gender": "male",
+      "social_rank": "royal",
+      "house": "아우레아 황실",
+      "faction": "제2황자파",
+      "public_title": "제2황자 전하",
+      "court_position": "제국 제2황자",
+      "relationship_facts": [
+        {
+          "target": "elysia",
+          "kinship": "none",
+          "service": "none",
+          "romance_role": "latent",
+          "public_face": "formal",
+          "private_truth": "suspicious",
+          "trust_level": 0,
+          "hostility_mode": "curious_interest",
+          "address_default": "크레센트 영애",
+          "speech_mode_default": "formal"
+        },
+        {
+          "target": "rael",
+          "kinship": "none",
+          "service": "none",
+          "romance_role": "none",
+          "public_face": "cold",
+          "private_truth": "hostile",
+          "trust_level": -2,
+          "hostility_mode": "succession_rivalry",
+          "address_default": "형님",
+          "speech_mode_default": "formal"
+        }
+      ],
+      "masking_habit": "가벼운 농담으로 야망과 경계를 감춘다",
+      "intent_profile": {
+        "surface_goal": "방탕한 제2황자로 보이기",
+        "hidden_goal": "황위 경쟁에서 살아남고 우위를 잡기",
+        "core_fear": "형의 계획에 미리 제거되는 것",
+        "leverage_points": [
+          "정보전",
+          "예상 밖의 친근함"
+        ],
+        "taboo_actions": [
+          "라엘 앞에서 야망을 직접 드러내기"
+        ]
+      },
+      "access_profile": {
+        "knowledge_domains": [
+          "황실 권력 구도",
+          "라엘의 약점",
+          "궁정 뒷소문"
+        ],
+        "forbidden_knowledge": [
+          "엘리시아의 회귀 사실"
+        ],
+        "access_rights": [
+          "황궁 핵심 구역",
+          "황실 기록 일부"
+        ],
+        "surveillance_risk": [
+          "엘리시아에게 과도하게 관심 보이는 행동"
+        ]
       }
     },
     {
@@ -134,7 +388,89 @@
           "라엘": "연인. 이용하고 있다고 생각하지만 실제로는 이용당하는 중"
         },
         "inventory": [],
-        "secrets_known": ["라엘과의 밀약"]
+        "secrets_known": [
+          "라엘과의 밀약"
+        ]
+      },
+      "gender": "female",
+      "social_rank": "gentry",
+      "house": "크레센트 공작가",
+      "faction": "황태자파",
+      "public_title": "크레센트가 차녀",
+      "court_position": "공작가 서녀",
+      "address_hints": [
+        {
+          "to": "elysia",
+          "relation": "elder_to_younger_sibling",
+          "address": "엘리시아",
+          "speech_level": "polite",
+          "note": "겉으로 다정한 언니 톤"
+        }
+      ],
+      "relationship_facts": [
+        {
+          "target": "elysia",
+          "kinship": "younger_sibling",
+          "service": "none",
+          "romance_role": "rival",
+          "public_face": "warm",
+          "private_truth": "hostile",
+          "trust_level": -2,
+          "hostility_mode": "smiling_control",
+          "address_default": "엘리시아",
+          "speech_mode_default": "polite",
+          "preferred_register": "다정한 척하면서 떠보는 말투",
+          "preferred_patterns": [
+            "엘리시아, 괜찮니?",
+            "언니가 걱정돼서 그래"
+          ]
+        },
+        {
+          "target": "rael",
+          "kinship": "none",
+          "service": "none",
+          "romance_role": "latent",
+          "public_face": "formal",
+          "private_truth": "utilitarian",
+          "trust_level": 1,
+          "hostility_mode": "secret_affair",
+          "address_default": "전하",
+          "speech_mode_default": "formal",
+          "preferred_register": "공적 예의를 지키되 은밀한 유대가 새는 말투"
+        }
+      ],
+      "masking_habit": "눈물과 상냥함으로 적의를 감춘다",
+      "intent_profile": {
+        "surface_goal": "언니를 돕는 상냥한 동생으로 보이기",
+        "hidden_goal": "엘리시아의 자리와 라엘을 빼앗기",
+        "core_fear": "평생 적녀의 그림자로 남는 것",
+        "leverage_points": [
+          "사람들이 믿는 순한 인상",
+          "황태자와의 연결"
+        ],
+        "taboo_actions": [
+          "공적 자리에서 먼저 악의를 드러내기"
+        ]
+      },
+      "access_profile": {
+        "knowledge_domains": [
+          "공작가 내부 동선",
+          "정원과 약초",
+          "엘리시아의 생활 리듬"
+        ],
+        "forbidden_knowledge": [
+          "회귀의 실체",
+          "시간 속성의 구체적 발현 방식"
+        ],
+        "access_rights": [
+          "공작가 식당",
+          "자신의 방",
+          "정원"
+        ],
+        "surveillance_risk": [
+          "언니를 과하게 관찰하는 시선",
+          "독초와 약재를 만지는 행동"
+        ]
       }
     },
     {
@@ -171,6 +507,86 @@
         },
         "inventory": [],
         "secrets_known": []
+      },
+      "gender": "male",
+      "social_rank": "royal",
+      "house": "아우레아 황실",
+      "faction": "황태자파",
+      "public_title": "황태자 전하",
+      "court_position": "제국 황태자",
+      "address_hints": [
+        {
+          "to": "elysia",
+          "relation": "formal_fiance_under_tension",
+          "address": "크레센트 영애",
+          "speech_level": "formal",
+          "note": "완벽한 약혼자 예법"
+        },
+        {
+          "to": "serena",
+          "address": "세레나 양",
+          "speech_level": "formal",
+          "note": "공적 자리에서는 거리를 둠"
+        }
+      ],
+      "relationship_facts": [
+        {
+          "target": "elysia",
+          "kinship": "none",
+          "service": "none",
+          "romance_role": "primary",
+          "public_face": "formal",
+          "private_truth": "utilitarian",
+          "trust_level": -1,
+          "hostility_mode": "political_courtship",
+          "address_default": "크레센트 영애",
+          "speech_mode_default": "formal",
+          "preferred_register": "부드럽지만 사람을 재는 황태자 말투"
+        },
+        {
+          "target": "serena",
+          "kinship": "none",
+          "service": "none",
+          "romance_role": "latent",
+          "public_face": "formal",
+          "private_truth": "utilitarian",
+          "trust_level": 0,
+          "hostility_mode": "secret_collusion",
+          "address_default": "세레나 양",
+          "speech_mode_default": "formal"
+        }
+      ],
+      "masking_habit": "완벽한 미소와 예법으로 계산을 숨긴다",
+      "intent_profile": {
+        "surface_goal": "모범적인 황태자와 약혼자로 보이기",
+        "hidden_goal": "크레센트 공작가의 세력과 엘리시아의 위치를 통제하기",
+        "core_fear": "통제 밖의 변수 때문에 후계 구도가 흔들리는 것",
+        "leverage_points": [
+          "약혼 예법",
+          "황실 권위",
+          "방문 자체의 압박"
+        ],
+        "taboo_actions": [
+          "공적 자리에서 직접적인 분노 표출"
+        ]
+      },
+      "access_profile": {
+        "knowledge_domains": [
+          "궁정 예법",
+          "황실 방문 의전",
+          "정략 혼인 절차"
+        ],
+        "forbidden_knowledge": [
+          "엘리시아의 회귀 사실"
+        ],
+        "access_rights": [
+          "황실 응접실",
+          "황궁 기록",
+          "공식 방문 구역"
+        ],
+        "surveillance_risk": [
+          "공작가 방문 중 세레나와 사적인 눈빛 교환"
+        ]
       }
     },
     {
@@ -205,6 +621,76 @@
         },
         "inventory": [],
         "secrets_known": []
+      },
+      "gender": "female",
+      "social_rank": "servant",
+      "house": "크레센트 공작가",
+      "faction": "크레센트 공작가",
+      "public_title": "전속 시녀",
+      "court_position": "엘리시아의 시녀장",
+      "address_hints": [
+        {
+          "to": "elysia",
+          "relation": "servant_to_mistress",
+          "address": "아가씨",
+          "speech_level": "polite",
+          "note": "친밀해도 신분선은 넘지 않음"
+        }
+      ],
+      "relationship_facts": [
+        {
+          "target": "elysia",
+          "kinship": "none",
+          "service": "serves",
+          "romance_role": "none",
+          "public_face": "devoted",
+          "private_truth": "devoted",
+          "trust_level": 2,
+          "address_default": "아가씨",
+          "speech_mode_default": "polite",
+          "preferred_register": "걱정은 다정하게, 그러나 존대 유지",
+          "forbidden_register": [
+            "왜 그래",
+            "알겠어",
+            "혼자 버티진 마"
+          ],
+          "preferred_patterns": [
+            "왜 그러세요",
+            "알겠어요",
+            "혼자 버티지 마세요"
+          ]
+        }
+      ],
+      "masking_habit": "공적 자리에서는 실무적인 침착함으로 충정을 숨긴다",
+      "intent_profile": {
+        "surface_goal": "아가씨를 안전하게 보필하기",
+        "hidden_goal": "엘리시아가 무너지지 않게 대신 위험을 감당하기",
+        "core_fear": "엘리시아를 지키지 못하는 것",
+        "leverage_points": [
+          "생활 동선 파악",
+          "하인 네트워크"
+        ],
+        "taboo_actions": [
+          "공적 자리에서 주인보다 먼저 감정을 폭발시키기"
+        ]
+      },
+      "access_profile": {
+        "knowledge_domains": [
+          "엘리시아의 생활 습관",
+          "공작가 내부 동선",
+          "시녀 네트워크 소문"
+        ],
+        "forbidden_knowledge": [
+          "황실 밀약 전문"
+        ],
+        "access_rights": [
+          "엘리시아의 방",
+          "식당 시중",
+          "시녀용 복도"
+        ],
+        "surveillance_risk": [
+          "주인을 위해 과하게 끼어드는 행동"
+        ]
       }
     }
   ],
@@ -231,8 +717,16 @@
       "title": "두 번째 아침",
       "arc_id": "arc_1",
       "one_liner": "독살의 기억을 안고 깨어난 엘리시아가, 거울 속 3년 전의 자신을 보며 복수를 결심한다",
-      "key_points": ["회귀 자각", "세레나와의 아침 식사 — 겉과 속이 다른 대화", "마리안의 걱정"],
-      "characters_involved": ["elysia", "serena", "marian"],
+      "key_points": [
+        "회귀 자각",
+        "세레나와의 아침 식사 — 겉과 속이 다른 대화",
+        "마리안의 걱정"
+      ],
+      "characters_involved": [
+        "elysia",
+        "serena",
+        "marian"
+      ],
       "tension_level": 6
     },
     {
@@ -240,8 +734,17 @@
       "title": "가면 아래",
       "arc_id": "arc_1",
       "one_liner": "라엘이 약혼 인사차 공작가를 방문하고, 엘리시아는 전생의 분노를 삼키며 완벽한 연기를 한다",
-      "key_points": ["라엘 방문", "엘리시아의 연기", "세레나와 라엘의 은밀한 눈빛 교환을 포착"],
-      "characters_involved": ["elysia", "rael", "serena", "marian"],
+      "key_points": [
+        "라엘 방문",
+        "엘리시아의 연기",
+        "세레나와 라엘의 은밀한 눈빛 교환을 포착"
+      ],
+      "characters_involved": [
+        "elysia",
+        "rael",
+        "serena",
+        "marian"
+      ],
       "tension_level": 7
     },
     {
@@ -249,8 +752,15 @@
       "title": "겨울 장미의 비밀",
       "arc_id": "arc_1",
       "one_liner": "엘리시아가 공작가 서재에서 어머니의 유품을 발견하고, 시간 속성 마법의 단서를 얻는다",
-      "key_points": ["어머니 유품 발견", "시간 속성 마법 단서", "세레나가 서재 침입 시도"],
-      "characters_involved": ["elysia", "marian"],
+      "key_points": [
+        "어머니 유품 발견",
+        "시간 속성 마법 단서",
+        "세레나가 서재 침입 시도"
+      ],
+      "characters_involved": [
+        "elysia",
+        "marian"
+      ],
       "tension_level": 5
     }
   ],
@@ -261,7 +771,11 @@
       "description": "엘리시아의 시간 속성 마법 — 1화에서 시계가 거꾸로 도는 묘사로 암시, 10화에서 발현",
       "plant_chapter": 1,
       "reveal_chapter": 10,
-      "hint_chapters": [3, 5, 7],
+      "hint_chapters": [
+        3,
+        5,
+        7
+      ],
       "importance": "critical"
     },
     {
@@ -270,7 +784,11 @@
       "description": "세레나의 독살 준비 — 2화에서 정원의 독초를 만지는 세레나, 15화에서 독살 시도",
       "plant_chapter": 2,
       "reveal_chapter": 15,
-      "hint_chapters": [5, 8, 12],
+      "hint_chapters": [
+        5,
+        8,
+        12
+      ],
       "importance": "critical"
     }
   ],
@@ -286,6 +804,80 @@
       "대사 후 긴 지문 금지",
       "매 회차 끝은 궁금증 유발",
       "엘리시아 독백은 이탤릭 처리"
+    ]
+  },
+  "romance_core": {
+    "primary_pair": [
+      "elysia",
+      "rael"
+    ],
+    "mode": "dangerous_courtship",
+    "obstacle": "독살의 기억과 황태자파 음모 때문에 서로를 쉽게 믿을 수 없다",
+    "promise": "정략 약혼의 압박 속에서도 서로를 점점 더 의식하게 된다",
+    "early_romance_modes": [
+      "social_pressure",
+      "memory",
+      "formal etiquette tension"
+    ],
+    "forbidden_early_romance_shortcuts": [
+      "즉시 상호 신뢰",
+      "빠른 고백",
+      "단서 없는 공모 확정 이후 즉시 감정 급진전"
+    ]
+  },
+  "narrative_baseline": {
+    "default_pov_mode": "close_third",
+    "interiority_bias": "high",
+    "sensory_bias": [
+      "손끝의 냉기",
+      "잔 표면의 떨림",
+      "홍차 향의 메스꺼움"
+    ],
+    "tone_guardrails": [
+      "시녀가 주인에게 친구처럼 반말하지 않는다",
+      "동생이 언니에게 관료 문체로 말하지 않는다",
+      "초중반 음모는 얇은 단서만으로 공모 확정까지 닫지 않는다"
+    ]
+  },
+  "certainty_ceiling_by_phase": [
+    {
+      "chapter_range": "1-5",
+      "max_certainty": "suspicion",
+      "notes": "시선, 향, 타이밍만으로는 공모를 확정하지 않는다"
+    },
+    {
+      "chapter_range": "6-20",
+      "max_certainty": "partial",
+      "notes": "물건, 기록, 반복되는 흔적이 쌓이면 부분 확신까지 가능"
+    },
+    {
+      "chapter_range": "21-60",
+      "max_certainty": "confirmed",
+      "notes": "문서와 현장 포착이 모이면 본격 확정 가능"
+    }
+  ],
+  "must_happen_opening_events": [
+    "독살 기억과 회귀 인식",
+    "세레나와의 첫 식탁 대치",
+    "라엘 혹은 약혼 압박의 첫 체감",
+    "어머니 유품/시간 단서의 첫 발견"
+  ],
+  "must_happen_part_events": [
+    {
+      "part_id": "arc_1",
+      "events": [
+        "마법 각성 단서",
+        "라엘-세레나 축의 첫 균열 감지",
+        "공작가 내부 기록 접근"
+      ]
+    }
+  ],
+  "payoff_cadence": {
+    "micro_payoff_every_chapters": 3,
+    "relationship_payoff_every_chapters": 4,
+    "revelation_payoff_every_chapters": 6,
+    "notes": [
+      "초반에는 식탁/응접실/서재 축이 번갈아 관계 보상과 단서 보상을 제공해야 한다"
     ]
   }
 }
