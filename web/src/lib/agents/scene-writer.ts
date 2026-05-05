@@ -104,6 +104,37 @@ function getForeshadowingActionLabel(action: "plant" | "hint" | "reveal"): strin
   }
 }
 
+function pickRelevantProtocolLines(seed: NovelSeed, locationHints: string): string[] {
+  const lines: string[] = [];
+  const isFormalSpace = /식당|응접실|접견|연회|궁/.test(locationHints);
+  for (const rule of seed.world.protocol_rules || []) {
+    if (isFormalSpace || /(황태자|전하|시녀|약혼|귀족)/.test(rule)) {
+      lines.push(rule);
+    }
+  }
+  for (const rule of seed.world.public_behavior_constraints || []) {
+    if (isFormalSpace) lines.push(rule);
+  }
+  return lines.slice(0, 4);
+}
+
+function pickRelevantObjectLines(seed: NovelSeed, sceneContext: string): string[] {
+  const hits = (seed.world.symbolic_objects || []).filter((obj) =>
+    sceneContext.includes(obj.name) || obj.significance.split(/\s+/).some((token) => token.length >= 2 && sceneContext.includes(token))
+  );
+  return hits.slice(0, 2).map((obj) => `${obj.name}(${obj.significance})`);
+}
+
+function pickRelevantAccessLines(seed: NovelSeed, locationHints: string): string[] {
+  const lines: string[] = [];
+  for (const [room, rule] of Object.entries(seed.world.room_access_rules || {})) {
+    if (locationHints.includes(room)) {
+      lines.push(`${room}: ${rule}`);
+    }
+  }
+  return lines.slice(0, 3);
+}
+
 /**
  * Build the prompt for generating a single scene.
  */
@@ -152,14 +183,13 @@ ${chapterNumber}화 — ${blueprint.one_liner}
   if (seed.world.rules.length > 0) {
     worldParts.push(`세계 규칙: ${seed.world.rules.slice(0, 3).join("; ")}`);
   }
-  if ((seed.world.protocol_rules || []).length > 0) {
-    worldParts.push(`궁정/예법 규칙: ${(seed.world.protocol_rules || []).slice(0, 3).join("; ")}`);
+  const chapterSceneContext = [blueprint.one_liner, scene.purpose, scene.where_detail].filter(Boolean).join(" ");
+  const protocolLines = pickRelevantProtocolLines(seed, chapterSceneContext);
+  if (protocolLines.length > 0) {
+    worldParts.push(`궁정/예법 규칙: ${protocolLines.join("; ")}`);
   }
-  if ((seed.world.public_behavior_constraints || []).length > 0) {
-    worldParts.push(`공적 행동 제약: ${(seed.world.public_behavior_constraints || []).slice(0, 3).join("; ")}`);
-  }
-  if ((seed.world.symbolic_objects || []).length > 0) {
-    const symbolic = (seed.world.symbolic_objects || []).slice(0, 3).map((obj) => `${obj.name}(${obj.significance})`);
+  const symbolic = pickRelevantObjectLines(seed, chapterSceneContext);
+  if (symbolic.length > 0) {
     worldParts.push(`상징물: ${symbolic.join(", ")}`);
   }
   if (worldParts.length > 0) {
