@@ -1,5 +1,18 @@
 import { NextRequest } from "next/server";
-import { NovelHarness, getDefaultConfig, getBudgetConfig, getFastConfig } from "@/lib/harness";
+import {
+  getBudgetConfig,
+  getDefaultConfig,
+  getFastConfig,
+} from "@/lib/harness";
+import type {
+  HarnessEvent,
+  RendererRegenerationRequest,
+} from "@/lib/harness";
+import {
+  buildChapterGenerationProgrammaticRunResponse,
+  createChapterGenerationProgrammaticRunRequest,
+  runEndToEndChapterGeneration,
+} from "@/lib/orchestration";
 import type { NovelSeed } from "@/lib/schema/novel";
 import type { MasterPlan } from "@/lib/schema/planning";
 
@@ -17,9 +30,11 @@ export async function POST(request: NextRequest) {
       batch,
       masterPlan,
       preset,
+      mode,
+      rendererRegeneration,
     } = body as {
       seed: NovelSeed;
-      chapterNumber: number;
+      chapterNumber?: number;
       previousSummaries: Array<{
         chapter: number;
         title: string;
@@ -31,21 +46,50 @@ export async function POST(request: NextRequest) {
         qualityThreshold?: number;
         maxAttempts?: number;
         budgetUsd?: number;
+        outDir?: string;
       };
       batch?: { startChapter: number; endChapter: number };
       masterPlan?: MasterPlan;
-      /** Harness preset: "default" | "budget" | "fast" */
       preset?: string;
+      mode?: "generate" | "renderer_regeneration";
+      rendererRegeneration?: RendererRegenerationRequest;
     };
 
-    // Default to "default" preset — legacy orchestrator is deprecated
+    const resolvedChapterNumber =
+      rendererRegeneration?.snapshot.chapterNumber ?? chapterNumber;
+    const resolvedMode = mode
+      ?? (rendererRegeneration ? "renderer_regeneration" : "generate");
     const resolvedPreset = preset || "default";
 
-    console.log(`[orchestrate] 요청: ${chapterNumber}화 생성 (preset: ${resolvedPreset}, ${new Date().toISOString()})`);
+    console.log(
+      `[orchestrate] 요청: ${resolvedChapterNumber}화 ${resolvedMode} `
+      + `(preset: ${resolvedPreset}, ${new Date().toISOString()})`,
+    );
 
-    if (!seed || !chapterNumber) {
+    if (!seed || !resolvedChapterNumber) {
       return new Response(
         JSON.stringify({ error: "시드와 챕터 번호가 필요합니다" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    if (resolvedMode === "renderer_regeneration" && !rendererRegeneration) {
+      return new Response(
+        JSON.stringify({ error: "renderer regeneration 요청 본문이 필요합니다" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    if (
+      rendererRegeneration
+      && chapterNumber
+      && chapterNumber !== rendererRegeneration.snapshot.chapterNumber
+    ) {
+      return new Response(
+        JSON.stringify({
+          error:
+            "chapterNumber must match rendererRegeneration.snapshot.chapterNumber",
+        }),
         { status: 400, headers: { "Content-Type": "application/json" } },
       );
     }
@@ -60,68 +104,134 @@ export async function POST(request: NextRequest) {
         };
 
         try {
-          // --- Harness mode (legacy Orchestrator branch removed) ---
-          const configMap: Record<string, () => ReturnType<typeof getDefaultConfig>> = {
+          const configMap: Record<
+            string,
+            () => ReturnType<typeof getDefaultConfig>
+          > = {
             default: getDefaultConfig,
             budget: getBudgetConfig,
             fast: getFastConfig,
           };
-          const config = (configMap[resolvedPreset] || getDefaultConfig)();
 
-          // Apply user overrides
-          if (options?.qualityThreshold) config.qualityThreshold = options.qualityThreshold;
-          if (options?.maxAttempts) config.maxAttempts = options.maxAttempts;
-          if (options?.budgetUsd) config.budgetUsd = options.budgetUsd;
-          config.output = { mode: "stream", verbose: false };
-
-          const harness = new NovelHarness(config);
-
-          const startCh = batch?.startChapter ?? chapterNumber;
-          const endCh = batch?.endChapter ?? chapterNumber;
-
-          for await (const event of harness.run(seed, startCh, endCh, {
+          const startChapter = resolvedMode === "renderer_regeneration"
+            ? resolvedChapterNumber
+            : (batch?.startChapter ?? resolvedChapterNumber);
+          const endChapter = resolvedMode === "renderer_regeneration"
+            ? resolvedChapterNumber
+            : (batch?.endChapter ?? resolvedChapterNumber);
+          const workflowInput = {
+            workflow: "chapter_generation" as const,
+            seed,
+            startChapter,
+            endChapter,
+            preset: resolvedPreset,
+            budgetUsd: options?.budgetUsd,
             masterPlan,
             previousSummaries,
             previousChapterEnding,
-          })) {
-            switch (event.type) {
-              case "chapter_start":
-                send({ type: "pipeline_stage", stage: "generating_chapter" });
-                break;
-              case "pipeline_event":
-                // Forward lifecycle events directly to client
-                send(event.event as Record<string, unknown>);
-                break;
-              case "chapter_complete":
-                send({
-                  type: "complete",
-                  summary: event.result.summary,
-                  final_score: event.result.score,
-                });
-                send({ type: "usage", ...event.result.usage });
-                break;
-              case "plan_generated":
-                send({ type: "plan_update", plan: event.plan });
-                break;
-              case "plausibility_check":
-                send({ type: "plausibility_check", passed: event.passed, issues: event.issues });
-                break;
-              case "plausibility_fixed":
-                send({ type: "plausibility_fixed", fixes: event.fixes });
-                break;
-              case "error":
-                send({ type: "error", message: event.message });
-                break;
-              case "done":
-                send({
-                  type: "harness_done",
-                  config: event.result.config,
-                  totalCostUsd: event.result.totalCostUsd,
-                  totalTokens: event.result.totalUsage.total_tokens,
-                  totalDurationMs: event.result.totalDurationMs,
-                });
-                break;
-            }
+            rendererRegeneration,
+          };
+          const contractRequest = createChapterGenerationProgrammaticRunRequest({
+            input: workflowInput,
+            preset: resolvedPreset,
+            outDir: options?.outDir,
+            verbose: false,
+            budgetUsd: options?.budgetUsd ?? null,
+            qualityThreshold: options?.qualityThreshold,
+            maxAttempts: options?.maxAttempts,
+          });
+
+          const execution = await runEndToEndChapterGeneration({
+            outDir: options?.outDir,
+            input: workflowInput,
+            resolveConfig: (selectedPreset) => {
+              const config = (configMap[selectedPreset] || getDefaultConfig)();
+              if (options?.qualityThreshold) {
+                config.qualityThreshold = options.qualityThreshold;
+              }
+              if (options?.maxAttempts) {
+                config.maxAttempts = options.maxAttempts;
+              }
+              if (options?.budgetUsd) {
+                config.budgetUsd = options.budgetUsd;
+              }
+              config.output = { mode: "stream", verbose: false };
+              return config;
+            },
+            onLifecycleEvent: async (event) => {
+              if (event.type !== "source_event" || event.source !== "harness") {
+                return;
+              }
+
+              const harnessEvent = event.payload as HarnessEvent;
+              switch (harnessEvent.type) {
+                case "chapter_start":
+                  send({ type: "pipeline_stage", stage: "generating_chapter" });
+                  break;
+                case "pipeline_event":
+                  send(harnessEvent.event as Record<string, unknown>);
+                  break;
+                case "chapter_complete":
+                  send({
+                    type: "complete",
+                    text: harnessEvent.result.text,
+                    summary: harnessEvent.result.summary,
+                    final_score: harnessEvent.result.score,
+                    verification: harnessEvent.result.verification,
+                    beliefInterpretationRecovery:
+                      harnessEvent.result.beliefInterpretationRecovery,
+                    rendererRegenerationRequest:
+                      harnessEvent.result.rendererRegenerationRequest,
+                  });
+                  send({ type: "usage", ...harnessEvent.result.usage });
+                  break;
+                case "plan_generated":
+                  send({ type: "plan_update", plan: harnessEvent.plan });
+                  break;
+                case "plausibility_check":
+                  send({
+                    type: "plausibility_check",
+                    passed: harnessEvent.passed,
+                    issues: harnessEvent.issues,
+                  });
+                  break;
+                case "plausibility_fixed":
+                  send({ type: "plausibility_fixed", fixes: harnessEvent.fixes });
+                  break;
+                case "error":
+                  send({
+                    type: "error",
+                    message: harnessEvent.message,
+                    code: harnessEvent.code,
+                    canonicalValidationFailure:
+                      harnessEvent.canonicalValidationFailure,
+                    beliefInterpretationRecovery:
+                      harnessEvent.beliefInterpretationRecovery,
+                  });
+                  break;
+                case "done": {
+                  break;
+                }
+              }
+            },
+          });
+
+          send({
+            type: "harness_done",
+            run: buildChapterGenerationProgrammaticRunResponse({
+              request: contractRequest,
+              result: execution,
+            }),
+            ...execution.report,
+          });
+
+          if (!execution.workflowResult.ok && !execution.workflowResult.payload) {
+            send({
+              type: "error",
+              message:
+                execution.workflowResult.errors[0]?.message ?? "오케스트레이션 실패",
+              code: execution.workflowResult.errors[0]?.code,
+            });
           }
         } catch (err) {
           send({

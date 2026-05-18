@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { PlotOption } from "@/lib/schema/plot";
 import type { NovelSeed } from "@/lib/schema/novel";
+import { refreshForeshadowVerificationMetadata } from "@/lib/schema/foreshadowing";
 import { NovelHarness, getDefaultConfig } from "@/lib/harness";
 
 export const maxDuration = 300;
+
+function enrichSeedForeshadowing(seed: NovelSeed): NovelSeed {
+  return {
+    ...seed,
+    foreshadowing: (seed.foreshadowing ?? []).map((foreshadowing) =>
+      refreshForeshadowVerificationMetadata({ ...foreshadowing }),
+    ),
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,7 +42,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "시드 생성 실패" }, { status: 500 });
     }
 
-    return NextResponse.json({ seed });
+    return NextResponse.json({ seed: enrichSeedForeshadowing(seed) });
   } catch (err) {
     console.error("[seed] Error:", err);
     const message = err instanceof Error ? err.message : "시드 생성 실패";

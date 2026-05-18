@@ -109,8 +109,7 @@ export async function POST(request: NextRequest) {
     // Check if any API key is configured
     const hasApiKey = !!(
       process.env.OPENAI_API_KEY ||
-      process.env.OPENROUTER_API_KEY ||
-      process.env.ZAI_API_KEY
+      process.env.OPENROUTER_API_KEY
     );
     if (!hasApiKey) {
       const plots = generateMockPlots(genre);

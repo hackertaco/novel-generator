@@ -132,6 +132,88 @@ describe("POST /api/seed — response format contract", () => {
     expect(Array.isArray(json.seed.arcs)).toBe(true);
   });
 
+  it("adds verification metadata to foreshadowing items in the API response", async () => {
+    mockStepSeed.mockImplementation(async function* () {
+      yield {
+        type: "seed_generated",
+        seed: {
+          ...GENERATED_SEED,
+          foreshadowing: [
+            {
+              id: "fs_gate",
+              name: "문양 균열",
+              description: "회랑 문양이 특정 피를 인식한다는 초기 징후",
+              planted_at: 1,
+              reveal_at: 8,
+              hints_at: [],
+              origin: {
+                episode_id: "ep_001",
+                scene_id: "scene_001_corridor_gate",
+                source_span: {
+                  start_offset: 18,
+                  end_offset: 49,
+                  excerpt: "문 표면의 문양이 세라핀의 손끝에서 붉게 갈라졌다.",
+                },
+              },
+              linked_hint_occurrences: [
+                {
+                  episode_id: "ep_004",
+                  scene_id: "scene_004_archive",
+                  source_span: {
+                    start_offset: 4,
+                    end_offset: 19,
+                    excerpt: "같은 붉은 균열 자국이 장부 옆에서 발견된다.",
+                  },
+                },
+              ],
+              status: "pending",
+              hint_count: 0,
+            },
+          ],
+        },
+      };
+    });
+
+    const { json } = await callRoute(validBody);
+    expect(json.seed.foreshadowing[0].lifecycle).toBe("pending");
+    expect(json.seed.foreshadowing[0].verification_metadata).toEqual({
+      source_episode_ids: ["ep_001", "ep_004"],
+      source_scene_ids: ["scene_001_corridor_gate", "scene_004_archive"],
+      source_occurrence_count: 2,
+      shared_target_summary: "회랑 문양이 특정 피를 인식한다는 초기 징후",
+    });
+  });
+
+  it("preserves explicit intentional-abandonment markers in the API seed response", async () => {
+    mockStepSeed.mockImplementation(async function* () {
+      yield {
+        type: "seed_generated",
+        seed: {
+          ...GENERATED_SEED,
+          foreshadowing: [
+            {
+              id: "fs_cut",
+              name: "폐기된 떡밥",
+              description: "중반 구조 개편으로 더 이상 회수하지 않기로 한 떡밥",
+              planted_at: 1,
+              reveal_at: null,
+              hints_at: [],
+              abandonment_marker: "intentional-abandonment:timeline-cut",
+              status: "pending",
+              hint_count: 0,
+            },
+          ],
+        },
+      };
+    });
+
+    const { json } = await callRoute(validBody);
+    expect(json.seed.foreshadowing[0].lifecycle).toBe("intentionally_abandoned");
+    expect(json.seed.foreshadowing[0].abandonment_marker).toBe(
+      "intentional-abandonment:timeline-cut",
+    );
+  });
+
   it("`seed` has `style` object", async () => {
     const { json } = await callRoute(validBody);
     expect(json.seed).toHaveProperty("style");
