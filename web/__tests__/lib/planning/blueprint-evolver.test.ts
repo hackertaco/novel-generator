@@ -45,7 +45,27 @@ function makeSeed(): NovelSeed {
     extended_outlines: [],
     story_threads: [],
     foreshadowing: [
-      { id: "fs_1", name: "복선1", description: "테스트", importance: "critical", planted_at: 2, hints_at: [5], reveal_at: 8, status: "pending", hint_count: 1 },
+      {
+        id: "fs_1",
+        name: "복선1",
+        description: "테스트",
+        importance: "critical",
+        planted_at: 2,
+        hints_at: [5],
+        reveal_at: 8,
+        origin: {
+          episode_id: "ep_002",
+          scene_id: "scene_002_01",
+          source_span: {
+            start_offset: 0,
+            end_offset: 12,
+            excerpt: "복선1 첫 제시",
+          },
+        },
+        linked_hint_occurrences: [],
+        status: "pending",
+        hint_count: 1,
+      },
     ],
     style: { max_paragraph_length: 3, dialogue_ratio: 0.6, sentence_style: "short", hook_ending: true, pov: "1인칭", tense: "과거형", formatting_rules: [] },
   } as NovelSeed;

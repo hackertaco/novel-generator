@@ -21,6 +21,7 @@ import {
   WEIGHT_SCENE_SPECIFICITY,
 } from "@/lib/evolution/blueprint-evaluator";
 import type { EvaluationResult } from "@/lib/evolution/blueprint-evaluator";
+import { FORESHADOW_QUALITY_GATE_THRESHOLD } from "@/lib/evolution/evaluators/foreshadowing-usage";
 import type { NovelSeed } from "@/lib/schema/novel";
 import type { Character } from "@/lib/schema/character";
 
@@ -141,6 +142,16 @@ function makePassingSeed(): NovelSeed {
       planted_at: 2,
       hints_at: [5],
       reveal_at: 8,
+      origin: {
+        episode_id: "ep_002",
+        scene_id: "scene_002_01",
+        source_span: {
+          start_offset: 0,
+          end_offset: 18,
+          excerpt: "수상한 유물이 처음 등장한다",
+        },
+      },
+      linked_hint_occurrences: [],
       status: "pending",
       hint_count: 0,
     },
@@ -261,6 +272,14 @@ function makeFailingSeed(): NovelSeed {
   return seed;
 }
 
+function makeForeshadowQualityGateSeed(
+  foreshadowing: NovelSeed["foreshadowing"],
+): NovelSeed {
+  const seed = makeMinimalSeed();
+  seed.foreshadowing = foreshadowing;
+  return seed;
+}
+
 // ---------------------------------------------------------------------------
 // Weight constants
 // ---------------------------------------------------------------------------
@@ -358,7 +377,19 @@ describe("EvaluationResult shape", () => {
     expect(typeof result.foreshadowing_usage.overall_score).toBe("number");
     expect(result.foreshadowing_usage.plant_coverage).toBeDefined();
     expect(result.foreshadowing_usage.reveal_coverage).toBeDefined();
+    expect(result.foreshadowing_usage.quality_gate).toBeDefined();
     expect(typeof result.foreshadowing_usage.pass).toBe("boolean");
+  });
+
+  it("returns top-level foreshadow quality-gate metrics", () => {
+    const evaluator = new BlueprintEvaluator();
+    const result = evaluator.evaluate(makePassingSeed());
+    expect(result.foreshadow_quality_gate).toEqual({
+      total_registered_items: 1,
+      fully_resolved_item_count: 1,
+      resolution_percentage: 100,
+      pass: true,
+    });
   });
 
   it("returns genre_alignment sub-result with expected fields", () => {
@@ -423,6 +454,123 @@ describe("total_score calculation", () => {
       expect(result.total_score).toBeGreaterThanOrEqual(0);
       expect(result.total_score).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// foreshadow quality gate
+// ---------------------------------------------------------------------------
+
+describe("foreshadow quality gate", () => {
+  it("passes when at least 90% of registered items are fully resolved", () => {
+    const evaluator = new BlueprintEvaluator();
+    const resolved = {
+      id: "fs_resolved",
+      name: "해결된 복선",
+      description: "초기 단서",
+      importance: "normal" as const,
+      planted_at: 1,
+      hints_at: [],
+      reveal_at: 5,
+      origin: {
+        episode_id: "ep_001",
+        scene_id: "scene_001_01",
+        source_span: {
+          start_offset: 0,
+          end_offset: 8,
+          excerpt: "해결 단서",
+        },
+      },
+      linked_hint_occurrences: [],
+      status: "pending" as const,
+      hint_count: 0,
+    };
+
+    const seed = makeForeshadowQualityGateSeed([
+      resolved,
+      { ...resolved, id: "fs_resolved_2", name: "해결된 복선2" },
+      { ...resolved, id: "fs_resolved_3", name: "해결된 복선3" },
+      { ...resolved, id: "fs_resolved_4", name: "해결된 복선4" },
+      { ...resolved, id: "fs_resolved_5", name: "해결된 복선5" },
+      { ...resolved, id: "fs_resolved_6", name: "해결된 복선6" },
+      { ...resolved, id: "fs_resolved_7", name: "해결된 복선7" },
+      { ...resolved, id: "fs_resolved_8", name: "해결된 복선8" },
+      { ...resolved, id: "fs_resolved_9", name: "해결된 복선9" },
+      {
+        ...resolved,
+        id: "fs_open",
+        name: "미해결 복선",
+        reveal_at: null,
+      },
+    ]);
+
+    const result = evaluator.evaluate(seed);
+
+    expect(result.foreshadow_quality_gate).toEqual({
+      total_registered_items: 10,
+      fully_resolved_item_count: 9,
+      resolution_percentage: 90,
+      pass: true,
+    });
+    expect(result.foreshadowing_usage.quality_gate).toEqual(
+      result.foreshadow_quality_gate,
+    );
+  });
+
+  it("fails when resolved items fall below the 90% threshold", () => {
+    const evaluator = new BlueprintEvaluator();
+    const seed = makeForeshadowQualityGateSeed([
+      {
+        id: "fs_resolved",
+        name: "해결된 복선",
+        description: "초기 단서",
+        importance: "normal",
+        planted_at: 1,
+        hints_at: [],
+        reveal_at: 5,
+        origin: {
+          episode_id: "ep_001",
+          scene_id: "scene_001_01",
+          source_span: {
+            start_offset: 0,
+            end_offset: 8,
+            excerpt: "해결 단서",
+          },
+        },
+        linked_hint_occurrences: [],
+        status: "pending",
+        hint_count: 0,
+      },
+      {
+        id: "fs_unresolved",
+        name: "미해결 복선",
+        description: "남은 떡밥",
+        importance: "normal",
+        planted_at: 2,
+        hints_at: [],
+        reveal_at: null,
+        origin: {
+          episode_id: "ep_002",
+          scene_id: "scene_002_01",
+          source_span: {
+            start_offset: 0,
+            end_offset: 8,
+            excerpt: "남은 떡밥",
+          },
+        },
+        linked_hint_occurrences: [],
+        status: "pending",
+        hint_count: 0,
+      },
+    ]);
+
+    const result = evaluator.evaluate(seed);
+
+    expect(result.foreshadow_quality_gate.total_registered_items).toBe(2);
+    expect(result.foreshadow_quality_gate.fully_resolved_item_count).toBe(1);
+    expect(result.foreshadow_quality_gate.resolution_percentage).toBe(50);
+    expect(result.foreshadow_quality_gate.pass).toBe(false);
+    expect(FORESHADOW_QUALITY_GATE_THRESHOLD).toBe(0.9);
   });
 });
 

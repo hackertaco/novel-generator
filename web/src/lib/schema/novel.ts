@@ -141,6 +141,8 @@ export const PlotPointSchema = z.union([
   }),
 ]);
 
+export type PlotPoint = z.infer<typeof PlotPointSchema>;
+
 export const ChapterOutlineSchema = z.object({
   chapter_number: z.number().int(),
   title: z.string(),

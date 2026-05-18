@@ -106,6 +106,16 @@ function createTestSeed() {
         planted_at: 5,
         hints_at: [15, 30],
         reveal_at: 48,
+        origin: {
+          episode_id: "ep_005",
+          scene_id: "scene_005_courtyard",
+          source_span: {
+            start_offset: 112,
+            end_offset: 168,
+            excerpt: "정원 바닥에 붉은 밀랍 조각이 떨어져 있었다.",
+          },
+        },
+        linked_hint_occurrences: [],
         status: "pending",
         hint_count: 0,
       },
@@ -136,6 +146,14 @@ describe("NovelSeedSchema", () => {
     expect(result.arcs).toHaveLength(1);
     expect(result.chapter_outlines).toHaveLength(1);
     expect(result.foreshadowing).toHaveLength(1);
+    expect(result.foreshadowing[0].origin?.episode_id).toBe("ep_005");
+    expect(result.foreshadowing[0].origin?.scene_id).toBe("scene_005_courtyard");
+    expect(result.foreshadowing[0].lifecycle).toBe("pending");
+    expect(result.foreshadowing[0].origin?.source_span).toEqual({
+      start_offset: 112,
+      end_offset: 168,
+      excerpt: "정원 바닥에 붉은 밀랍 조각이 떨어져 있었다.",
+    });
     expect(result.style.pov).toBe("1인칭");
     expect(result.romance_core?.mode).toBe("dangerous_courtship");
     expect(result.narrative_baseline?.default_pov_mode).toBe("close_third");

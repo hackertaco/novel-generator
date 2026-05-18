@@ -7,13 +7,16 @@
  */
 import { describe, it, expect } from "vitest";
 import {
+  classifyForeshadowThreadVerdicts,
   evaluateForeshadowingUsage,
   MIN_PLANTS_PER_ARC,
   MIN_REVEALS_PER_ARC,
+  summarizeForeshadowThreadVerdicts,
 } from "@/lib/evolution/evaluators/foreshadowing-usage";
 import type { NovelSeed } from "@/lib/schema/novel";
 import type { Foreshadowing } from "@/lib/schema/foreshadowing";
 import type { PlotArc } from "@/lib/schema/novel";
+import { foreshadowThreadVerdictFixtures } from "./fixtures/foreshadow-thread-verdict-fixtures";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -49,6 +52,16 @@ function makeForeshadowing(
     planted_at: plantedAt,
     hints_at: [],
     reveal_at: revealAt,
+    origin: {
+      episode_id: `ep_${String(plantedAt).padStart(3, "0")}`,
+      scene_id: `scene_${String(plantedAt).padStart(3, "0")}_01`,
+      source_span: {
+        start_offset: 0,
+        end_offset: 16,
+        excerpt: `${id} first presentation`,
+      },
+    },
+    linked_hint_occurrences: [],
     status: "pending",
     hint_count: 0,
   };
@@ -304,6 +317,242 @@ describe("reveal_coverage", () => {
     expect(arcDetail.revealed_ids).toContain("fs_1");
     expect(arcDetail.revealed_ids).toContain("fs_2");
     expect(arcDetail.has_reveal).toBe(true);
+  });
+
+  it("fails when a payoff record has no matching earlier first-presentation registration", () => {
+    const seed = makeSeed(
+      [makeArc("arc_1", "1부", 1, 10)],
+      [
+        {
+          ...makeForeshadowing("fs_1", 2, 8),
+          origin: undefined,
+        },
+      ],
+    );
+
+    const result = evaluateForeshadowingUsage(seed);
+
+    expect(result.pass).toBe(false);
+    expect(result.reveal_coverage.pass).toBe(false);
+    expect(result.reveal_coverage.missing_arcs).toContain("arc_1");
+    expect(
+      result.issues.some((issue) =>
+        issue.includes("payoff record has no matching earlier first-presentation registration"),
+      ),
+    ).toBe(true);
+  });
+
+  it("fails when the stored payoff origin points to a later scene than the earliest qualifying first presentation", () => {
+    const foreshadowing = makeForeshadowing("fs_auto_ch003_sc01_kp01", 3, 8);
+    const seed = makeSeed(
+      [makeArc("arc_1", "1부", 1, 10)],
+      [
+        {
+          ...foreshadowing,
+          origin: {
+            ...foreshadowing.origin!,
+            scene_id: "scene_003_02",
+          },
+        },
+      ],
+    );
+
+    const result = evaluateForeshadowingUsage(seed);
+
+    expect(result.pass).toBe(false);
+    expect(result.reveal_coverage.pass).toBe(false);
+    expect(result.reveal_coverage.missing_arcs).toContain("arc_1");
+    expect(
+      result.issues.some((issue) =>
+        issue.includes("payoff origin resolves to later occurrence scene_003_02"),
+      ),
+    ).toBe(true);
+    expect(
+      result.issues.some((issue) =>
+        issue.includes("earlier qualifying first presentation exists at scene_003_01"),
+      ),
+    ).toBe(true);
+  });
+
+  it("fails when any foreshadow thread remains unresolved at evaluation end", () => {
+    const resolved = makeForeshadowing("fs_resolved", 2, 8);
+    const seed = makeSeed(
+      [makeArc("arc_1", "1부", 1, 10)],
+      [
+        resolved,
+        makeForeshadowing("fs_open", 4, null),
+      ],
+    );
+
+    const result = evaluateForeshadowingUsage(seed);
+
+    expect(result.reveal_coverage.pass).toBe(true);
+    expect(result.pass).toBe(false);
+    expect(
+      result.issues.some((issue) =>
+        issue.includes("fs_open")
+        && issue.includes("thread remains unresolved at evaluation end"),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not emit an unresolved-thread failure when the thread is intentionally abandoned", () => {
+    const resolved = makeForeshadowing("fs_resolved", 2, 8);
+    const seed = makeSeed(
+      [makeArc("arc_1", "1부", 1, 10)],
+      [
+        resolved,
+        {
+          ...makeForeshadowing("fs_cut", 4, null),
+          lifecycle: "intentionally_abandoned",
+          abandonment_marker: "intentional-abandonment:timeline-cut",
+        },
+      ],
+    );
+
+    const result = evaluateForeshadowingUsage(seed);
+
+    expect(result.pass).toBe(true);
+    expect(result.verdict_summary).toMatchObject({
+      total_threads: 2,
+      resolved_threads: 1,
+      failure_threads: 0,
+      intentional_non_failure_closures: 1,
+    });
+    expect(result.thread_verdicts).toEqual([
+      expect.objectContaining({
+        id: "fs_resolved",
+        classification: "resolved",
+        counts_as_failure: false,
+      }),
+      expect.objectContaining({
+        id: "fs_cut",
+        classification: "intentional_non_failure_closure",
+        counts_as_failure: false,
+        abandonment_marker: "intentional-abandonment:timeline-cut",
+      }),
+    ]);
+    expect(
+      result.issues.some((issue) =>
+        issue.includes("fs_cut")
+        && issue.includes("unresolved at evaluation end"),
+      ),
+    ).toBe(false);
+  });
+
+  it("fails when later story state records only a partial resolution without intentional abandonment", () => {
+    const seed = makeSeed(
+      [makeArc("arc_1", "1부", 1, 10)],
+      [
+        {
+          ...makeForeshadowing("fs_partial", 2, 8),
+          resolution: {
+            status: "partial",
+            cause: { revealed: true, chapter: 8, evidence: ["원인 일부 공개"] },
+            identity: { revealed: false, chapter: null, evidence: [] },
+            consequence: { revealed: false, chapter: null, evidence: [] },
+          },
+        },
+      ],
+    );
+
+    const result = evaluateForeshadowingUsage(seed);
+
+    expect(result.reveal_coverage.pass).toBe(true);
+    expect(result.pass).toBe(false);
+    expect(result.verdict_summary).toMatchObject({
+      total_threads: 1,
+      failure_threads: 1,
+      non_terminal_failures: 1,
+      intentional_non_failure_closures: 0,
+    });
+    expect(
+      result.issues.some((issue) =>
+        issue.includes("fs_partial")
+        && issue.includes("later story state never reaches a terminal resolved/intentionally_abandoned status"),
+      ),
+    ).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// thread verdict regressions
+// ---------------------------------------------------------------------------
+
+describe("thread verdict regressions", () => {
+  it("fails an unresolved thread with no abandonment marker", () => {
+    const verdicts = classifyForeshadowThreadVerdicts([
+      foreshadowThreadVerdictFixtures.unresolvedFailure,
+    ]);
+    const summary = summarizeForeshadowThreadVerdicts(verdicts);
+
+    expect(verdicts).toEqual([
+      expect.objectContaining({
+        id: "fs_unresolved_fixture",
+        classification: "unresolved_failure",
+        counts_as_failure: true,
+      }),
+    ]);
+    expect(verdicts[0]?.message).toContain(
+      "thread remains unresolved at evaluation end and has no recorded intentional-abandonment marker",
+    );
+    expect(summary).toMatchObject({
+      total_threads: 1,
+      failure_threads: 1,
+      unresolved_failures: 1,
+      non_terminal_failures: 0,
+      intentional_non_failure_closures: 0,
+    });
+  });
+
+  it("fails a disappeared thread when no explicit abandonment marker closes it", () => {
+    const verdicts = classifyForeshadowThreadVerdicts([
+      foreshadowThreadVerdictFixtures.disappearedWithoutMarkerFailure,
+    ]);
+    const summary = summarizeForeshadowThreadVerdicts(verdicts);
+
+    expect(verdicts).toEqual([
+      expect.objectContaining({
+        id: "fs_disappeared_fixture",
+        classification: "non_terminal_failure",
+        counts_as_failure: true,
+      }),
+    ]);
+    expect(verdicts[0]?.message).toContain(
+      "later story state never reaches a terminal resolved/intentionally_abandoned status",
+    );
+    expect(summary).toMatchObject({
+      total_threads: 1,
+      failure_threads: 1,
+      unresolved_failures: 0,
+      non_terminal_failures: 1,
+      intentional_non_failure_closures: 0,
+    });
+  });
+
+  it("passes an explicitly abandoned thread as a non-failure closure", () => {
+    const verdicts = classifyForeshadowThreadVerdicts([
+      foreshadowThreadVerdictFixtures.intentionallyAbandonedNonFailure,
+    ]);
+    const summary = summarizeForeshadowThreadVerdicts(verdicts);
+
+    expect(verdicts).toEqual([
+      expect.objectContaining({
+        id: "fs_abandoned_fixture",
+        classification: "intentional_non_failure_closure",
+        counts_as_failure: false,
+        abandonment_marker: "intentional-abandonment:timeline-cut",
+      }),
+    ]);
+    expect(verdicts[0]?.message).toBeUndefined();
+    expect(summary).toMatchObject({
+      total_threads: 1,
+      failure_threads: 0,
+      resolved_threads: 0,
+      intentional_non_failure_closures: 1,
+      unresolved_failures: 0,
+      non_terminal_failures: 0,
+    });
   });
 });
 

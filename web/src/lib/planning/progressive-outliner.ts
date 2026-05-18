@@ -10,7 +10,7 @@ import { z } from "zod";
 import { getAgent } from "../agents/llm-agent";
 import type { NovelSeed, ChapterOutline } from "../schema/novel";
 import { ChapterOutlineSchema } from "../schema/novel";
-import type { WorldStateManager } from "../memory/world-state-manager";
+import type { WorldStateAuthority } from "../sim";
 
 const DetailedOutlinesResponseSchema = z.object({
   outlines: z.array(ChapterOutlineSchema),
@@ -20,7 +20,7 @@ export interface ProgressiveOutlinerInput {
   seed: NovelSeed;
   startChapter: number;
   endChapter: number;
-  worldState?: WorldStateManager;
+  worldState?: WorldStateAuthority;
   previousSummaries: Array<{ chapter: number; summary: string }>;
 }
 

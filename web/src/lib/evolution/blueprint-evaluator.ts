@@ -24,7 +24,10 @@ import {
 } from "@/lib/evaluators/character-density";
 import type { CharacterDensityResult } from "@/lib/evaluators/character-density";
 import { evaluateForeshadowingUsage } from "@/lib/evolution/evaluators/foreshadowing-usage";
-import type { ForeshadowingUsageResult } from "@/lib/evolution/evaluators/foreshadowing-usage";
+import type {
+  ForeshadowingUsageResult,
+  ForeshadowQualityGateMetrics,
+} from "@/lib/evolution/evaluators/foreshadowing-usage";
 import { evaluateGenreAlignment } from "@/lib/evolution/evaluators/genre-alignment";
 import type { GenreAlignmentResult } from "@/lib/evolution/evaluators/genre-alignment";
 import { evaluateSceneSpecificity } from "@/lib/evolution/evaluators/scene-specificity";
@@ -66,6 +69,7 @@ export interface EvaluationResult {
   pacing_quality: PacingQualityResult;
   character_introduction: CharacterDensityResult;
   foreshadowing_usage: ForeshadowingUsageResult;
+  foreshadow_quality_gate: ForeshadowQualityGateMetrics;
   genre_alignment: GenreAlignmentResult;
   scene_specificity: SceneSpecificityResult;
 
@@ -147,6 +151,7 @@ export class BlueprintEvaluator {
       pacing_quality: pacingResult,
       character_introduction: characterResult,
       foreshadowing_usage: foreshadowingResult,
+      foreshadow_quality_gate: foreshadowingResult.quality_gate,
       genre_alignment: genreResult,
       scene_specificity: sceneResult,
       issues,
