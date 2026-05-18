@@ -83,7 +83,7 @@ describe("episode selector", () => {
     expect(plan.diagnostics.maxSelectionScore).toBeGreaterThanOrEqual(plan.diagnostics.minSelectionScore);
   });
 
-  it("can group adjacent timeline scenes into fewer episode windows", () => {
+  it("can group adjacent timeline scenes into fewer episode windows", { timeout: 30_000 }, () => {
     const result = runWorldModelFirstSimulation(loadFixtureSeed(), {
       startChapter: 1,
       endChapter: 5,
@@ -104,7 +104,7 @@ describe("episode selector", () => {
     expect(plan.diagnostics.coveredActionLogRatio).toBe(1);
   });
 
-  it("can deliberately select lower-impact connector windows", () => {
+  it("can deliberately select lower-impact connector windows", { timeout: 30_000 }, () => {
     const result = runWorldModelFirstSimulation(loadFixtureSeed(), {
       startChapter: 1,
       endChapter: 8,

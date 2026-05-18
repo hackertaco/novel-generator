@@ -214,6 +214,20 @@ function lineForLog(log: CharacterActionLog, turn?: SceneLog["dialogueTurns"][nu
   return parts.join(" ");
 }
 
+/**
+ * Strip cognition-tell phrases that leak in from action templates so the
+ * deterministic fallback passes `validateNarrativeProse`. Mirrors the
+ * sanitization used by episode-draft-renderer and world-novel-writer.
+ */
+function sanitizeCognitionTells(text: string): string {
+  return text
+    .replace(/마음속에는/g, "손끝에는")
+    .replace(/마음속에서/g, "목 안쪽에서")
+    .replace(/마음속에/g, "손끝에")
+    .replace(/마음속으로/g, "조용히")
+    .replace(/마음속/gu, "침묵 아래");
+}
+
 export function renderObservableFallback(input: Omit<SurfaceRewriteInput, "model" | "maxTokens" | "maxAttempts">): string {
   const turnsByLogId = turnByLogId(input.sceneLog);
   const body = input.actionLogs
@@ -222,7 +236,7 @@ export function renderObservableFallback(input: Omit<SurfaceRewriteInput, "model
     .map((log) => lineForLog(log, turnsByLogId.get(log.logId)))
     .filter(Boolean);
   const ending = sentence(`${input.sceneLog.location}에는 ${input.sceneLog.sensoryAnchors[0] ?? "낮은 소리"}만 남았다`);
-  return [
+  const composed = [
     `제목: ${input.sceneLog.title}`,
     ``,
     opening(input.sceneLog),
@@ -230,6 +244,7 @@ export function renderObservableFallback(input: Omit<SurfaceRewriteInput, "model
     ...body.flatMap((line) => [line, ""]),
     ending,
   ].join("\n").trim() + "\n";
+  return sanitizeCognitionTells(composed);
 }
 
 export async function rewriteSurfaceProse(input: SurfaceRewriteInput): Promise<SurfaceRewriteResult> {

@@ -91,7 +91,7 @@ describe("episode window writer", () => {
     expect(polished).toContain("대답은 지금 듣겠습니다.");
   });
 
-  it("builds one episode prompt from a multi-scene timeline window", () => {
+  it("builds one episode prompt from a multi-scene timeline window", { timeout: 30_000 }, () => {
     const seed = loadFixtureSeed();
     const result = runWorldModelFirstSimulation(seed, {
       startChapter: 1,

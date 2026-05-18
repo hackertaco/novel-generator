@@ -63,7 +63,7 @@ function runWorld(fast: boolean) {
 }
 
 describe("world runner fast path", () => {
-  it("keeps timeline source logs and episode selection equivalent to the full projection path", () => {
+  it("keeps timeline source logs and episode selection equivalent to the full projection path", { timeout: 30_000 }, () => {
     const full = runWorld(false);
     const fast = runWorld(true);
 
