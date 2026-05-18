@@ -5,7 +5,11 @@
  * evaluation criteria, and tracking options.
  */
 
+import { createRequire } from "module";
+
 import type { PipelineAgent } from "../agents/pipeline";
+
+const require = createRequire(import.meta.url);
 
 // ---------------------------------------------------------------------------
 // Model configuration
@@ -167,19 +171,12 @@ export interface HarnessConfig {
 
 /** Import pipeline agents lazily to avoid circular deps */
 function lazyPipeline(): PipelineStepConfig[] {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { WriterAgent } = require("../agents/writer-agent");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { RuleGuardAgent } = require("../agents/rule-guard");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { SceneVerifierAgent } = require("../agents/scene-verifier");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { ConsistencyChecker } = require("../agents/consistency-checker");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { QualityLoop } = require("../agents/quality-loop");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { PolisherAgent } = require("../agents/polisher-agent");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { FinalRewriterAgent } = require("../agents/final-rewriter");
 
   return [

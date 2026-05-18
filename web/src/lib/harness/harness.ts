@@ -45,11 +45,64 @@ import {
 import { FeedbackAccumulator, postProcessChapter } from "../feedback";
 import { debateFutureCharacterIntroduction, applyFutureCharacterDebate } from "../agents/future-character-debate";
 import { detectChapterQualityIssues, formatChapterQualityIssuesForPrompt } from "../agents/chapter-quality-validator";
+import {
+  buildCanonicalValidationErrorContract,
+  buildCanonicalValidationFailureReport,
+  mergeCanonicalValidationFailureReports,
+} from "./canonical-validation";
+import {
+  recoverBeliefInterpretationFailures,
+  type BeliefInterpretationRecoveryReport,
+} from "./belief-interpretation-recovery";
+import {
+  buildForeshadowVerificationInput,
+  buildForeshadowingVerificationItems,
+} from "./reporting";
+import type {
+  CanonicalValidationErrorContract,
+  CanonicalValidationFailureReport,
+} from "./canonical-validation";
 
 // World state + progressive outliner imports
-import { WorldStateManager } from "../memory/world-state-manager";
 import { extractChapterFacts } from "../memory/fact-extractor";
 import { generateDetailedOutlines, needsDetailedOutline } from "../planning/progressive-outliner";
+import {
+  buildSimulationCausalLedgerAggregation,
+  createSimulationState,
+  createSimulationValidationVerdict,
+  createWorldStateAuthorityFromSnapshot,
+  createWorldStateAuthority,
+  emitGeneratedChapterSceneLedger,
+  formatSimulationValidationFailure,
+  validateMajorPlotActionLedger,
+  verifyCharacterCognitionConsistency,
+} from "../sim";
+import {
+  attachRendererSceneSnapshots,
+  buildRendererProseStabilityReport,
+  createRendererRegenerationRequest,
+  normalizeRendererRegenerationRequest,
+  formatRendererRegenerationCorrectionContext,
+  formatRendererScopedRegenerationContext,
+} from "./renderer-regeneration";
+import type {
+  RendererProseStabilityReport,
+  RendererScopedSceneRegenerationScope,
+  RendererNarrativeStateSnapshot,
+  RendererRegenerationRequest,
+} from "./renderer-regeneration";
+import {
+  buildRendererNarrativeStateIdentityManifest,
+  buildRendererNarrativeStateImmutabilityReport,
+  formatRendererNarrativeStateImmutabilityFailures,
+} from "./renderer-state-identity";
+import type {
+  MajorPlotActionLedgerValidation,
+  SimulationCausalLedgerAggregation,
+  SimulationCausalLedger,
+  SimulationValidationVerdict,
+  WorldStateAuthority,
+} from "../sim";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -62,15 +115,45 @@ export interface ChapterResult {
   score: number;
   usage: TokenUsage;
   durationMs: number;
+  verification?: SimulationValidationVerdict;
+  beliefInterpretationRecovery?: BeliefInterpretationRecoveryReport;
+  rendererRegenerationRequest?: RendererRegenerationRequest;
 }
 
 export interface HarnessResult {
+  mode?: "standard" | "renderer_regeneration";
   config: string;
   chapters: ChapterResult[];
   totalUsage: TokenUsage;
   totalDurationMs: number;
   totalCostUsd: number;
+  verification?: SimulationValidationVerdict;
+  canonicalValidationFailures: CanonicalValidationFailureReport[];
+  beliefInterpretationRecoveries: BeliefInterpretationRecoveryReport[];
+  causalLedger?: SimulationCausalLedger;
+  causalLedgerAggregation?: SimulationCausalLedgerAggregation;
+  causalLedgerValidation?: MajorPlotActionLedgerValidation;
 }
+
+export interface HarnessErrorEvent {
+  type: "error";
+  chapter: number;
+  message: string;
+  code?: CanonicalValidationErrorContract["code"];
+  canonicalValidationFailure?: CanonicalValidationFailureReport;
+  beliefInterpretationRecovery?: BeliefInterpretationRecoveryReport;
+}
+
+export type HarnessRunOutcome =
+  | {
+    ok: true;
+    result: HarnessResult;
+  }
+  | {
+    ok: false;
+    result: HarnessResult;
+    error: CanonicalValidationErrorContract;
+  };
 
 export type HarnessEvent =
   | { type: "chapter_start"; chapter: number }
@@ -79,7 +162,7 @@ export type HarnessEvent =
   | { type: "plan_generated"; plan: MasterPlan }
   | { type: "plausibility_check"; passed: boolean; issues: Array<{ severity: string; category: string; description: string; suggestion: string }> }
   | { type: "plausibility_fixed"; fixes: string[] }
-  | { type: "error"; chapter: number; message: string }
+  | HarnessErrorEvent
   | { type: "done"; result: HarnessResult }
   // Full pipeline events
   | { type: "stage"; stage: "plots" | "seed" | "plausibility" | "master_plan" | "chapters" }
@@ -88,6 +171,56 @@ export type HarnessEvent =
   | { type: "seed_generated"; seed: NovelSeed }
   | { type: "causal_validated"; score: number; issues: Array<{ severity: string; description: string }> }
   | { type: "blueprint_generated"; chapter: number; blueprint: ChapterBlueprint };
+
+export async function collectHarnessRunOutcome(
+  events: AsyncIterable<HarnessEvent>,
+  onEvent?: (event: HarnessEvent) => void | Promise<void>,
+): Promise<HarnessRunOutcome> {
+  let result: HarnessResult | undefined;
+  const errorReports: CanonicalValidationFailureReport[] = [];
+
+  for await (const event of events) {
+    await onEvent?.(event);
+
+    if (
+      event.type === "error"
+      && event.code === "simulation_validation_failed"
+      && event.canonicalValidationFailure
+    ) {
+      errorReports.push(event.canonicalValidationFailure);
+    }
+
+    if (event.type === "done") {
+      result = {
+        ...event.result,
+        canonicalValidationFailures: mergeCanonicalValidationFailureReports(
+          event.result.canonicalValidationFailures,
+          errorReports,
+        ),
+      };
+    }
+  }
+
+  if (!result) {
+    throw new Error("Harness run completed without a done result.");
+  }
+
+  const error = buildCanonicalValidationErrorContract(
+    result.canonicalValidationFailures,
+  );
+  if (error) {
+    return {
+      ok: false,
+      result,
+      error,
+    };
+  }
+
+  return {
+    ok: true,
+    result,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -112,11 +245,11 @@ export class NovelHarness {
   private feedbackAccumulator?: FeedbackAccumulator;
   private constraintChecker?: ConstraintChecker;
   private pendingCorrectionContext?: string;
-  private worldStateManager?: WorldStateManager;
+  private worldStateAuthority?: WorldStateAuthority;
 
   /** Expose world state for debugging/testing (read-only snapshot). */
   getWorldStateSnapshot() {
-    return this.worldStateManager?.toJSON() ?? [];
+    return this.worldStateAuthority?.getWorldStateSnapshot() ?? [];
   }
 
   constructor(config?: Partial<HarnessConfig>) {
@@ -152,7 +285,7 @@ export class NovelHarness {
     if (t.progress) this.progressMonitor = new ProgressMonitor(seed);
     if (t.feedback) this.feedbackAccumulator = new FeedbackAccumulator();
     this.constraintChecker = new ConstraintChecker(seed);
-    this.worldStateManager = new WorldStateManager();
+    this.worldStateAuthority = createWorldStateAuthority(seed);
   }
 
   private buildTrackingContext(seed: NovelSeed, chapterNumber: number) {
@@ -299,6 +432,20 @@ export class NovelHarness {
       .map((step) => step.create());
   }
 
+  private buildSimulationValidationVerdict():
+    | SimulationValidationVerdict
+    | undefined {
+    if (!this.worldStateAuthority) {
+      return undefined;
+    }
+
+    return createSimulationValidationVerdict(
+      verifyCharacterCognitionConsistency(
+        this.worldStateAuthority.getSimulationState(),
+      ),
+    );
+  }
+
   private async *runPipeline(
     ctx: ChapterContext,
   ): AsyncGenerator<LifecycleEvent> {
@@ -437,8 +584,8 @@ export class NovelHarness {
       if (arc && scheduler.needsChapterBlueprint(chapterNumber)) {
         try {
           // Collect revealed facts from previous chapters for priority adjustment
-          const prevRevealed = this.worldStateManager
-            ? this.worldStateManager.getAudienceKnownFacts(chapterNumber).map((f) => ({
+          const prevRevealed = this.worldStateAuthority
+            ? this.worldStateAuthority.getAudienceKnownFacts(chapterNumber).map((f) => ({
                 chapter: f.revealedInChapter,
                 content: f.content,
                 type: f.type,
@@ -521,26 +668,51 @@ export class NovelHarness {
       parallelMode: this.config.parallelMode,
       simpleMode: this.config.simpleMode,
       directionDesign: this._directionDesign,
-      worldStateContext: this.worldStateManager && this.worldStateManager.size > 0
+      worldStateContext: this.worldStateAuthority
         ? [
-            this.worldStateManager.formatForWriter(chapterNumber),
-            this.worldStateManager.formatScenePlacement(chapterNumber),
+            this.worldStateAuthority.formatForWriter(chapterNumber),
+            this.worldStateAuthority.formatScenePlacement(chapterNumber),
           ].filter(Boolean).join("\n\n")
         : undefined,
-      antiRepeatContext: this.worldStateManager && this.worldStateManager.size > 0
-        ? this.worldStateManager.formatAntiRepeatContext(chapterNumber)
+      antiRepeatContext: this.worldStateAuthority && this.worldStateAuthority.size > 0
+        ? this.worldStateAuthority.formatAntiRepeatContext(chapterNumber)
         : undefined,
-      previousCharacterStates: this.worldStateManager
-        ? this.worldStateManager.getPreviousCharacterStates(chapterNumber)
+      previousCharacterStates: this.worldStateAuthority
+        ? this.worldStateAuthority.getPreviousCharacterStates(chapterNumber)
         : undefined,
-      previousFacts: this.worldStateManager && this.worldStateManager.size > 0
-        ? this.worldStateManager.getCurrentFacts()
+      previousFacts: this.worldStateAuthority && this.worldStateAuthority.size > 0
+        ? this.worldStateAuthority.getCurrentFacts()
             .filter((f) => f.chapter < chapterNumber)
         : undefined,
-      worldStateManager: this.worldStateManager,
+      worldStateAuthority: this.worldStateAuthority,
       debateHistory: [],
       appliedDebateDecisionIds: [],
     };
+    const rendererNarrativeStateSnapshot: RendererNarrativeStateSnapshot = {
+      chapterNumber,
+      blueprint: blueprint ?? buildFallbackBlueprint(),
+      previousSummaries: previousSummaries.map((summary) => ({ ...summary })),
+      previousChapterEnding,
+      previousSceneState: endingSceneState
+        ? structuredClone(endingSceneState)
+        : undefined,
+      trackingContext: trackingContext
+        ? structuredClone(trackingContext)
+        : undefined,
+      directionDesign: this._directionDesign
+        ? structuredClone(this._directionDesign)
+        : undefined,
+      simulationState: this.worldStateAuthority
+        ? structuredClone(this.worldStateAuthority.getSimulationState())
+        : createSimulationState(seed),
+      worldStateProjection: this.worldStateAuthority
+        ? structuredClone(this.worldStateAuthority.getWorldStateSnapshot())
+        : undefined,
+      renderedScenes: undefined,
+    };
+    const rendererRegenerationRequest = createRendererRegenerationRequest(
+      rendererNarrativeStateSnapshot,
+    );
     const constraintChecker = this.constraintChecker;
 
     function appendCorrectionContext(instruction: string): void {
@@ -781,6 +953,15 @@ export class NovelHarness {
     // could miss post-processing and return the pre-trimmed text.
     const completedText = ctx.text;
 
+    if (this.worldStateAuthority && blueprint && ctx.sceneTexts?.length) {
+      emitGeneratedChapterSceneLedger(this.worldStateAuthority, {
+        seed,
+        chapterNumber,
+        blueprint,
+        sceneTexts: ctx.sceneTexts,
+      });
+    }
+
     // Extract summary
     const outline = seed.chapter_outlines.find((o) => o.chapter_number === chapterNumber);
     const extOutline = !outline
@@ -817,9 +998,9 @@ export class NovelHarness {
     await this.updateTracking(seed, chapterNumber, completedText);
 
     // Post-chapter fact extraction (TKG) — runs in background, non-blocking on failure
-    if (this.worldStateManager) {
+    if (this.worldStateAuthority) {
       try {
-        const previousFacts = this.worldStateManager.getCurrentFacts();
+        const previousFacts = this.worldStateAuthority.getCurrentFacts();
         const chapterWorldState = await extractChapterFacts(
           completedText,
           seed,
@@ -827,11 +1008,11 @@ export class NovelHarness {
           previousFacts,
         );
         // Detect contradictions before adding
-        const contradictions = this.worldStateManager.detectContradictions(chapterWorldState.facts);
+        const contradictions = this.worldStateAuthority.detectContradictions(chapterWorldState.facts);
         if (contradictions.length > 0) {
           console.warn(`[harness] ${chapterNumber}화 모순 감지: ${contradictions.map((c) => c.description).join("; ")}`);
         }
-        this.worldStateManager.addChapterState(chapterWorldState);
+        this.worldStateAuthority.ingestNarrativeProjection(chapterWorldState);
       } catch (err) {
         console.warn(`[harness] ${chapterNumber}화 사실 추출 실패, 건너뜀:`, err instanceof Error ? err.message : err);
       }
@@ -844,9 +1025,246 @@ export class NovelHarness {
       score: ctx.bestScore,
       usage: ctx.totalUsage,
       durationMs: Date.now() - startTime,
+      verification: this.buildSimulationValidationVerdict(),
+      rendererRegenerationRequest: attachRendererSceneSnapshots(
+        rendererRegenerationRequest,
+        ctx.sceneTexts?.length ? ctx.sceneTexts : [completedText],
+      ),
     };
 
     yield { type: "chapter_complete", result };
+  }
+
+  private async *runRendererRegeneration(
+    seed: NovelSeed,
+    startChapter: number,
+    endChapter: number,
+    request: RendererRegenerationRequest,
+  ): AsyncGenerator<HarnessEvent> {
+    const normalizedRequest = normalizeRendererRegenerationRequest(request);
+    const { snapshot, proseFailureContext, regenerationScope } = normalizedRequest;
+
+    if (startChapter !== endChapter || startChapter !== snapshot.chapterNumber) {
+      throw new Error(
+        "Renderer regeneration must target exactly one chapter matching the snapshot chapter number.",
+      );
+    }
+
+    const totalStart = Date.now();
+    const chapterNumber = snapshot.chapterNumber;
+    const chapterStart = Date.now();
+    const scopedRegeneration = regenerationScope?.mode === "scoped_scene_patch"
+      ? regenerationScope
+      : undefined;
+    const renderedScenes = snapshot.renderedScenes ?? [];
+    const blueprint = scopedRegeneration
+      ? this.buildScopedRendererBlueprint(snapshot.blueprint, scopedRegeneration)
+      : snapshot.blueprint;
+    const previousChapterEnding = scopedRegeneration
+      ? this.resolveScopedRendererPreviousText(snapshot, scopedRegeneration)
+      : snapshot.previousChapterEnding;
+    const worldStateAuthority = createWorldStateAuthorityFromSnapshot(seed, {
+      simulationState: snapshot.simulationState,
+      worldStateProjection: snapshot.worldStateProjection,
+    });
+    const baselineStateIdentity = snapshot.stateIdentity
+      ?? buildRendererNarrativeStateIdentityManifest({
+        simulationState: snapshot.simulationState,
+        worldStateProjection: snapshot.worldStateProjection,
+      });
+    const rehydratedStateIdentity = buildRendererNarrativeStateIdentityManifest({
+      simulationState: worldStateAuthority.getSimulationState(),
+      worldStateProjection: worldStateAuthority.getWorldStateSnapshot(),
+    });
+
+    yield { type: "chapter_start", chapter: chapterNumber };
+
+    const trackingContext = {
+      ...(snapshot.trackingContext || {}),
+      correctionContext: [
+        snapshot.trackingContext?.correctionContext,
+        formatRendererRegenerationCorrectionContext(proseFailureContext),
+        scopedRegeneration
+          ? formatRendererScopedRegenerationContext(snapshot, scopedRegeneration)
+          : undefined,
+      ].filter(Boolean).join("\n\n"),
+    };
+
+    const ctx: ChapterContext = {
+      seed,
+      chapterNumber,
+      blueprint,
+      previousSummaries: snapshot.previousSummaries,
+      text: "",
+      snapshots: [],
+      bestScore: 0,
+      ruleIssues: [],
+      critiqueHistory: [],
+      totalUsage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0, cost_usd: 0 },
+      trackingContext,
+      previousChapterEnding,
+      fastMode: this.config.fastMode,
+      parallelMode: this.config.parallelMode,
+      simpleMode: this.config.simpleMode,
+      directionDesign: snapshot.directionDesign,
+      worldStateContext: [
+        worldStateAuthority.formatForWriter(chapterNumber),
+        worldStateAuthority.formatScenePlacement(chapterNumber),
+      ].filter(Boolean).join("\n\n") || undefined,
+      antiRepeatContext: worldStateAuthority.size > 0
+        ? worldStateAuthority.formatAntiRepeatContext(chapterNumber)
+        : undefined,
+      previousCharacterStates: worldStateAuthority.getPreviousCharacterStates(chapterNumber),
+      previousFacts: worldStateAuthority.size > 0
+        ? worldStateAuthority.getCurrentFacts().filter((fact) => fact.chapter < chapterNumber)
+        : undefined,
+      worldStateAuthority,
+      debateHistory: [],
+      appliedDebateDecisionIds: [],
+    };
+
+    for await (const event of this.runPipeline(ctx)) {
+      yield { type: "pipeline_event", chapter: chapterNumber, event };
+    }
+
+    let proseStabilityReport: RendererProseStabilityReport | undefined;
+    if (scopedRegeneration) {
+      if (renderedScenes.length === 0) {
+        throw new Error(
+          "Scoped renderer regeneration requires stored rendered scenes from the original chapter.",
+        );
+      }
+
+      if (!ctx.sceneTexts || ctx.sceneTexts.length !== scopedRegeneration.impactedSceneIndexes.length) {
+        throw new Error(
+          "Renderer regeneration attempted an unrestricted rewrite outside the approved scene scope.",
+        );
+      }
+
+      const mergedSceneTexts = [...renderedScenes.map((scene) => scene.text)];
+      scopedRegeneration.impactedSceneIndexes.forEach((sceneIndex, offset) => {
+        const regeneratedSceneText = ctx.sceneTexts?.[offset];
+        if (regeneratedSceneText === undefined) {
+          throw new Error(
+            `Renderer regeneration missing scoped scene output for scene index ${sceneIndex}.`,
+          );
+        }
+        mergedSceneTexts[sceneIndex] = regeneratedSceneText;
+      });
+
+      ctx.sceneTexts = mergedSceneTexts;
+      ctx.text = mergedSceneTexts.join("\n\n");
+      proseStabilityReport = buildRendererProseStabilityReport({
+        baselineScenes: renderedScenes,
+        finalSceneTexts: mergedSceneTexts,
+        regenerationScope: scopedRegeneration,
+      });
+
+      if (!proseStabilityReport.byteStable) {
+        throw new Error(
+          "Renderer regeneration rewrote preserved scene prose outside the approved ledger span.",
+        );
+      }
+    }
+
+    const postRenderStateIdentity = buildRendererNarrativeStateIdentityManifest({
+      simulationState: worldStateAuthority.getSimulationState(),
+      worldStateProjection: worldStateAuthority.getWorldStateSnapshot(),
+    });
+    const immutabilityReport = buildRendererNarrativeStateImmutabilityReport({
+      baseline: baselineStateIdentity,
+      rehydrated: rehydratedStateIdentity,
+      postRender: postRenderStateIdentity,
+    });
+    const immutabilityFailures =
+      formatRendererNarrativeStateImmutabilityFailures(immutabilityReport);
+
+    if (immutabilityFailures.length > 0) {
+      throw new Error(
+        "Renderer regeneration mutated read-only narrative state: "
+        + immutabilityFailures.join("; "),
+      );
+    }
+
+    const title = snapshot.blueprint.title || `${chapterNumber}화`;
+    const summary = extractSummaryRuleBased(chapterNumber, title, ctx.text, seed);
+    summary.style_score = ctx.bestScore;
+    const nextRendererRegenerationRequest = attachRendererSceneSnapshots(
+      normalizedRequest,
+      ctx.sceneTexts?.length ? ctx.sceneTexts : [ctx.text],
+    );
+
+    const result: ChapterResult = {
+      chapterNumber,
+      text: ctx.text,
+      summary,
+      score: ctx.bestScore,
+      usage: ctx.totalUsage,
+      durationMs: Date.now() - chapterStart,
+      verification: createSimulationValidationVerdict(
+        verifyCharacterCognitionConsistency(
+          worldStateAuthority.getSimulationState(),
+        ),
+      ),
+      rendererRegenerationRequest: {
+        ...nextRendererRegenerationRequest,
+        immutabilityReport,
+        proseStabilityReport,
+      },
+    };
+
+    yield { type: "chapter_complete", result };
+    yield {
+      type: "done",
+      result: {
+        mode: "renderer_regeneration",
+        config: this.config.name,
+        chapters: [result],
+        totalUsage: result.usage,
+        totalDurationMs: Date.now() - totalStart,
+        totalCostUsd: result.usage.cost_usd,
+        verification: result.verification,
+        canonicalValidationFailures: [],
+        beliefInterpretationRecoveries: [],
+      },
+    };
+  }
+
+  private buildScopedRendererBlueprint(
+    blueprint: ChapterBlueprint,
+    scope: RendererScopedSceneRegenerationScope,
+  ): ChapterBlueprint {
+    const scopedScenes = scope.impactedSceneIndexes.map((sceneIndex) => {
+      const scene = blueprint.scenes[sceneIndex];
+      if (!scene) {
+        throw new Error(
+          `Scoped renderer regeneration references missing scene index ${sceneIndex}.`,
+        );
+      }
+      return structuredClone(scene);
+    });
+
+    return {
+      ...structuredClone(blueprint),
+      scenes: scopedScenes,
+      target_word_count: scopedScenes.reduce(
+        (total, scene) => total + (scene.estimated_chars || 0),
+        0,
+      ),
+    };
+  }
+
+  private resolveScopedRendererPreviousText(
+    snapshot: RendererNarrativeStateSnapshot,
+    scope: RendererScopedSceneRegenerationScope,
+  ): string | undefined {
+    const firstSceneIndex = scope.impactedSceneIndexes[0];
+    if (firstSceneIndex === undefined || firstSceneIndex <= 0) {
+      return snapshot.previousChapterEnding;
+    }
+
+    return snapshot.renderedScenes?.[firstSceneIndex - 1]?.text
+      ?? snapshot.previousChapterEnding;
   }
 
   // -----------------------------------------------------------------------
@@ -866,8 +1284,14 @@ export class NovelHarness {
       previousSummaries?: Array<{ chapter: number; title: string; summary: string }>;
       previousChapterEnding?: string;
       previousSceneState?: ChapterSummary["ending_scene_state"];
+      rendererRegeneration?: RendererRegenerationRequest;
     },
   ): AsyncGenerator<HarnessEvent> {
+    if (options?.rendererRegeneration) {
+      yield* this.runRendererRegeneration(seed, startChapter, endChapter, options.rendererRegeneration);
+      return;
+    }
+
     const totalStart = Date.now();
     this.initTracking(seed);
 
@@ -966,6 +1390,10 @@ export class NovelHarness {
     await this.generateRemainingOutlines(seed);
 
     const chapters: ChapterResult[] = [];
+    const canonicalValidationFailures: CanonicalValidationFailureReport[] = [];
+    const beliefInterpretationRecoveries: BeliefInterpretationRecoveryReport[] = [];
+    let verification: SimulationValidationVerdict | undefined;
+    let validationFailed = false;
     // Seed summaries from caller (for continuation from previous chapters)
     const summaries: Array<{ chapter: number; title: string; summary: string }> = [
       ...(options?.previousSummaries || []),
@@ -991,7 +1419,7 @@ export class NovelHarness {
             seed,
             startChapter: ch,
             endChapter: batchEnd,
-            worldState: this.worldStateManager,
+            worldState: this.worldStateAuthority,
             previousSummaries: summaries.map((s) => ({ chapter: s.chapter, summary: s.summary })),
           });
           if (detailedOutlines.length > 0) {
@@ -1024,9 +1452,28 @@ export class NovelHarness {
 
       try {
         for await (const event of this.generateChapter(seed, ch, summaries, previousEnding, prevSceneState)) {
+          if (
+            event.type === "chapter_complete"
+            && event.result.verification
+            && !event.result.verification.passed
+            && this.worldStateAuthority
+          ) {
+            const recovery = recoverBeliefInterpretationFailures(
+              this.worldStateAuthority,
+              ch,
+              event.result.verification,
+            );
+            if (recovery.report.status !== "not_needed") {
+              event.result.beliefInterpretationRecovery = recovery.report;
+              beliefInterpretationRecoveries.push(recovery.report);
+            }
+            event.result.verification = recovery.verification;
+          }
+
           yield event;
           if (event.type === "chapter_complete") {
             chapters.push(event.result);
+            verification = event.result.verification;
             summaries.push({
               chapter: ch,
               title: event.result.summary.title,
@@ -1038,6 +1485,30 @@ export class NovelHarness {
               total_tokens: totalUsage.total_tokens + event.result.usage.total_tokens,
               cost_usd: totalUsage.cost_usd + event.result.usage.cost_usd,
             };
+
+            if (event.result.verification && !event.result.verification.passed) {
+              validationFailed = true;
+              const canonicalValidationFailure = buildCanonicalValidationFailureReport(
+                ch,
+                event.result.verification,
+              );
+              if (canonicalValidationFailure) {
+                canonicalValidationFailures.push(canonicalValidationFailure);
+              }
+              yield {
+                type: "error",
+                chapter: ch,
+                message: canonicalValidationFailure?.summary
+                  ?? formatSimulationValidationFailure(
+                    event.result.verification,
+                    ch,
+                  ),
+                code: canonicalValidationFailure?.code,
+                canonicalValidationFailure: canonicalValidationFailure ?? undefined,
+                beliefInterpretationRecovery:
+                  event.result.beliefInterpretationRecovery,
+              };
+            }
           }
         }
       } catch (err) {
@@ -1048,18 +1519,63 @@ export class NovelHarness {
           message: err instanceof Error ? err.message : "생성 실패",
         };
       }
+
+      if (validationFailed) {
+        break;
+      }
     }
 
     yield {
       type: "done",
-      result: {
-        config: this.config.name,
-        chapters,
-        totalUsage,
-        totalDurationMs: Date.now() - totalStart,
-        totalCostUsd: totalUsage.cost_usd,
-      },
+      result: (() => {
+        const causalLedger = this.worldStateAuthority?.getCausalLedger();
+        const causalLedgerAggregation = causalLedger
+          ? buildSimulationCausalLedgerAggregation(causalLedger)
+          : undefined;
+        const foreshadowVerificationInput = buildForeshadowVerificationInput(
+          seed,
+          chapters,
+        );
+        return {
+          mode: "standard" as const,
+          config: this.config.name,
+          chapters,
+          totalUsage,
+          totalDurationMs: Date.now() - totalStart,
+          totalCostUsd: totalUsage.cost_usd,
+          verification: verification ?? this.buildSimulationValidationVerdict(),
+          canonicalValidationFailures,
+          beliefInterpretationRecoveries,
+          causalLedger,
+          causalLedgerAggregation,
+          causalLedgerValidation: causalLedger
+            ? validateMajorPlotActionLedger(causalLedger, {
+                initialState: createSimulationState(seed),
+                foreshadowingItems: buildForeshadowingVerificationItems(seed),
+                foreshadowEpisodeSequence:
+                  foreshadowVerificationInput.episodeSequence,
+              })
+            : undefined,
+        };
+      })(),
     };
+  }
+
+  async runToCompletion(
+    seed: NovelSeed,
+    startChapter: number,
+    endChapter: number,
+    options?: {
+      masterPlan?: MasterPlan;
+      previousSummaries?: Array<{ chapter: number; title: string; summary: string }>;
+      previousChapterEnding?: string;
+      previousSceneState?: ChapterSummary["ending_scene_state"];
+      rendererRegeneration?: RendererRegenerationRequest;
+    },
+  ): Promise<HarnessRunOutcome> {
+    return collectHarnessRunOutcome(
+      this.run(seed, startChapter, endChapter, options),
+    );
   }
 
   // -----------------------------------------------------------------------
