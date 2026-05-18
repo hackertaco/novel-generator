@@ -1,7 +1,62 @@
 {
-  "name": "web",
+  "name": "kakao-novel-engine",
   "version": "0.1.0",
-  "private": true,
+  "description": "Simulation-first long-form novel engine with CLI and reusable TypeScript APIs for chapter generation and 300-episode verification.",
+  "type": "module",
+  "private": false,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./orchestration": {
+      "types": "./src/orchestration.ts",
+      "default": "./src/orchestration.ts"
+    },
+    "./cli": {
+      "types": "./src/cli.ts",
+      "default": "./src/cli.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "kakao-novel-engine": "./bin/kakao-novel-engine.mjs"
+  },
+  "files": [
+    "bin",
+    "scripts/build-world-brain.ts",
+    "scripts/generate.ts",
+    "scripts/novel-engine.ts",
+    "scripts/render-scene-log.ts",
+    "scripts/simulate-world.ts",
+    "scripts/world-model-endurance.ts",
+    "scripts/verify-long-form.ts",
+    "src",
+    "README.md"
+  ],
+  "keywords": [
+    "novel",
+    "fiction",
+    "simulation",
+    "storytelling",
+    "cli",
+    "typescript"
+  ],
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hackertaco/novel-generator.git",
+    "directory": "web"
+  },
+  "homepage": "https://github.com/hackertaco/novel-generator/tree/main/web",
+  "bugs": {
+    "url": "https://github.com/hackertaco/novel-generator/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,9 +67,15 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:smoke": "vitest run __tests__/smoke",
+    "test:release-parity": "vitest run __tests__/lib/novel-engine/release-validation.test.ts",
     "test:all": "vitest run && playwright test",
     "auto-research": "tsx scripts/auto-research.ts",
-    "generate": "tsx scripts/generate.ts"
+    "brain:build": "tsx scripts/build-world-brain.ts",
+    "generate": "tsx scripts/generate.ts",
+    "render:scene": "tsx scripts/render-scene-log.ts",
+    "simulate:world": "tsx scripts/simulate-world.ts",
+    "world:endurance": "tsx scripts/world-model-endurance.ts",
+    "verify:long-form": "tsx scripts/verify-long-form.ts"
   },
   "dependencies": {
     "js-yaml": "^4.1.1",
@@ -39,6 +100,7 @@
     "eslint-config-next": "16.1.6",
     "jsdom": "^27.0.1",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^4.0.18"
   }

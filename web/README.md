@@ -1,62 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Novel Engine (`web/`)
 
-## Getting Started
+This directory contains the shipping TypeScript novel engine and its public surfaces:
 
-First, run the development server:
+- CLI: `scripts/novel-engine.ts`
+- Library API: `src/lib/novel-engine/index.ts`
+- HTTP wrappers: `src/app/api/orchestrate/route.ts` and `src/app/api/verify-long-form/route.ts`
+
+Published package metadata exposes the same surfaces under:
+
+- package name: `kakao-novel-engine`
+- root library entrypoint: `kakao-novel-engine`
+- request/contract builders: `kakao-novel-engine/orchestration`
+- CLI helpers: `kakao-novel-engine/cli`
+- installed command: `kakao-novel-engine`
+
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Set `OPENAI_API_KEY` in `.env.local`.
+z-ai is disabled by default even if `NOVEL_LLM_PROVIDER=zai` is present; enabling it requires the explicit opt-in `NOVEL_ALLOW_ZAI=1`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Quick Commands
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Generate chapters from the canonical seed:
 
-## Learn More
+```bash
+npx tsx scripts/novel-engine.ts generate \
+  --seed ./seeds/test-romance-fantasy.json \
+  --chapters 1-3 \
+  --out ./output/readme-generate
+```
 
-To learn more about Next.js, take a look at the following resources:
+Run built-in 300-episode long-form verification:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npx tsx scripts/novel-engine.ts verify-long-form \
+  --preset fast \
+  --budget 25 \
+  --out ./output/readme-verify
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Parity Documentation
 
-## Deploy on Vercel
+The full CLI vs library API parity guide lives in [../docs/novel-engine-cli-library-parity.md](../docs/novel-engine-cli-library-parity.md).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+That guide includes:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-## Academic References
-
-### Narrative Quality & Engagement
-- Reagan et al. 2016: "The emotional arcs of stories are dominated by six basic shapes" (EPJ Data Science)
-- Bizzoni et al. 2021: Hurst exponent & reader preference correlation (NLP4DH)
-- Toubia et al. 2021: "How quantifying the shape of stories predicts their success" (PNAS)
-- Wilmot & Keller 2020: Suspense = uncertainty reduction (ACL)
-- Ely et al. 2015: "Suspense and Surprise" (Journal of Political Economy)
-
-### Causal Graph & Narrative Plausibility
-- Trabasso & van den Broek 1985: "Causal Thinking and the Representation of Narrative Events" (Journal of Memory and Language)
-- Riedl & Young 2010: "Narrative Planning: Balancing Plot and Character" (JAIR) — IPOCL framework
-- Ammanabrolu et al. 2021: "Automated Storytelling via Causal, Commonsense Plot Ordering" (AAAI)
-- Niehaus, Li & Riedl 2011: Dead-end detection in narrative planning
-- Castricato et al. 2021: "Towards a Model-Theoretic View of Narratives" — Entropy of World/Transitional Coherence
-
-### Story Evaluation
-- Chen et al. 2022: "StoryER: Automatic Story Evaluation via Ranking, Rating and Reasoning" (EMNLP)
-- Wang et al. 2024: "Event Causality Is Key to Computational Story Understanding" (NAACL)
-- ACL 2025: "MLD-EA: Check and Complete Narrative Coherence by Introducing Actions and Emotions"
-- ACL 2025: "An Enhanced Plot-planning Framework for Coherent and Cohesive Story Generation"
-
-### Causal Reasoning
-- GraphPlan 2021: "Story Generation by Planning with Event Graph" (INLG)
-- DeBuse 2024: "Narrative Engineering: Tools, Computational Structure, and Impact of Stories" (BYU PhD Dissertation)
+- matching setup for both surfaces
+- canonical generation and verification scenarios
+- artifact expectations
+- pass/fail checks for parity validation
