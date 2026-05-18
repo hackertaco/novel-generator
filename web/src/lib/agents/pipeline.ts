@@ -4,7 +4,7 @@ import type { ChapterBlueprint } from "@/lib/schema/planning";
 import type { DirectionDesign } from "@/lib/schema/direction";
 import type { TokenUsage } from "@/lib/agents/types";
 import type { CharacterState } from "@/lib/memory/world-state";
-import type { WorldStateManager } from "@/lib/memory/world-state-manager";
+import type { WorldStateAuthority } from "@/lib/sim";
 
 /** Lightweight summary passed between pipeline stages (not the full ChapterSummary). */
 export type PreviousChapterSummary = { chapter: number; title: string; summary: string };
@@ -101,7 +101,7 @@ export interface ChapterContext {
   simpleMode?: boolean;
   /** Direction design metadata (address matrix, info budget, emotion curve, hook strategy) */
   directionDesign?: DirectionDesign;
-  /** Formatted world state context from WorldStateManager (facts + character states) */
+  /** Formatted world state context from the shared world-state authority */
   worldStateContext?: string;
   /** Anti-repeat context: previous chapters' key dialogues/actions to avoid repetition */
   antiRepeatContext?: string;
@@ -109,8 +109,8 @@ export interface ChapterContext {
   previousCharacterStates?: CharacterState[];
   /** Previous chapters' established facts for cross-chapter info repeat detection */
   previousFacts?: Array<{ subject: string; action: string; object: string; chapter: number }>;
-  /** WorldStateManager instance for audience knowledge + relationship context */
-  worldStateManager?: WorldStateManager;
+  /** Shared world-state authority used by simulation and generation */
+  worldStateAuthority?: WorldStateAuthority;
   /** Structured records of future-character exception debates applied during this chapter */
   debateHistory?: FutureCharacterDebateRecord[];
   /** Deduplication keys for already-applied debate decisions */

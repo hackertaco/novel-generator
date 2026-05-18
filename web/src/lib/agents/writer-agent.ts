@@ -58,7 +58,7 @@ export class WriterAgent implements PipelineAgent {
         previousChapterEnding,
         fastMode,
         simpleMode,
-        worldStateManager: ctx.worldStateManager,
+        worldStateAuthority: ctx.worldStateAuthority,
         directionDesign: ctx.directionDesign,
         // Pass tracking context to scene writer if available (skipped in simple mode)
         ...(!simpleMode && ctx.trackingContext ? {

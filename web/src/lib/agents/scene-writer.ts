@@ -15,6 +15,7 @@ import { getDialoguePlaybookForPair } from "@/lib/schema/character";
 import type { DirectionDesign } from "@/lib/schema/direction";
 import type { ChapterBlueprint, SceneSpec } from "@/lib/schema/planning";
 import type { TokenUsage } from "@/lib/agents/types";
+import { buildFocalCharacterPromptContext, type WorldStateAuthority } from "@/lib/sim";
 import { validateScene, buildSceneRepairPrompt } from "./scene-validator";
 import { planBeats, writeSceneByBeats } from "./beat-writer";
 import { validateSentiment } from "./sentiment-validator";
@@ -49,8 +50,8 @@ export interface SceneWriterOptions {
   parallelMode?: boolean;
   /** Simple mode: minimal context for more natural writing */
   simpleMode?: boolean;
-  /** World state manager for audience knowledge + relationship context */
-  worldStateManager?: import("@/lib/memory/world-state-manager").WorldStateManager;
+  /** Shared world-state authority for audience knowledge + relationship context */
+  worldStateAuthority?: WorldStateAuthority;
   /** Direction design metadata incl. address matrix */
   directionDesign?: DirectionDesign;
 }
@@ -135,6 +136,63 @@ function pickRelevantAccessLines(seed: NovelSeed, locationHints: string): string
   return lines.slice(0, 3);
 }
 
+function resolveSceneFocalCharacter(
+  seed: NovelSeed,
+  blueprint: ChapterBlueprint,
+  scene: SceneSpec,
+): { id: string; name: string } | undefined {
+  const sceneCharacterIds = new Set(scene.characters);
+  const povCharacter = blueprint.pov_character
+    ? seed.characters.find((character) => character.id === blueprint.pov_character || character.name === blueprint.pov_character)
+    : undefined;
+
+  if (povCharacter && sceneCharacterIds.has(povCharacter.id)) {
+    return { id: povCharacter.id, name: povCharacter.name };
+  }
+
+  const firstSceneCharacter = seed.characters.find((character) => sceneCharacterIds.has(character.id));
+  if (firstSceneCharacter) {
+    return { id: firstSceneCharacter.id, name: firstSceneCharacter.name };
+  }
+
+  return undefined;
+}
+
+function buildSceneFocalViewpointSection(
+  seed: NovelSeed,
+  blueprint: ChapterBlueprint,
+  scene: SceneSpec,
+  worldStateAuthority?: WorldStateAuthority,
+): string {
+  if (!worldStateAuthority) {
+    return "";
+  }
+
+  const focalCharacter = resolveSceneFocalCharacter(seed, blueprint, scene);
+  if (!focalCharacter) {
+    return "";
+  }
+
+  const block = buildFocalCharacterPromptContext(
+    worldStateAuthority.getSimulationState(),
+    {
+      focalCharacterId: focalCharacter.id,
+      maxMemories: 4,
+      maxBeliefs: 4,
+    },
+  );
+
+  if (!block) {
+    return "";
+  }
+
+  return `# 현재 시점 인지 스냅샷
+${block}
+→ 이 씬의 관찰, 내면, 분위기 묘사는 ${focalCharacter.name}의 현재 기억과 믿음 범위를 넘어서면 안 됩니다.
+→ 숨겨진 진실이 있어도 전지적 해설로 단정하지 말고, ${focalCharacter.name}의 추측·오해·빈칸으로 남기세요.
+`;
+}
+
 /**
  * Build the prompt for generating a single scene.
  */
@@ -154,6 +212,7 @@ export function buildScenePrompt(
     correctionContext?: string;
     previousChapterEnding?: string;
     directionDesign?: DirectionDesign;
+    worldStateAuthority?: WorldStateAuthority;
   },
 ): string {
   const parts: string[] = [];
@@ -348,6 +407,16 @@ ${futureCharacters.map((char) => `- ${char.name} (${char.introduction_chapter}�
 `);
       }
     }
+  }
+
+  const focalViewpointSection = buildSceneFocalViewpointSection(
+    seed,
+    blueprint,
+    scene,
+    extras?.worldStateAuthority,
+  );
+  if (focalViewpointSection) {
+    parts.push(focalViewpointSection);
   }
 
   const sceneConstraintLines: string[] = [];
@@ -657,7 +726,7 @@ export function buildSimpleScenePrompt(
   previousSceneTexts: string[],
   previousSummaries: Array<{ chapter: number; summary: string }>,
   previousChapterEnding?: string,
-  worldStateManager?: import("@/lib/memory/world-state-manager").WorldStateManager,
+  worldStateAuthority?: WorldStateAuthority,
 ): string {
   const parts: string[] = [];
 
@@ -726,6 +795,16 @@ ${lastScene.slice(-600)}
     }
   }
 
+  const focalViewpointSection = buildSceneFocalViewpointSection(
+    seed,
+    blueprint,
+    scene,
+    worldStateAuthority,
+  );
+  if (focalViewpointSection) {
+    parts.push(focalViewpointSection);
+  }
+
   // Foreshadowing actions — essential for cross-chapter thread continuity
   const fsActions = getForeshadowingActions(seed, chapterNumber);
   if (fsActions.length > 0) {
@@ -738,21 +817,21 @@ ${lastScene.slice(-600)}
   }
 
   // Audience knowledge + relationship context (anti-repetition + depth)
-  if (worldStateManager && sceneIndex === 0 && chapterNumber > 1) {
-    const audienceBlock = worldStateManager.formatAudienceKnowledge(chapterNumber);
+  if (worldStateAuthority && sceneIndex === 0 && chapterNumber > 1) {
+    const audienceBlock = worldStateAuthority.formatAudienceKnowledge(chapterNumber);
     if (audienceBlock) {
       parts.push(audienceBlock);
       parts.push("");
     }
 
     const sceneCharNames = sceneChars.map((c) => c!.name);
-    const relBlock = worldStateManager.formatRelationshipContext(chapterNumber, sceneCharNames);
+    const relBlock = worldStateAuthority.formatRelationshipContext(chapterNumber, sceneCharNames);
     if (relBlock) {
       parts.push(relBlock);
       parts.push("");
     }
 
-    const visBlock = worldStateManager.formatCharacterVisibility(chapterNumber, sceneCharNames);
+    const visBlock = worldStateAuthority.formatCharacterVisibility(chapterNumber, sceneCharNames);
     if (visBlock) {
       parts.push(visBlock);
       parts.push("");
@@ -816,7 +895,7 @@ export async function writeChapterByScenes(
     previousChapterEnding,
     fastMode,
     simpleMode,
-    worldStateManager,
+    worldStateAuthority,
     directionDesign,
   } = options;
 
@@ -872,12 +951,20 @@ export async function writeChapterByScenes(
         ? buildSimpleScenePrompt(
             seed, chapterNumber, blueprint, scene, i,
             sceneTexts, previousSummaries, previousChapterEnding,
-            worldStateManager,
+            worldStateAuthority,
           )
         : buildScenePrompt(
             seed, chapterNumber, blueprint, scene, i,
             sceneTexts, previousSummaries,
-            { memoryContext, toneGuidance, progressContext, threadReminders, correctionContext, previousChapterEnding },
+            {
+              memoryContext,
+              toneGuidance,
+              progressContext,
+              threadReminders,
+              correctionContext,
+              previousChapterEnding,
+              worldStateAuthority,
+            },
           );
       const result = await agent.call({
         prompt: scenePrompt,
@@ -892,6 +979,7 @@ export async function writeChapterByScenes(
     } else {
       // Normal mode: beat-by-beat structured writing
       const beats = planBeats(scene, seed);
+      const focalCharacter = resolveSceneFocalCharacter(seed, blueprint, scene);
       const beatResult = await writeSceneByBeats({
         beats,
         scene,
@@ -901,6 +989,8 @@ export async function writeChapterByScenes(
         systemPrompt,
         model,
         previousChapterEnding,
+        worldStateAuthority,
+        focalCharacterId: focalCharacter?.id,
       });
       totalUsage = addUsage(totalUsage, beatResult.usage);
       sceneText = beatResult.text;
@@ -1004,7 +1094,7 @@ export async function writeChapterParallel(
     correctionContext,
     previousChapterEnding,
     simpleMode,
-    worldStateManager,
+    worldStateAuthority,
     directionDesign,
   } = options;
 
@@ -1036,7 +1126,7 @@ export async function writeChapterParallel(
           seed, chapterNumber, blueprint, scene, i,
           [], // no previous scene texts in parallel mode
           previousSummaries, previousChapterEnding,
-          worldStateManager,
+          worldStateAuthority,
         )
       : buildScenePrompt(
           seed, chapterNumber, blueprint, scene, i,
@@ -1050,6 +1140,7 @@ export async function writeChapterParallel(
             correctionContext,
             previousChapterEnding: previousChapterEnding,
             directionDesign,
+            worldStateAuthority,
           },
         );
 

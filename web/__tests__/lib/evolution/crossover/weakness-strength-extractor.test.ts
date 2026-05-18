@@ -100,8 +100,31 @@ function makeEvalResult(scores: {
         score: 1.0,
         pass: true,
       },
+      quality_gate: {
+        total_registered_items: fu >= 1.0 ? 1 : 2,
+        fully_resolved_item_count: fu >= 1.0 ? 1 : 1,
+        resolution_percentage: fu >= 1.0 ? 100 : 50,
+        pass: fu >= 1.0,
+      },
       arc_details: [],
+      thread_verdicts: [],
+      verdict_summary: {
+        total_threads: fu >= 1.0 ? 1 : 2,
+        resolved_threads: 1,
+        failure_threads: fu >= 1.0 ? 0 : 1,
+        intentional_non_failure_closures: 0,
+        invalid_payoff_failures: 0,
+        unresolved_failures: fu >= 1.0 ? 0 : 1,
+        non_terminal_failures: 0,
+      },
       issues: fu < 1.0 ? [`복선 문제: score=${fu}`] : [],
+    },
+
+    foreshadow_quality_gate: {
+      total_registered_items: fu >= 1.0 ? 1 : 2,
+      fully_resolved_item_count: fu >= 1.0 ? 1 : 1,
+      resolution_percentage: fu >= 1.0 ? 100 : 50,
+      pass: fu >= 1.0,
     },
 
     genre_alignment: {

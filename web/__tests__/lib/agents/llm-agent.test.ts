@@ -39,6 +39,14 @@ const TestSchema = z.object({ name: z.string(), value: z.number() });
 
 describe("LLMAgent", () => {
   describe("call()", () => {
+    it("blocks z-ai unless explicitly allowed", () => {
+      vi.stubEnv("NOVEL_LLM_PROVIDER", "zai");
+      vi.stubEnv("ZAI_API_KEY", "test-zai-key");
+      vi.stubEnv("OPENAI_API_KEY", "");
+
+      expect(() => new LLMAgent()).toThrow("z-ai provider is disabled");
+    });
+
     it("returns content from LLM response", async () => {
       mockCreate.mockResolvedValueOnce(mockResponse("Hello world"));
       const agent = new LLMAgent();

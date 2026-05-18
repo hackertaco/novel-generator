@@ -18,10 +18,27 @@ import {
 
 type LLMProvider = "openai" | "openrouter" | "zai";
 
+function isZaiAllowed(): boolean {
+  return process.env.NOVEL_ALLOW_ZAI === "1";
+}
+
 function getProvider(): LLMProvider {
+  const explicitProvider = process.env.NOVEL_LLM_PROVIDER?.trim().toLowerCase();
+  if (
+    explicitProvider === "openai"
+    || explicitProvider === "openrouter"
+  ) {
+    return explicitProvider;
+  }
+  if (explicitProvider === "zai") {
+    if (!isZaiAllowed()) {
+      throw new Error("z-ai provider is disabled. Set NOVEL_ALLOW_ZAI=1 only if this run is explicitly allowed to use z-ai.");
+    }
+    return explicitProvider;
+  }
+
   if (process.env.OPENAI_API_KEY) return "openai";
   if (process.env.OPENROUTER_API_KEY) return "openrouter";
-  if (process.env.ZAI_API_KEY) return "zai";
   return "openai";
 }
 
@@ -31,7 +48,7 @@ function createClient(): OpenAI {
     case "zai":
       return new OpenAI({
         apiKey: process.env.ZAI_API_KEY,
-        baseURL: process.env.ZAI_BASE_URL || "https://api.z.ai/api/openai/v1",
+        baseURL: process.env.ZAI_BASE_URL || "https://api.z.ai/api/paas/v4",
       });
     case "openrouter":
       return new OpenAI({

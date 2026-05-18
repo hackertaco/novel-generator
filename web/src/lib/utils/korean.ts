@@ -11,3 +11,13 @@ export function hasBatchim(char: string): boolean {
   if (code < 0xac00 || code > 0xd7a3) return false;
   return (code - 0xac00) % 28 !== 0;
 }
+
+export function particlePair(stem: string, withBatchim: string, withoutBatchim: string): string {
+  const trimmed = stem.trim();
+  const lastChar = trimmed[trimmed.length - 1] ?? "";
+  return hasBatchim(lastChar) ? withBatchim : withoutBatchim;
+}
+
+export function conjunctiveParticle(stem: string): string {
+  return particlePair(stem, "과", "와");
+}

@@ -76,6 +76,7 @@ const testSeed: NovelSeed = {
       planted_at: 5,
       hints_at: [15],
       reveal_at: 48,
+      linked_hint_occurrences: [],
       status: "pending",
       hint_count: 0,
     },

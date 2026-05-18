@@ -13,6 +13,11 @@ import { getActiveThreadsForChapter, formatThreadRevealsForPrompt } from "@/lib/
 import type { SceneSpec } from "@/lib/schema/planning";
 import type { DirectionDesign } from "@/lib/schema/direction";
 import {
+  buildActiveSpeakerPromptContext,
+  buildFocalCharacterPromptContext,
+} from "@/lib/sim/adapter";
+import type { WorldStateAuthority } from "@/lib/sim/world-state-authority";
+import {
   getAddressEntriesForCharacters,
   getInfoBudgetForChapter,
   getEmotionTargetForChapter,
@@ -235,6 +240,199 @@ export interface BeatWriterResult {
   usage: TokenUsage;
 }
 
+function buildCharacterVoiceReference(scene: SceneSpec, seed: NovelSeed): string {
+  return scene.characters
+    .map((id) => seed.characters.find((c) => c.id === id))
+    .filter(Boolean)
+    .map((c) => {
+      const gender = c!.gender || "male";
+      const pronoun = gender === "female" ? "그녀" : "그";
+      const genderLabel = gender === "female" ? "여" : gender === "male" ? "남" : "기타";
+      return `${c!.name}(${genderLabel}/${pronoun}): ${c!.voice.tone} / 말투: "${c!.voice.sample_dialogues[0] || ""}"`;
+    })
+    .join("\n");
+}
+
+function buildSpeakerCognitionBlock(
+  seed: NovelSeed,
+  beat: Beat,
+  worldStateAuthority?: WorldStateAuthority,
+): string {
+  if (beat.type !== "dialogue" || !worldStateAuthority) {
+    return "";
+  }
+
+  const speakerName = beat.characters[0];
+  const speaker = seed.characters.find((character) => character.name === speakerName);
+  if (!speaker) {
+    return "";
+  }
+
+  return buildActiveSpeakerPromptContext(
+    worldStateAuthority.getSimulationState(),
+    {
+      speakerCharacterId: speaker.id,
+      maxMemories: 3,
+      maxBeliefs: 3,
+    },
+  );
+}
+
+function resolveCharacterIdByNameOrId(seed: NovelSeed, value?: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  return seed.characters.find((character) => character.id === value || character.name === value)?.id;
+}
+
+function buildFocalViewpointBlock(
+  focalCharacterId: string | undefined,
+  worldStateAuthority?: WorldStateAuthority,
+): string {
+  if (!focalCharacterId || !worldStateAuthority) {
+    return "";
+  }
+
+  return buildFocalCharacterPromptContext(
+    worldStateAuthority.getSimulationState(),
+    {
+      focalCharacterId,
+      maxMemories: 4,
+      maxBeliefs: 4,
+    },
+  );
+}
+
+export interface BuildBeatPromptOptions {
+  beat: Beat;
+  beatIndex: number;
+  totalBeats: number;
+  scene: SceneSpec;
+  seed: NovelSeed;
+  chapterNumber: number;
+  previousText: string;
+  accumulatedText: string;
+  previousChapterEnding?: string;
+  directionDesign?: DirectionDesign;
+  worldStateAuthority?: WorldStateAuthority;
+  focalCharacterId?: string;
+}
+
+export function buildBeatPrompt(options: BuildBeatPromptOptions): string {
+  const {
+    beat,
+    beatIndex,
+    totalBeats,
+    scene,
+    seed,
+    chapterNumber,
+    previousText,
+    accumulatedText,
+    previousChapterEnding,
+    directionDesign,
+    worldStateAuthority,
+    focalCharacterId,
+  } = options;
+  const charVoices = buildCharacterVoiceReference(scene, seed);
+
+  const emotionalLine = beat.emotionalTarget
+    ? `이 비트의 감정: ${beat.emotionalTarget}`
+    : "";
+  const tensionLine = beat.microTension
+    ? `미세 긴장: ${beat.microTension}`
+    : "";
+
+  const continuityBlock = (beatIndex === 0 && previousChapterEnding && !accumulatedText)
+    ? `# ⚠️ 직전 화 마지막 장면 (이 직후부터 이어쓰세요!)
+${previousChapterEnding}
+→ 위 내용은 ${chapterNumber - 1}화의 끝입니다. 같은 장면을 반복하지 말고, 바로 다음 순간부터 시작하세요.
+`
+    : "";
+
+  const sceneContextParts: string[] = [];
+  if (scene.who) sceneContextParts.push(`누가: ${scene.who}`);
+  if (scene.when) sceneContextParts.push(`언제: ${scene.when}`);
+  if (scene.where_detail) sceneContextParts.push(`어디서: ${scene.where_detail}`);
+  if (scene.how) sceneContextParts.push(`어떻게: ${scene.how}`);
+  const sceneContextBlock = sceneContextParts.length > 0
+    ? `\n# 장면 맥락\n${sceneContextParts.join("\n")}\n`
+    : "";
+
+  const activeReveals = getActiveThreadsForChapter(seed.story_threads || [], chapterNumber);
+  const threadGuideBlock = activeReveals.length > 0
+    ? `\n# 캐릭터 내면 가이드\n${formatThreadRevealsForPrompt(activeReveals)}\n`
+    : "";
+
+  let directionBlock = "";
+  if (directionDesign) {
+    const ddParts: string[] = [];
+    const sceneCharNames = scene.characters
+      .map((id) => seed.characters.find((c) => c.id === id))
+      .filter(Boolean)
+      .map((c) => c!.name);
+    const addressEntries = getAddressEntriesForCharacters(directionDesign, sceneCharNames);
+    if (addressEntries.length > 0) {
+      ddParts.push(`호칭 규칙:\n${formatAddressMatrixForPrompt(addressEntries)}`);
+    }
+    const infoBudget = getInfoBudgetForChapter(directionDesign, chapterNumber);
+    if (infoBudget) {
+      ddParts.push(`정보 예산:\n${formatInfoBudgetForPrompt(infoBudget)}`);
+    }
+    const emotionTarget = getEmotionTargetForChapter(directionDesign, chapterNumber);
+    if (emotionTarget) {
+      ddParts.push(`감정 목표: ${formatEmotionTargetForPrompt(emotionTarget)}`);
+    }
+    if (chapterNumber === 1 && beatIndex === 0 && directionDesign.hook_strategy) {
+      ddParts.push(`1화 훅 전략:\n${formatHookStrategyForPrompt(directionDesign.hook_strategy)}`);
+    }
+    if (ddParts.length > 0) {
+      directionBlock = `\n# 연출 설계\n${ddParts.join("\n")}\n`;
+    }
+  }
+
+  const speakerCognitionBlock = buildSpeakerCognitionBlock(
+    seed,
+    beat,
+    worldStateAuthority,
+  );
+  const focalViewpointBlock = buildFocalViewpointBlock(
+    focalCharacterId ?? resolveCharacterIdByNameOrId(seed, beat.characters[0]),
+    worldStateAuthority,
+  );
+  const focalViewpointSection = focalViewpointBlock
+    ? `\n# 현재 시점 인지 스냅샷\n${focalViewpointBlock}\n`
+    : "";
+  const cognitionSection = speakerCognitionBlock
+    ? `\n# 현재 화자 인지 스냅샷\n${speakerCognitionBlock}\n`
+    : "";
+
+  return `# 소설 정보
+제목: ${seed.title} | 장르: ${seed.world.genre} | ${chapterNumber}화
+감정톤: ${scene.emotional_tone}
+${emotionalLine}
+${sceneContextBlock}${threadGuideBlock}${directionBlock}${focalViewpointSection}${cognitionSection}
+# 캐릭터 목소리
+${charVoices}
+
+${continuityBlock}${previousText ? `# 이전 씬 (마지막 부분)\n${previousText.slice(-500)}\n` : ""}
+${accumulatedText ? `# 현재 씬 (여기까지 작성됨)\n${accumulatedText}\n` : ""}
+# 지금 쓸 비트: [${beat.type}] (${beatIndex + 1}/${totalBeats})
+${beat.instruction}
+${tensionLine}
+
+규칙:
+- 감정을 설명하지 말고 행동/감각으로 보여주세요
+- "~였다" 어미 반복 금지. 직전 문장과 다른 어미를 쓰세요.
+- 캐릭터 말투를 지키세요
+- 이전 텍스트에 자연스럽게 이어지게 쓰세요
+- 연속 3문장을 같은 주어로 시작하지 마세요
+- 대사 후 "라고 말했다" 대신 행동 비트("칼을 내려놓았다", "고개를 돌렸다")로 화자를 보여주세요
+- 독자가 다음을 궁금해할 긴장 요소를 유지하세요
+
+출력: 비트 텍스트만 (메타 정보 없이)`;
+}
+
 /**
  * Generate a scene by writing each beat sequentially.
  * Each beat gets the accumulated text as context for continuity.
@@ -249,111 +447,43 @@ export async function writeSceneByBeats(options: {
   model?: string;
   previousChapterEnding?: string; // actual text from previous chapter for continuity
   directionDesign?: DirectionDesign; // direction design metadata
+  worldStateAuthority?: WorldStateAuthority;
+  focalCharacterId?: string;
 }): Promise<BeatWriterResult> {
-  const { beats, scene, seed, chapterNumber, previousText, systemPrompt, model, previousChapterEnding, directionDesign } = options;
+  const {
+    beats,
+    scene,
+    seed,
+    chapterNumber,
+    previousText,
+    systemPrompt,
+    model,
+    previousChapterEnding,
+    directionDesign,
+    worldStateAuthority,
+    focalCharacterId,
+  } = options;
   const agent = getAgent();
   let totalUsage: TokenUsage = { ...ZERO_USAGE };
   const beatTexts: string[] = [];
 
-  // Character voice reference (with gender/pronouns)
-  const charVoices = scene.characters
-    .map((id) => seed.characters.find((c) => c.id === id))
-    .filter(Boolean)
-    .map((c) => {
-      const gender = c!.gender || "male";
-      const pronoun = gender === "female" ? "그녀" : "그";
-      const genderLabel = gender === "female" ? "여" : gender === "male" ? "남" : "기타";
-      return `${c!.name}(${genderLabel}/${pronoun}): ${c!.voice.tone} / 말투: "${c!.voice.sample_dialogues[0] || ""}"`;
-    })
-    .join("\n");
-
   for (let i = 0; i < beats.length; i++) {
     const beat = beats[i];
     const accumulatedText = beatTexts.join("\n");
-
-    const emotionalLine = beat.emotionalTarget
-      ? `이 비트의 감정: ${beat.emotionalTarget}`
-      : "";
-    const tensionLine = beat.microTension
-      ? `미세 긴장: ${beat.microTension}`
-      : "";
-
-    // For the first beat of the first scene, add continuity from previous chapter
-    const continuityBlock = (i === 0 && previousChapterEnding && !beatTexts.length)
-      ? `# ⚠️ 직전 화 마지막 장면 (이 직후부터 이어쓰세요!)
-${previousChapterEnding}
-→ 위 내용은 ${chapterNumber - 1}화의 끝입니다. 같은 장면을 반복하지 말고, 바로 다음 순간부터 시작하세요.
-`
-      : "";
-
-    // 5W1H context for scene grounding
-    const sceneContextParts: string[] = [];
-    if (scene.who) sceneContextParts.push(`누가: ${scene.who}`);
-    if (scene.when) sceneContextParts.push(`언제: ${scene.when}`);
-    if (scene.where_detail) sceneContextParts.push(`어디서: ${scene.where_detail}`);
-    if (scene.how) sceneContextParts.push(`어떻게: ${scene.how}`);
-    const sceneContextBlock = sceneContextParts.length > 0
-      ? `\n# 장면 맥락\n${sceneContextParts.join("\n")}\n`
-      : "";
-
-    // Thread reveal guide for this chapter
-    const activeReveals = getActiveThreadsForChapter(seed.story_threads || [], chapterNumber);
-    const threadGuideBlock = activeReveals.length > 0
-      ? `\n# 캐릭터 내면 가이드\n${formatThreadRevealsForPrompt(activeReveals)}\n`
-      : "";
-
-    // Direction design context
-    let directionBlock = "";
-    if (directionDesign) {
-      const ddParts: string[] = [];
-      const sceneCharNames = scene.characters
-        .map((id) => seed.characters.find((c) => c.id === id))
-        .filter(Boolean)
-        .map((c) => c!.name);
-      const addressEntries = getAddressEntriesForCharacters(directionDesign, sceneCharNames);
-      if (addressEntries.length > 0) {
-        ddParts.push(`호칭 규칙:\n${formatAddressMatrixForPrompt(addressEntries)}`);
-      }
-      const infoBudget = getInfoBudgetForChapter(directionDesign, chapterNumber);
-      if (infoBudget) {
-        ddParts.push(`정보 예산:\n${formatInfoBudgetForPrompt(infoBudget)}`);
-      }
-      const emotionTarget = getEmotionTargetForChapter(directionDesign, chapterNumber);
-      if (emotionTarget) {
-        ddParts.push(`감정 목표: ${formatEmotionTargetForPrompt(emotionTarget)}`);
-      }
-      if (chapterNumber === 1 && i === 0 && directionDesign.hook_strategy) {
-        ddParts.push(`1화 훅 전략:\n${formatHookStrategyForPrompt(directionDesign.hook_strategy)}`);
-      }
-      if (ddParts.length > 0) {
-        directionBlock = `\n# 연출 설계\n${ddParts.join("\n")}\n`;
-      }
-    }
-
-    const prompt = `# 소설 정보
-제목: ${seed.title} | 장르: ${seed.world.genre} | ${chapterNumber}화
-감정톤: ${scene.emotional_tone}
-${emotionalLine}
-${sceneContextBlock}${threadGuideBlock}${directionBlock}
-# 캐릭터 목소리
-${charVoices}
-
-${continuityBlock}${previousText ? `# 이전 씬 (마지막 부분)\n${previousText.slice(-500)}\n` : ""}
-${accumulatedText ? `# 현재 씬 (여기까지 작성됨)\n${accumulatedText}\n` : ""}
-# 지금 쓸 비트: [${beat.type}] (${i + 1}/${beats.length})
-${beat.instruction}
-${tensionLine}
-
-규칙:
-- 감정을 설명하지 말고 행동/감각으로 보여주세요
-- "~였다" 어미 반복 금지. 직전 문장과 다른 어미를 쓰세요.
-- 캐릭터 말투를 지키세요
-- 이전 텍스트에 자연스럽게 이어지게 쓰세요
-- 연속 3문장을 같은 주어로 시작하지 마세요
-- 대사 후 "라고 말했다" 대신 행동 비트("칼을 내려놓았다", "고개를 돌렸다")로 화자를 보여주세요
-- 독자가 다음을 궁금해할 긴장 요소를 유지하세요
-
-출력: 비트 텍스트만 (메타 정보 없이)`;
+    const prompt = buildBeatPrompt({
+      beat,
+      beatIndex: i,
+      totalBeats: beats.length,
+      scene,
+      seed,
+      chapterNumber,
+      previousText,
+      accumulatedText,
+      previousChapterEnding,
+      directionDesign,
+      worldStateAuthority,
+      focalCharacterId,
+    });
 
     const result = await agent.call({
       prompt,
