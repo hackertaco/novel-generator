@@ -130,7 +130,7 @@ class ExhaustedHarness extends FakeHarness {
   }
 }
 
-function createSeed(): NovelSeed {
+function createSeed(overrides: Partial<NovelSeed> = {}): NovelSeed {
   return {
     title: "retry smoke",
     logline: "세라핀과 레온이 미지의 문을 연다.",
@@ -181,7 +181,29 @@ function createSeed(): NovelSeed {
     ],
     story_threads: [],
     arcs: [],
-    foreshadowing: [],
+    foreshadowing: [
+      {
+        id: "fs_gate",
+        name: "문양 균열",
+        description: "회랑 문양이 특정 피를 인식한다는 초기 징후",
+        importance: "critical",
+        planted_at: 1,
+        hints_at: [],
+        reveal_at: 2,
+        origin: {
+          episode_id: "ep_001",
+          scene_id: "scene_001_corridor_gate",
+          source_span: {
+            start_offset: 18,
+            end_offset: 49,
+            excerpt: "문 표면의 문양이 세라핀의 손끝에서 붉게 갈라졌다.",
+          },
+        },
+        linked_hint_occurrences: [],
+        status: "pending",
+        hint_count: 0,
+      },
+    ],
     chapter_outlines: [],
     extended_outlines: [],
     style: {
@@ -189,6 +211,7 @@ function createSeed(): NovelSeed {
       prose_guidelines: [],
       banned: [],
     },
+    ...overrides,
   } as unknown as NovelSeed;
 }
 
@@ -235,12 +258,88 @@ describe("quick-rerun", () => {
 
     const progressLog = fs.readFileSync(path.join(outDir, "progress.log"), "utf-8");
     const chapterLog = fs.readFileSync(path.join(outDir, "quick-rerun.log"), "utf-8");
+    const persistedSeed = JSON.parse(fs.readFileSync(path.join(outDir, "seed.json"), "utf-8")) as NovelSeed;
     const report = JSON.parse(fs.readFileSync(path.join(outDir, "report.json"), "utf-8")) as {
       summary: string;
       safeguardSummary: Record<string, number>;
       artifactVerification: { ok: boolean; checks: Array<{ kind: string; exists: boolean }> };
       usageTotals: { prompt_tokens: number; completion_tokens: number; total_tokens: number; cost_usd: number };
       durationTotalsMs: number;
+      foreshadowingVerificationItems: Array<{
+        id: string;
+        name: string;
+        plantedAt: number;
+        revealAt: number | null;
+        lifecycle: string;
+        terminalState: {
+          status: string;
+          source: string;
+          provenance: {
+            sourceEpisodeIds: string[];
+            sourceSceneIds: string[];
+            sourceOccurrenceCount: number;
+          };
+        } | null;
+        abandonmentReason?: string;
+        abandonmentMarker?: string;
+        intentionalAbandonment: {
+          marker: string;
+          source: string;
+          provenance: {
+            sourceEpisodeIds: string[];
+            sourceSceneIds: string[];
+            sourceOccurrenceCount: number;
+          };
+        } | null;
+        sourceEpisodeIds: string[];
+        sourceSceneIds: string[];
+        sourceOccurrenceCount: number;
+        sharedTargetSummary: string;
+      }>;
+      foreshadowVerificationInput: {
+        registeredForeshadowItems: Array<{
+          id: string;
+          registrationEpisode: number;
+          registrationEpisodeId: string;
+          candidateResolutionEvents: Array<{
+            episodeNumber: number;
+            episodeId: string;
+          }>;
+        }>;
+        episodeSequence: Array<{
+          episodeNumber: number;
+          episodeId: string;
+        }>;
+      };
+      foreshadowContinuityVerifierReport: {
+        resolutionWindowEpisodes: number;
+        evaluationHorizonEpisode: number;
+        totals: {
+          total: number;
+          resolvedWithinWindow: number;
+          pending: number;
+          missed: number;
+          expired: number;
+          intentionallyAbandoned: number;
+        };
+        items: Array<{
+          id: string;
+          status: string;
+          resolutionEpisode: number | null;
+          resolutionEpisodeId: string | null;
+          countsAsFailure: boolean;
+          threadVerdictClassification: string;
+          expiryReasoning: {
+            kind: string;
+            deadlineEpisode: number;
+            evaluationHorizonEpisode: number;
+            resolutionEpisode: number | null;
+            episodesLate: number | null;
+            episodesRemaining: number | null;
+            summary: string;
+          };
+        }>;
+      };
       factExtractionFallbacks: {
         total: number;
         byKind: Record<string, number>;
@@ -260,6 +359,26 @@ describe("quick-rerun", () => {
         pipelineWarnings: string[];
       }>;
     };
+
+    expect(persistedSeed.foreshadowing[0]).toMatchObject({
+      id: "fs_gate",
+      lifecycle: "pending",
+      origin: {
+        episode_id: "ep_001",
+        scene_id: "scene_001_corridor_gate",
+        source_span: {
+          start_offset: 18,
+          end_offset: 49,
+          excerpt: "문 표면의 문양이 세라핀의 손끝에서 붉게 갈라졌다.",
+        },
+      },
+      verification_metadata: {
+        source_episode_ids: ["ep_001"],
+        source_scene_ids: ["scene_001_corridor_gate"],
+        source_occurrence_count: 1,
+        shared_target_summary: "회랑 문양이 특정 피를 인식한다는 초기 징후",
+      },
+    });
     expect(progressLog).toContain("ch1 retry scheduled in 0s");
     expect(progressLog).toContain("[rerun] 2화 중 2화 성공, 없음화 실패");
     expect(progressLog).toContain("[rerun] safeguard summary");
@@ -299,6 +418,69 @@ describe("quick-rerun", () => {
       safeguardStages: ["future-character-debate", "final-cast-hard-repair"],
       pipelineWarnings: ["[future-character-debate] keep_original — cast guard preserved"],
       factExtractionFallbackKind: "json_parse_fallback",
+    });
+    expect(report.foreshadowingVerificationItems).toEqual([
+      {
+        id: "fs_gate",
+        name: "문양 균열",
+        plantedAt: 1,
+        revealAt: 2,
+        lifecycle: "pending",
+        terminalState: null,
+        intentionalAbandonment: null,
+        sourceEpisodeIds: ["ep_001"],
+        sourceSceneIds: ["scene_001_corridor_gate"],
+        sourceOccurrenceCount: 1,
+        sharedTargetSummary: "회랑 문양이 특정 피를 인식한다는 초기 징후",
+      },
+    ]);
+    expect(report.foreshadowVerificationInput.registeredForeshadowItems).toEqual([
+      expect.objectContaining({
+        id: "fs_gate",
+        registrationEpisode: 1,
+        registrationEpisodeId: "ep_001",
+        candidateResolutionEvents: [],
+      }),
+    ]);
+    expect(report.foreshadowVerificationInput.episodeSequence).toEqual([
+      expect.objectContaining({
+        episodeNumber: 1,
+        episodeId: "ep_001",
+      }),
+      expect.objectContaining({
+        episodeNumber: 2,
+        episodeId: "ep_002",
+      }),
+    ]);
+    expect(report.foreshadowContinuityVerifierReport).toMatchObject({
+      resolutionWindowEpisodes: 80,
+      evaluationHorizonEpisode: 2,
+      totals: {
+        total: 1,
+        resolvedWithinWindow: 0,
+        pending: 1,
+        missed: 0,
+        expired: 0,
+        intentionallyAbandoned: 0,
+      },
+      items: [
+        {
+          id: "fs_gate",
+          status: "pending",
+          resolutionEpisode: null,
+          resolutionEpisodeId: null,
+          countsAsFailure: false,
+          threadVerdictClassification: "non_terminal_failure",
+          expiryReasoning: {
+            kind: "deadline_not_reached",
+            deadlineEpisode: 81,
+            evaluationHorizonEpisode: 2,
+            resolutionEpisode: null,
+            episodesLate: null,
+            episodesRemaining: 79,
+          },
+        },
+      ],
     });
     expect(report.lowScoreChapters[1]?.score).toBeCloseTo(0.62725, 5);
     expect(report.statuses[1]?.safeguardStages).toEqual(["future-character-debate", "final-cast-hard-repair"]);
@@ -360,8 +542,259 @@ describe("quick-rerun", () => {
     const report = JSON.parse(fs.readFileSync(path.join(outDir, "report.json"), "utf-8")) as {
       usageTotals: { prompt_tokens: number; completion_tokens: number; total_tokens: number; cost_usd: number };
       durationTotalsMs: number;
+      foreshadowVerificationVerdictSummary: {
+        totalThreads: number;
+        failureThreads: number;
+        intentionalNonFailureClosures: number;
+      };
+      foreshadowVerificationInput: {
+        registeredForeshadowItems: Array<{ id: string }>;
+        episodeSequence: Array<{ episodeNumber: number }>;
+      };
     };
     expect(report.usageTotals).toEqual({ prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, cost_usd: 0.001 });
     expect(report.durationTotalsMs).toBe(25);
+    expect(report.foreshadowVerificationVerdictSummary).toMatchObject({
+      totalThreads: 1,
+      failureThreads: 1,
+      intentionalNonFailureClosures: 0,
+    });
+    expect(report.foreshadowVerificationInput.registeredForeshadowItems).toHaveLength(1);
+    expect(report.foreshadowVerificationInput.episodeSequence).toHaveLength(1);
+  });
+
+  it("persists intentional-abandonment markers through seed and report serialization", async () => {
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "quick-rerun-abandon-test-"));
+    const harness = new FakeHarness();
+
+    await runQuickRerun({
+      harness,
+      seed: createSeed({
+        foreshadowing: [
+          {
+            id: "fs_cut",
+            name: "폐기된 균열 떡밥",
+            description: "중반 구조 개편으로 더 이상 회수하지 않기로 한 떡밥",
+            importance: "minor",
+            planted_at: 1,
+            hints_at: [],
+            reveal_at: null,
+            abandonment_marker: "intentional-abandonment:timeline-cut",
+            origin: {
+              episode_id: "ep_001",
+              scene_id: "scene_001_corridor_gate",
+              source_span: {
+                start_offset: 18,
+                end_offset: 49,
+              },
+            },
+            linked_hint_occurrences: [],
+            status: "pending",
+            hint_count: 0,
+          },
+        ],
+      }),
+      maxChapters: 1,
+      outDir,
+      retryDelaysMs: [0],
+      sleep: async () => {},
+    });
+
+    const persistedSeed = JSON.parse(fs.readFileSync(path.join(outDir, "seed.json"), "utf-8")) as NovelSeed;
+    const report = JSON.parse(fs.readFileSync(path.join(outDir, "report.json"), "utf-8")) as {
+      foreshadowingVerificationItems: Array<{
+        id: string;
+        lifecycle: string;
+        terminalState: {
+          status: string;
+          source: string;
+          provenance: {
+            sourceEpisodeIds: string[];
+            sourceSceneIds: string[];
+            sourceOccurrenceCount: number;
+          };
+        } | null;
+        abandonmentMarker?: string;
+        intentionalAbandonment: {
+          marker: string;
+          source: string;
+          provenance: {
+            sourceEpisodeIds: string[];
+            sourceSceneIds: string[];
+            sourceOccurrenceCount: number;
+          };
+        } | null;
+      }>;
+      foreshadowVerificationInput: {
+        registeredForeshadowItems: Array<{
+          id: string;
+          lifecycle: string;
+          abandonmentMarker?: string;
+        }>;
+        episodeSequence: Array<{ episodeNumber: number; episodeId: string }>;
+      };
+      foreshadowVerificationVerdictSummary: {
+        totalThreads: number;
+        resolvedThreads: number;
+        failureThreads: number;
+        intentionalNonFailureClosures: number;
+        threadVerdicts: Array<{
+          id: string;
+          classification: string;
+          countsAsFailure: boolean;
+        }>;
+      };
+    };
+
+    expect(persistedSeed.foreshadowing[0]).toMatchObject({
+      id: "fs_cut",
+      lifecycle: "intentionally_abandoned",
+      abandonment_marker: "intentional-abandonment:timeline-cut",
+    });
+    expect(report.foreshadowingVerificationItems).toEqual([
+      expect.objectContaining({
+        id: "fs_cut",
+        lifecycle: "intentionally_abandoned",
+        terminalState: {
+          status: "intentionally_abandoned",
+          source: "abandonment_marker",
+          provenance: {
+            sourceEpisodeIds: ["ep_001"],
+            sourceSceneIds: ["scene_001_corridor_gate"],
+            sourceOccurrenceCount: 1,
+          },
+        },
+        abandonmentMarker: "intentional-abandonment:timeline-cut",
+        intentionalAbandonment: {
+          marker: "intentional-abandonment:timeline-cut",
+          source: "abandonment_marker",
+          provenance: {
+            sourceEpisodeIds: ["ep_001"],
+            sourceSceneIds: ["scene_001_corridor_gate"],
+            sourceOccurrenceCount: 1,
+          },
+        },
+      }),
+    ]);
+    expect(report.foreshadowVerificationInput.registeredForeshadowItems).toEqual([
+      expect.objectContaining({
+        id: "fs_cut",
+        lifecycle: "intentionally_abandoned",
+        abandonmentMarker: "intentional-abandonment:timeline-cut",
+      }),
+    ]);
+    expect(report.foreshadowVerificationInput.episodeSequence).toEqual([
+      expect.objectContaining({
+        episodeNumber: 1,
+        episodeId: "ep_001",
+      }),
+    ]);
+    expect(report.foreshadowVerificationVerdictSummary).toMatchObject({
+      totalThreads: 1,
+      resolvedThreads: 0,
+      failureThreads: 0,
+      intentionalNonFailureClosures: 1,
+    });
+    expect(report.foreshadowVerificationVerdictSummary.threadVerdicts).toEqual([
+      expect.objectContaining({
+        id: "fs_cut",
+        classification: "intentional_non_failure_closure",
+        countsAsFailure: false,
+      }),
+    ]);
+  });
+
+  it("does not serialize a fully revealed foreshadow as resolved unless the episode payoff explicitly links the originating foreshadow id", async () => {
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "quick-rerun-resolution-gate-"));
+    const harness = new FakeHarness();
+
+    await runQuickRerun({
+      harness,
+      seed: createSeed({
+        foreshadowing: [
+          {
+            id: "fs_gate",
+            name: "문양 균열",
+            description: "회랑 문양이 특정 피를 인식한다는 초기 징후",
+            importance: "critical",
+            planted_at: 1,
+            hints_at: [],
+            reveal_at: 2,
+            origin: {
+              episode_id: "ep_001",
+              scene_id: "scene_001_corridor_gate",
+              source_span: {
+                start_offset: 18,
+                end_offset: 49,
+              },
+            },
+            linked_hint_occurrences: [],
+            status: "pending",
+            hint_count: 0,
+            resolution: {
+              cause: { revealed: true, chapter: 2, evidence: ["원인 공개"] },
+              identity: { revealed: true, chapter: 2, evidence: ["정체 공개"] },
+              consequence: { revealed: true, chapter: 2, evidence: ["결과 공개"] },
+            },
+          },
+        ],
+      }),
+      maxChapters: 1,
+      outDir,
+      retryDelaysMs: [0],
+      sleep: async () => {},
+    });
+
+    const persistedSeed = JSON.parse(fs.readFileSync(path.join(outDir, "seed.json"), "utf-8")) as NovelSeed;
+    const report = JSON.parse(fs.readFileSync(path.join(outDir, "report.json"), "utf-8")) as {
+      foreshadowingVerificationItems: Array<{
+        id: string;
+        lifecycle: string;
+        terminalState: {
+          status: string;
+          source: string;
+          provenance: {
+            sourceEpisodeIds: string[];
+            sourceSceneIds: string[];
+            sourceOccurrenceCount: number;
+          };
+        } | null;
+      }>;
+      foreshadowVerificationInput: {
+        registeredForeshadowItems: Array<{
+          id: string;
+          lifecycle: string;
+        }>;
+      };
+      foreshadowVerificationVerdictSummary: {
+        failureThreads: number;
+        nonTerminalFailures: number;
+      };
+    };
+
+    expect(persistedSeed.foreshadowing[0]).toMatchObject({
+      id: "fs_gate",
+      lifecycle: "pending",
+      resolution: expect.objectContaining({
+        status: "partial",
+      }),
+    });
+    expect(report.foreshadowingVerificationItems).toEqual([
+      expect.objectContaining({
+        id: "fs_gate",
+        lifecycle: "pending",
+        terminalState: null,
+      }),
+    ]);
+    expect(report.foreshadowVerificationInput.registeredForeshadowItems).toEqual([
+      expect.objectContaining({
+        id: "fs_gate",
+        lifecycle: "pending",
+      }),
+    ]);
+    expect(report.foreshadowVerificationVerdictSummary).toMatchObject({
+      failureThreads: 1,
+      nonTerminalFailures: 1,
+    });
   });
 });

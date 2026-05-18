@@ -11,8 +11,25 @@ import type { NovelSeed } from "../src/lib/schema/novel";
 import type { ChapterSummary } from "../src/lib/schema/chapter";
 import type { MasterPlan } from "../src/lib/schema/planning";
 import type { TokenUsage } from "../src/lib/agents/types";
-import type { ChapterResult, HarnessEvent } from "../src/lib/harness";
-import { NovelHarness, getFastConfig } from "../src/lib/harness";
+import type {
+  ChapterResult,
+  ForeshadowContinuityVerifierReport,
+  ForeshadowResolutionWindowSummary,
+  ForeshadowVerificationInput,
+  ForeshadowVerificationItemSummary,
+  ForeshadowVerificationVerdictSummary,
+  HarnessEvent,
+} from "../src/lib/harness";
+import {
+  buildForeshadowContinuityVerifierReport,
+  buildForeshadowVerificationInput,
+  buildForeshadowVerificationVerdictSummary,
+  buildForeshadowingVerificationItems,
+  evaluateForeshadowResolutionWindows,
+  NovelHarness,
+  getFastConfig,
+  normalizeSeedForeshadowing,
+} from "../src/lib/harness";
 import { computeDeterministicScores } from "../src/lib/evaluators/deterministic-scorer";
 
 if (fs.existsSync(".env")) {
@@ -119,6 +136,11 @@ export interface QuickRerunReport {
   worldStateEntries: number;
   factExtractionFallbacks: FactExtractionFallbackSummary;
   lowScoreChapters: LowScoreChapterEntry[];
+  foreshadowingVerificationItems: ForeshadowVerificationItemSummary[];
+  foreshadowVerificationInput: ForeshadowVerificationInput;
+  foreshadowContinuityVerifierReport: ForeshadowContinuityVerifierReport;
+  foreshadowVerificationVerdictSummary: ForeshadowVerificationVerdictSummary;
+  foreshadowResolutionWindowSummary: ForeshadowResolutionWindowSummary;
   usageTotals: TokenUsage;
   durationTotalsMs: number;
 }
@@ -505,12 +527,14 @@ function writeReport(
   seed: NovelSeed,
   maxChapters: number,
   statuses: ChapterRunStatus[],
+  chapterResults: ChapterResult[],
   progressLogPath: string,
   chapterLogPath: string,
   worldState: unknown[],
 ): { reportPath: string; report: QuickRerunReport; artifactVerification: ArtifactVerification } {
   const reportPath = path.join(outDir, "report.json");
   const factExtractionFallbacks = summarizeFactExtractionFallbacks(worldState);
+  const foreshadowVerificationInput = buildForeshadowVerificationInput(seed, chapterResults);
   const report: QuickRerunReport = {
     generatedAt: timestamp(),
     seedTitle: seed.title,
@@ -528,6 +552,14 @@ function writeReport(
     worldStateEntries: worldState.length,
     factExtractionFallbacks,
     lowScoreChapters: summarizeLowScoreChapters(statuses, factExtractionFallbacks),
+    foreshadowingVerificationItems: buildForeshadowingVerificationItems(seed),
+    foreshadowVerificationInput,
+    foreshadowContinuityVerifierReport:
+      buildForeshadowContinuityVerifierReport(seed, chapterResults),
+    foreshadowVerificationVerdictSummary:
+      buildForeshadowVerificationVerdictSummary(seed),
+    foreshadowResolutionWindowSummary:
+      evaluateForeshadowResolutionWindows(foreshadowVerificationInput),
     usageTotals: sumUsage(statuses),
     durationTotalsMs: sumDurations(statuses),
   };
@@ -562,18 +594,20 @@ export async function runQuickRerun({
   retryDelaysMs?: number[];
   sleep?: (ms: number) => Promise<void>;
 }): Promise<QuickRerunResult> {
+  const normalizedSeed = normalizeSeedForeshadowing(seed);
   fs.mkdirSync(path.join(outDir, "chapters"), { recursive: true });
   fs.mkdirSync(path.join(outDir, "blueprints"), { recursive: true });
-  fs.writeFileSync(path.join(outDir, "seed.json"), JSON.stringify(seed, null, 2));
+  fs.writeFileSync(path.join(outDir, "seed.json"), JSON.stringify(normalizedSeed, null, 2));
 
   const progressLogPath = path.join(outDir, "progress.log");
   const chapterLogPath = path.join(outDir, "quick-rerun.log");
 
   appendLine(progressLogPath, `=== quick rerun start ${timestamp()} ===`);
   appendLine(chapterLogPath, `=== quick rerun chapter status ${timestamp()} ===`);
-  logProgress(progressLogPath, `[rerun] Seed: "${seed.title}", ${maxChapters}화 생성`);
+  logProgress(progressLogPath, `[rerun] Seed: "${normalizedSeed.title}", ${maxChapters}화 생성`);
 
   const statuses: ChapterRunStatus[] = [];
+  const chapterResults: ChapterResult[] = [];
   const state: ChapterRunState = {
     previousSummaries: [],
   };
@@ -586,7 +620,7 @@ export async function runQuickRerun({
     for (let attempt = 1; attempt <= retryDelaysMs.length + 1; attempt++) {
       const attemptResult = await runChapterAttempt({
         harness,
-        seed,
+        seed: normalizedSeed,
         chapter,
         outDir,
         state,
@@ -615,7 +649,8 @@ export async function runQuickRerun({
 
       if (attemptResult.success && attemptResult.chapterResult) {
         const result = attemptResult.chapterResult;
-        const score = computeDeterministicScores(result.text, seed, result.chapterNumber);
+        chapterResults.push(result);
+        const score = computeDeterministicScores(result.text, normalizedSeed, result.chapterNumber);
         state.previousSummaries.push({
           chapter: result.chapterNumber,
           title: result.summary.title,
@@ -701,9 +736,10 @@ export async function runQuickRerun({
   );
   const { reportPath, report, artifactVerification } = writeReport(
     outDir,
-    seed,
+    normalizedSeed,
     maxChapters,
     statuses,
+    chapterResults,
     progressLogPath,
     chapterLogPath,
     worldState,
