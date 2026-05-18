@@ -40,6 +40,9 @@ yarn-error.log*
 # auto-research experiment logs
 .auto-research/
 
+# generation artifacts
+/e2e-output/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
