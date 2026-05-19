@@ -229,7 +229,9 @@ describe("sim module", () => {
       },
     });
     expect(afterFact.characters.ally.secretsKnown).toContain("북회랑 열쇠는 황실 금고에 있다.");
-    expect(afterFact.audienceKnowledge).toContain("북회랑 열쇠는 황실 금고에 있다.");
+    expect(
+      Object.values(afterFact.audienceKnowledge.byId).map((record) => record.summary),
+    ).toContain("북회랑 열쇠는 황실 금고에 있다.");
     expect(listCharacterBeliefs(afterFact.beliefs, "ally")).toHaveLength(0);
     const allyMemoryIds = afterFact.memories.ally.timeline;
     expect(allyMemoryIds).toHaveLength(1);

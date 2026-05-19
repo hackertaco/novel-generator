@@ -103,7 +103,7 @@ export function createRendererRegenerationParityScenario(): ChapterGenerationPar
         seedTitle: seed.title,
         chapterCursor: chapterNumber - 1,
         objectiveFacts: { entries: [] },
-        audienceKnowledge: [],
+        audienceKnowledge: { byId: {}, timeline: [], bySummary: {} },
         characters: {},
         memories: { byCharacterId: {} },
         beliefs: { byCharacterId: {}, trustMatrix: {} },

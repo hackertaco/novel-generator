@@ -1,4 +1,5 @@
 import type { SimulationAdapterOptions, SimulationState } from "./types";
+import { listAudienceKnowledge } from "./audience-knowledge";
 import { listCharacterBeliefs } from "./belief-state";
 import { listObjectiveFacts } from "./objective-facts";
 import { listCharacterMemories } from "./memory-state";
@@ -215,12 +216,17 @@ export function buildSimulationPromptContext(
     }
   }
 
-  const audienceKnowledge = state.audienceKnowledge.slice(-maxKnowledge);
+  const audienceKnowledge = listAudienceKnowledge(state.audienceKnowledge, {
+    limit: maxKnowledge,
+  });
   if (audienceKnowledge.length > 0) {
     parts.push("");
     parts.push("### Audience Already Knows");
-    for (const fact of audienceKnowledge) {
-      parts.push(`- ${fact}`);
+    for (const record of audienceKnowledge) {
+      const meta: string[] = [`ch${record.chapter}`, record.source];
+      if (record.kind !== "fact_revealed") meta.push(record.kind);
+      if (record.status !== "revealed") meta.push(record.status);
+      parts.push(`- [${meta.join("/")}] ${record.summary}`);
     }
   }
 

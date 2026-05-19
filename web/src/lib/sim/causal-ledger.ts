@@ -31,6 +31,10 @@ export const SimulationEventTypeSchema = z.enum([
   "relationship_shift",
   "open_thread",
   "resolve_thread",
+  "recollection_surfaced",
+  "internal_monologue",
+  "realization",
+  "time_jump",
 ]);
 
 export const SimulationEventEntityTypeSchema = z.enum([

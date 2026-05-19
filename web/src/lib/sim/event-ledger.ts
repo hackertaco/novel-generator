@@ -19,6 +19,12 @@ import {
   type SimulationEventStateOperation,
 } from "./causal-ledger";
 import {
+  addAudienceKnowledge,
+  cloneAudienceKnowledgeStore,
+  hasAudienceKnowledgeSummary,
+  type AudienceKnowledgeSource,
+} from "./audience-knowledge";
+import {
   ensureCharacterBeliefInterpretationStore,
 } from "./belief-interpretation-state";
 import {
@@ -36,6 +42,7 @@ import {
 import {
   addCharacterMemory,
   cloneCharacterMemoryStore,
+  recordMemoryRecall,
 } from "./memory-state";
 import { cloneForeshadowRegistryStore } from "./foreshadow-registry";
 import {
@@ -51,7 +58,7 @@ function cloneState(state: SimulationState): SimulationState {
   return {
     ...state,
     objectiveFacts: cloneObjectiveFactStore(state.objectiveFacts),
-    audienceKnowledge: [...state.audienceKnowledge],
+    audienceKnowledge: cloneAudienceKnowledgeStore(state.audienceKnowledge),
     characters: Object.fromEntries(
       Object.entries(state.characters).map(([id, value]) => [
         id,
@@ -1182,8 +1189,23 @@ export class SimulationEventLedger {
         recordObjectiveFactCreation(normalizedEvent, fact);
 
         const revealedSummary = toOptionalString(payload?.canonicalSummary) ?? factSummary;
-        if (visibility === "audience" && !next.audienceKnowledge.includes(revealedSummary)) {
-          next.audienceKnowledge.push(revealedSummary);
+        if (visibility === "audience" && !hasAudienceKnowledgeSummary(next.audienceKnowledge, revealedSummary)) {
+          addAudienceKnowledge(next.audienceKnowledge, {
+            chapter: normalizedEvent.chapter,
+            kind: "fact_revealed",
+            subject: factSubject,
+            summary: revealedSummary,
+            status: "revealed",
+            source: "action",
+            references: {
+              eventId: normalizedEvent.id,
+              objectiveFactIds: [fact.id],
+            },
+            tags: uniqueStrings([
+              "event:plot_action",
+              ...normalizedEvent.tags,
+            ]),
+          });
         }
 
         applyCharacterStateUpdatesFromEvent(next, normalizedEvent, {
@@ -1575,8 +1597,24 @@ export class SimulationEventLedger {
           factIds.push(recordedFact.id);
           recordObjectiveFactCreation(normalizedEvent, recordedFact);
         }
-        if (visibility === "audience" && !next.audienceKnowledge.includes(fact)) {
-          next.audienceKnowledge.push(fact);
+        if (visibility === "audience" && !hasAudienceKnowledgeSummary(next.audienceKnowledge, fact)) {
+          const factSubjectForAudience = toOptionalString(normalizedEvent.payload?.subject) ?? "world";
+          const payloadSource = toOptionalString(normalizedEvent.payload?.source) as
+            | AudienceKnowledgeSource
+            | undefined;
+          addAudienceKnowledge(next.audienceKnowledge, {
+            chapter: normalizedEvent.chapter,
+            kind: "fact_revealed",
+            subject: factSubjectForAudience,
+            summary: fact,
+            status: "revealed",
+            source: payloadSource ?? "exposition",
+            references: {
+              eventId: normalizedEvent.id,
+              objectiveFactIds: [...factIds],
+            },
+            tags: ["event:learn_fact"],
+          });
         }
         applyCharacterStateUpdatesFromEvent(next, normalizedEvent, {
           defaultMemoryUpdates: recipientIds.map((recipientId) => {
@@ -1799,6 +1837,218 @@ export class SimulationEventLedger {
             ],
             fallbackTags: ["event:resolve_thread"],
             causalEvent: normalizedEvent,
+          });
+        }
+        break;
+      }
+
+      case "recollection_surfaced": {
+        const payload = normalizedEvent.payload;
+        const characterId = toOptionalString(payload?.characterId)
+          ?? normalizedEvent.actorId;
+        const memoryId = toOptionalString(payload?.memoryId);
+        const recallSummary = toOptionalString(payload?.summary)
+          ?? normalizedEvent.summary;
+        const audienceVisible = toOptionalString(payload?.visibility) !== "private";
+
+        if (characterId && memoryId) {
+          const recalled = recordMemoryRecall(
+            next.memories,
+            characterId,
+            memoryId,
+            normalizedEvent.chapter,
+          );
+          if (recalled) {
+            appendStateChange(normalizedEvent, {
+              suffix: `memory-recall:${characterId}:${memoryId}`,
+              domain: "memories",
+              operation: "record",
+              stateKey: `memory:${memoryId}:recalledAtChapters`,
+              summary: `${characterId} recalls memory ${memoryId} at chapter ${normalizedEvent.chapter}`,
+              entityIds: [characterId],
+              resultingRecordId: memoryId,
+            });
+            appendOutcome(normalizedEvent, {
+              suffix: `memory-recalled:${characterId}:${memoryId}`,
+              type: "memory_recorded",
+              summary: `${characterId} surfaced recollection of ${recalled.summary}`,
+              resultingRecordIds: [memoryId],
+            });
+          }
+        }
+
+        if (
+          audienceVisible &&
+          !hasAudienceKnowledgeSummary(next.audienceKnowledge, recallSummary)
+        ) {
+          addAudienceKnowledge(next.audienceKnowledge, {
+            chapter: normalizedEvent.chapter,
+            kind: "fact_revealed",
+            subject: characterId ?? "narrator",
+            summary: recallSummary,
+            status: "revealed",
+            source: "flashback",
+            references: {
+              eventId: normalizedEvent.id,
+            },
+            tags: uniqueStrings([
+              "event:recollection_surfaced",
+              ...normalizedEvent.tags,
+            ]),
+          });
+        }
+        break;
+      }
+
+      case "internal_monologue": {
+        const payload = normalizedEvent.payload;
+        const characterId = toOptionalString(payload?.characterId)
+          ?? normalizedEvent.actorId;
+        const monologueSummary = toOptionalString(payload?.summary)
+          ?? normalizedEvent.summary;
+        const beliefId = toOptionalString(payload?.beliefId);
+        const audienceVisible = toOptionalString(payload?.visibility) !== "private";
+
+        appendOutcome(normalizedEvent, {
+          suffix: `monologue:${characterId ?? "anon"}`,
+          type: "knowledge_revealed",
+          summary: monologueSummary,
+        });
+
+        if (
+          audienceVisible &&
+          !hasAudienceKnowledgeSummary(next.audienceKnowledge, monologueSummary)
+        ) {
+          addAudienceKnowledge(next.audienceKnowledge, {
+            chapter: normalizedEvent.chapter,
+            kind: "fact_revealed",
+            subject: characterId ?? "narrator",
+            summary: monologueSummary,
+            status: "revealed",
+            source: "monologue",
+            references: {
+              eventId: normalizedEvent.id,
+              characterBeliefIds: beliefId ? [beliefId] : [],
+            },
+            tags: uniqueStrings([
+              "event:internal_monologue",
+              ...normalizedEvent.tags,
+            ]),
+          });
+        }
+        break;
+      }
+
+      case "realization": {
+        const payload = normalizedEvent.payload;
+        const characterId = toOptionalString(payload?.characterId)
+          ?? normalizedEvent.actorId;
+        const subject = toOptionalString(payload?.subject)
+          ?? normalizedEvent.summary;
+        const beliefText = toOptionalString(payload?.belief)
+          ?? normalizedEvent.summary;
+        const cause = toOptionalString(payload?.cause)
+          ?? `Realization at chapter ${normalizedEvent.chapter}`;
+        const audienceVisible = toOptionalString(payload?.visibility) !== "private";
+        let createdBeliefId: string | undefined;
+
+        if (characterId) {
+          const beliefRecord = addCharacterBelief(next.beliefs, {
+            characterId,
+            chapter: normalizedEvent.chapter,
+            kind: "deduction",
+            subject,
+            belief: beliefText,
+            cause,
+            references: {
+              eventId: normalizedEvent.id,
+            },
+            tags: ["event:realization"],
+          });
+          createdBeliefId = beliefRecord.id;
+          appendStateChange(normalizedEvent, {
+            suffix: `realization:${characterId}:${beliefRecord.id}`,
+            domain: "beliefs",
+            operation: "create",
+            stateKey: `belief:${beliefRecord.id}`,
+            summary: `${characterId} realizes ${beliefText}`,
+            entityIds: [characterId],
+            resultingRecordId: beliefRecord.id,
+          });
+          appendOutcome(normalizedEvent, {
+            suffix: `belief-realized:${characterId}:${beliefRecord.id}`,
+            type: "belief_recorded",
+            summary: `${characterId} realizes ${beliefText}`,
+            resultingRecordIds: [beliefRecord.id],
+          });
+        }
+
+        if (
+          audienceVisible &&
+          !hasAudienceKnowledgeSummary(next.audienceKnowledge, beliefText)
+        ) {
+          addAudienceKnowledge(next.audienceKnowledge, {
+            chapter: normalizedEvent.chapter,
+            kind: "fact_revealed",
+            subject,
+            summary: beliefText,
+            status: "revealed",
+            source: "monologue",
+            references: {
+              eventId: normalizedEvent.id,
+              characterBeliefIds: createdBeliefId ? [createdBeliefId] : [],
+            },
+            tags: uniqueStrings([
+              "event:realization",
+              ...normalizedEvent.tags,
+            ]),
+          });
+        }
+        break;
+      }
+
+      case "time_jump": {
+        const payload = normalizedEvent.payload;
+        const toChapter = toOptionalNumber(payload?.toChapter)
+          ?? normalizedEvent.chapter;
+        const fromChapter = toOptionalNumber(payload?.fromChapter);
+        const jumpSummary = toOptionalString(payload?.summary)
+          ?? normalizedEvent.summary;
+
+        const previousCursor = next.chapterCursor;
+        next.chapterCursor = Math.max(next.chapterCursor, toChapter);
+        appendStateChange(normalizedEvent, {
+          suffix: `time-jump:${previousCursor}-${toChapter}`,
+          domain: "world_model",
+          operation: "update",
+          stateKey: "world:chapterCursor",
+          summary: fromChapter !== undefined
+            ? `Time jump from chapter ${fromChapter} to ${toChapter}`
+            : `Time jump to chapter ${toChapter}`,
+          beforeValue: previousCursor,
+          afterValue: next.chapterCursor,
+        });
+        appendOutcome(normalizedEvent, {
+          suffix: `time-jumped:${toChapter}`,
+          type: "character_state_changed",
+          summary: jumpSummary,
+        });
+
+        if (!hasAudienceKnowledgeSummary(next.audienceKnowledge, jumpSummary)) {
+          addAudienceKnowledge(next.audienceKnowledge, {
+            chapter: normalizedEvent.chapter,
+            kind: "fact_revealed",
+            subject: "timeline",
+            summary: jumpSummary,
+            status: "revealed",
+            source: "exposition",
+            references: {
+              eventId: normalizedEvent.id,
+            },
+            tags: uniqueStrings([
+              "event:time_jump",
+              ...normalizedEvent.tags,
+            ]),
           });
         }
         break;

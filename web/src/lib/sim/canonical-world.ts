@@ -6,6 +6,7 @@ import type {
   SimulationState,
   SimulationThread,
 } from "./types";
+import { createAudienceKnowledgeStore } from "./audience-knowledge";
 import {
   createCharacterBeliefInterpretationStore,
 } from "./belief-interpretation-state";
@@ -19,7 +20,10 @@ import {
   createObjectiveFactStore,
 } from "./objective-facts";
 import { createForeshadowRegistryFromSeed } from "./foreshadow-registry";
-import { createCharacterMemoryStore } from "./memory-state";
+import {
+  addCharacterMemory,
+  createCharacterMemoryStore,
+} from "./memory-state";
 import { createCharacterUtteranceStore } from "./utterance-state";
 
 function createCharacterState(character: Character): SimulationCharacterState {
@@ -228,7 +232,7 @@ export function createSimulationState(
     seedTitle: seed.title,
     chapterCursor: 0,
     objectiveFacts,
-    audienceKnowledge: [],
+    audienceKnowledge: createAudienceKnowledgeStore(),
     characters,
     memories: createCharacterMemoryStore(seed.characters.map((character) => character.id)),
     beliefs,
@@ -243,7 +247,26 @@ export function createSimulationState(
 
   for (const character of seed.characters) {
     seedBeliefState(character, state);
+    seedGenreOriginMemory(character, state);
   }
 
   return state;
+}
+
+function seedGenreOriginMemory(
+  character: Character,
+  state: SimulationState,
+): void {
+  const origin = character.genre_origin;
+  if (!origin?.past_life_summary) return;
+
+  addCharacterMemory(state.memories, {
+    characterId: character.id,
+    chapter: 0,
+    kind: "direct_experience",
+    summary: origin.past_life_summary,
+    emotionalTone: origin.kind === "regression" ? "분노/한" : undefined,
+    references: {},
+    tags: ["past_life", `genre:${origin.kind}`],
+  });
 }

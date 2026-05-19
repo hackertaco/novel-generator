@@ -100,6 +100,70 @@ export const CharacterVoiceSchema = z.object({
 
 export type CharacterVoice = z.infer<typeof CharacterVoiceSchema>;
 
+export const GenreOriginKindEnum = z.enum([
+  "regression",
+  "possession",
+  "transmigration",
+  "awakening",
+]);
+
+export type GenreOriginKind = z.infer<typeof GenreOriginKindEnum>;
+
+export const GenreOriginSchema = z.object({
+  kind: GenreOriginKindEnum.describe(
+    "장르 원형. regression=회귀, possession=빙의, transmigration=환생/이세계, awakening=각성. " +
+    "이 필드가 있으면 GenreConvention 룰이 결정적으로 1화 hook(회상/자각/시간점프 등)을 자동 생성.",
+  ),
+  past_life_summary: z
+    .string()
+    .optional()
+    .describe(
+      "전생/원래 세계에서의 마지막 기억 요약. regression이면 죽음 직전 장면 권장. " +
+      "canonical bootstrap 시 chapter 0 memory로 자동 시드되어 1화 회상의 결정적 소스가 됨.",
+    ),
+  trigger: z
+    .string()
+    .optional()
+    .describe(
+      "회귀/빙의/각성을 촉발한 사건 요약 (예: '독배를 마시고 눈을 뜨니 1년 전 약혼식 아침이었다'). " +
+      "1화 realization event의 cause로 사용.",
+    ),
+  awareness_chapter: z
+    .number()
+    .int()
+    .min(1)
+    .default(1)
+    .describe(
+      "자각이 일어나는 화. 기본 1화. GenreConvention 룰이 이 화에 한해 결정적으로 hook 이벤트를 emit.",
+    ),
+  must_understand: z
+    .array(z.string())
+    .default([])
+    .describe(
+      "1화 끝나기 전 독자가 반드시 이해해야 하는 사실들. EditorialPlan의 " +
+      "audience_must_understand로 자동 등재되어 검증 게이트의 대상이 됨.",
+    ),
+  fallback_lines: z
+    .object({
+      flashback: z.string().optional().describe(
+        "회상이 본문에 풀려나오지 못했을 때 결정적으로 삽입할 한 줄.",
+      ),
+      realization: z.string().optional().describe(
+        "회귀/빙의 자각이 본문에 풀려나오지 못했을 때 결정적으로 삽입할 한 줄.",
+      ),
+      time_jump: z.string().optional().describe(
+        "시간 점프가 본문에 풀려나오지 못했을 때 결정적으로 삽입할 한 줄.",
+      ),
+    })
+    .optional()
+    .describe(
+      "검증 게이트가 must_understand 누락을 감지했을 때 결정적으로 본문에 삽입할 fallback 라인. " +
+      "비워두면 GenreConvention이 past_life_summary/trigger에서 default 문장을 결정적으로 생성.",
+    ),
+});
+
+export type GenreOrigin = z.infer<typeof GenreOriginSchema>;
+
 export const CharacterStateSchema = z.object({
   level: z
     .preprocess((v) => {
@@ -204,6 +268,9 @@ export const CharacterSchema = z.object({
   masking_habit: z.string().optional().describe("공적 얼굴과 사적 진실 사이를 어떻게 숨기는지"),
   intent_profile: IntentProfileSchema.optional().describe("현재 욕망/두려움/leverage truth"),
   access_profile: AccessProfileSchema.optional().describe("지식/출입/감시 위험 truth"),
+  genre_origin: GenreOriginSchema.optional().describe(
+    "회귀/빙의/환생/각성 같은 장르 원형. 있으면 GenreConvention이 1화 hook을 결정적으로 생성.",
+  ),
   internal_arc: z
     .object({
       want: z

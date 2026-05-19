@@ -1,5 +1,41 @@
 export { createSimulationState } from "./canonical-world";
 export {
+  buildGenreConventionEvents,
+  buildGenreConventionPlans,
+  collectChapterGenreConventionCoverage,
+} from "./genre-convention";
+export type {
+  ChapterGenreConventionCoverage,
+  GenreConventionEventBuildContext,
+  GenreConventionFallback,
+  GenreConventionOriginPlan,
+} from "./genre-convention";
+export {
+  AudienceKnowledgeKindSchema,
+  AudienceKnowledgeRecordSchema,
+  AudienceKnowledgeReferenceSchema,
+  AudienceKnowledgeSourceSchema,
+  AudienceKnowledgeStatusSchema,
+  AudienceKnowledgeStoreSchema,
+  addAudienceKnowledge,
+  cloneAudienceKnowledgeStore,
+  createAudienceKnowledgeStore,
+  getAudienceKnowledgeBySummary,
+  hasAudienceKnowledgeSummary,
+  listAudienceKnowledge,
+  updateAudienceKnowledgeStatus,
+} from "./audience-knowledge";
+export type {
+  AudienceKnowledgeInput,
+  AudienceKnowledgeKind,
+  AudienceKnowledgeRecord,
+  AudienceKnowledgeReference,
+  AudienceKnowledgeSource,
+  AudienceKnowledgeStatus,
+  AudienceKnowledgeStore,
+  ListAudienceKnowledgeOptions,
+} from "./audience-knowledge";
+export {
   applySimulationEventLedgerPatch,
   SimulationEventLedger,
   SimulationEventLedgerPatchBlockedEditSchema,
@@ -554,6 +590,8 @@ export {
   addCharacterMemory,
   createCharacterMemoryStore,
   listCharacterMemories,
+  listRecalledMemories,
+  recordMemoryRecall,
 } from "./memory-state";
 export type {
   CharacterMemoryAccuracy,

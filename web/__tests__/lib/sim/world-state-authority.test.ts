@@ -197,7 +197,9 @@ describe("shared world state authority", () => {
     expect(simulationState.characters.hero.location).toBe("황궁");
     expect(simulationState.characters.hero.status).toBe("normal");
     expect(simulationState.characters.hero.secretsKnown).not.toContain("황실 금고는 이중 봉인이다");
-    expect(simulationState.audienceKnowledge).not.toContain("황실 금고는 이중 봉인이다");
+    expect(
+      Object.values(simulationState.audienceKnowledge.byId).map((record) => record.summary),
+    ).not.toContain("황실 금고는 이중 봉인이다");
     expect(authority.getAudienceKnownFacts(3)[0]?.content).toBe("황실 금고는 이중 봉인이다");
     expect(authority.getCurrentFacts()).toEqual(
       expect.arrayContaining([

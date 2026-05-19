@@ -1,4 +1,5 @@
 import type { NovelSeed } from "@/lib/schema/novel";
+import type { AudienceKnowledgeStore } from "./audience-knowledge";
 import type {
   CharacterBeliefInterpretationStore,
 } from "./belief-interpretation-state";
@@ -58,7 +59,7 @@ export interface SimulationState {
   seedTitle: string;
   chapterCursor: number;
   objectiveFacts: ObjectiveFactStore;
-  audienceKnowledge: string[];
+  audienceKnowledge: AudienceKnowledgeStore;
   characters: Record<string, SimulationCharacterState>;
   memories: CharacterMemoryStore;
   beliefs: CharacterBeliefStore;

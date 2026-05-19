@@ -22,6 +22,7 @@ import {
   validateNarrativeProse,
 } from "./narrative-prose-validator";
 import { rewriteSurfaceProse } from "./surface-rewriter";
+import { enforceProseCoverage } from "./prose-coverage-enforcer";
 
 const ZERO_USAGE: TokenUsage = {
   prompt_tokens: 0,
@@ -50,6 +51,23 @@ export const WorldNovelWriterReportSchema = z.object({
   violationCount: z.number().int().nonnegative(),
   violations: z.array(z.string()),
   usedFallback: z.boolean().default(false),
+  mustUnderstandApplied: z
+    .array(
+      z.object({
+        source: z.string(),
+        item: z.string(),
+        line: z.string(),
+      }),
+    )
+    .default([]),
+  mustUnderstandResidual: z
+    .array(
+      z.object({
+        source: z.string(),
+        item: z.string(),
+      }),
+    )
+    .default([]),
   usage: z.object({
     prompt_tokens: z.number().int().nonnegative(),
     completion_tokens: z.number().int().nonnegative(),
@@ -466,6 +484,13 @@ export async function writeWorldNovelChapter(
     usedFallback = surfaceRewrite.usedDeterministicFallback;
   }
 
+  const coverageResult = enforceProseCoverage({
+    text,
+    seed: input.seed,
+    chapter: input.sceneLog.chapter,
+  });
+  text = coverageResult.text;
+
   return {
     text: `${text}\n`,
     prompt,
@@ -480,6 +505,8 @@ export async function writeWorldNovelChapter(
       violationCount: violations.length,
       violations,
       usedFallback,
+      mustUnderstandApplied: coverageResult.applied,
+      mustUnderstandResidual: coverageResult.residualMissing,
       usage,
     }),
   };

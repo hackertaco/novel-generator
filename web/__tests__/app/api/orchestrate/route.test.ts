@@ -670,7 +670,7 @@ describe("POST /api/orchestrate", () => {
           seedTitle: "regen",
           chapterCursor: 6,
           objectiveFacts: { entries: [] },
-          audienceKnowledge: [],
+          audienceKnowledge: { byId: {}, timeline: [], bySummary: {} },
           characters: {},
           memories: { byCharacterId: {} },
           beliefs: { byCharacterId: {}, trustMatrix: {} },

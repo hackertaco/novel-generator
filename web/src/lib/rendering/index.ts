@@ -1,4 +1,24 @@
 export {
+  applyDeterministicFallback,
+  enforceMustUnderstandCoverage,
+  verifyMustUnderstandCoverage,
+} from "./must-understand-gate";
+export { enforceProseCoverage } from "./prose-coverage-enforcer";
+export type {
+  ProseCoverageAppliedEntry,
+  ProseCoverageEnforcementInput,
+  ProseCoverageEnforcementResult,
+  ProseCoverageResidualEntry,
+  ProseCoverageRuleSource,
+} from "./prose-coverage-enforcer";
+export type {
+  EnforceMustUnderstandInput,
+  EnforceMustUnderstandResult,
+  MustUnderstandCoverageReport,
+  MustUnderstandFallbackInput,
+  MustUnderstandFallbackResult,
+} from "./must-understand-gate";
+export {
   EditorialBeatPlanSchema,
   EditorialDialoguePrioritySchema,
   EditorialEmotionalZoomSchema,

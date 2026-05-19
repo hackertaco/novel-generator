@@ -53,6 +53,7 @@ import {
   WorldBrainPlanTransitionSchema,
 } from "./world-brain";
 import type { SimulationEvent, SimulationState } from "./types";
+import { buildGenreConventionEvents } from "./genre-convention";
 
 interface CharacterActionDecision {
   beat: string;
@@ -2295,6 +2296,18 @@ export function runWorldModelFirstSimulation(
     events.push(directorPressureEvent);
     previousEvent = directorPressureEvent;
     narrativeDirectorPressureCount += 1;
+
+    const genreConventionEvents = buildGenreConventionEvents({
+      state: authority.getSimulationState(),
+      seed,
+      chapter,
+      nextSequence: 2,
+    });
+    for (const genreEvent of genreConventionEvents) {
+      applyEvent(genreEvent);
+      events.push(genreEvent);
+      previousEvent = genreEvent;
+    }
 
     beats.forEach((beat, beatIndex) => {
       const event = buildWorldEvent({

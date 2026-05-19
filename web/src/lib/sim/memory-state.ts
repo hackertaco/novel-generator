@@ -207,3 +207,30 @@ export function listCharacterMemories(
 
   return limit ? memories.slice(-limit) : memories;
 }
+
+export function recordMemoryRecall(
+  store: CharacterMemoryStore,
+  characterId: string,
+  memoryId: string,
+  chapter: number,
+): CharacterMemoryRecord | undefined {
+  const state = store[characterId];
+  if (!state) return undefined;
+  const record = state.byId[memoryId];
+  if (!record) return undefined;
+
+  if (!record.recalledAtChapters.includes(chapter)) {
+    record.recalledAtChapters = [...record.recalledAtChapters, chapter];
+  }
+  return record;
+}
+
+export function listRecalledMemories(
+  store: CharacterMemoryStore,
+  characterId: string,
+  chapter: number,
+): CharacterMemoryRecord[] {
+  return listCharacterMemories(store, characterId).filter((memory) =>
+    memory.recalledAtChapters.includes(chapter),
+  );
+}
