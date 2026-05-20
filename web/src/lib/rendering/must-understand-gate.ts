@@ -5,6 +5,23 @@ export interface MustUnderstandCoverageReport {
   missing: string[];
 }
 
+export interface MustUnderstandCoverageOptions {
+  /**
+   * Strong identifier tokens (e.g. character names) — if any of these
+   * appear anywhere in the text, the item is considered cover-eligible
+   * via a partial match path. Korean prose drops the subject after
+   * introducing it, so requiring every occurrence is too strict.
+   */
+  identifierTokens?: ReadonlyArray<string>;
+  /**
+   * Minimum ratio of non-identifier tokens that must match for an item
+   * to be considered covered. Defaults to 0.6.
+   */
+  matchRatio?: number;
+}
+
+const DEFAULT_MATCH_RATIO = 0.5;
+
 export interface MustUnderstandFallbackInput {
   item: string;
   line: string;
@@ -40,24 +57,71 @@ function isTokenInText(text: string, token: string): boolean {
   return false;
 }
 
-function isItemCovered(text: string, item: string): boolean {
+function isIdentifierTokenInText(
+  text: string,
+  token: string,
+  identifierSet: ReadonlySet<string>,
+): boolean {
+  if (!identifierSet.has(token)) return false;
+  return text.includes(token);
+}
+
+function isItemCovered(
+  text: string,
+  item: string,
+  options: MustUnderstandCoverageOptions = {},
+): boolean {
   const normalized = text.trim();
   if (!normalized) return false;
   if (normalized.includes(item.trim())) return true;
   const tokens = extractCoreTokens(item);
   if (tokens.length === 0) return normalized.includes(item.trim());
-  return tokens.every((token) => isTokenInText(normalized, token));
+
+  const identifierSet = new Set(options.identifierTokens ?? []);
+  const ratio = options.matchRatio ?? DEFAULT_MATCH_RATIO;
+
+  const nonIdentifierTokens: string[] = [];
+  let anyIdentifierPresent = false;
+  let identifierTokenCount = 0;
+  for (const token of tokens) {
+    if (identifierSet.has(token)) {
+      identifierTokenCount += 1;
+      if (isIdentifierTokenInText(normalized, token, identifierSet)) {
+        anyIdentifierPresent = true;
+      }
+    } else {
+      nonIdentifierTokens.push(token);
+    }
+  }
+
+  // If the item has identifier tokens but none appear anywhere in the
+  // chapter prose, the chapter never names the subject — treat as missing.
+  if (identifierTokenCount > 0 && !anyIdentifierPresent) {
+    return false;
+  }
+
+  if (nonIdentifierTokens.length === 0) {
+    // All tokens are identifiers; presence of any single mention is enough.
+    return anyIdentifierPresent;
+  }
+
+  const matched = nonIdentifierTokens.filter((token) =>
+    isTokenInText(normalized, token),
+  ).length;
+  const required = Math.max(1, Math.ceil(nonIdentifierTokens.length * ratio));
+  return matched >= required;
 }
 
 export function verifyMustUnderstandCoverage(
   text: string,
   items: ReadonlyArray<string>,
+  options: MustUnderstandCoverageOptions = {},
 ): MustUnderstandCoverageReport {
   const covered: string[] = [];
   const missing: string[] = [];
 
   for (const item of items) {
-    if (isItemCovered(text, item)) {
+    if (isItemCovered(text, item, options)) {
       covered.push(item);
     } else {
       missing.push(item);
@@ -87,17 +151,18 @@ function insertAfterFirstSentence(text: string, line: string): string {
 export function applyDeterministicFallback(
   text: string,
   fallbacks: ReadonlyArray<MustUnderstandFallbackInput>,
+  options: MustUnderstandCoverageOptions = {},
 ): MustUnderstandFallbackResult {
   const applied: MustUnderstandFallbackInput[] = [];
   const skipped: MustUnderstandFallbackInput[] = [];
   let currentText = text;
 
   for (const fallback of fallbacks) {
-    if (isItemCovered(currentText, fallback.item)) {
+    if (isItemCovered(currentText, fallback.item, options)) {
       skipped.push(fallback);
       continue;
     }
-    if (isItemCovered(currentText, fallback.line)) {
+    if (isItemCovered(currentText, fallback.line, options)) {
       skipped.push(fallback);
       continue;
     }
@@ -112,6 +177,8 @@ export interface EnforceMustUnderstandInput {
   text: string;
   mustUnderstand: ReadonlyArray<string>;
   fallbacks: ReadonlyArray<GenreConventionFallback>;
+  identifierTokens?: ReadonlyArray<string>;
+  matchRatio?: number;
 }
 
 export interface EnforceMustUnderstandResult {
@@ -124,7 +191,11 @@ export interface EnforceMustUnderstandResult {
 export function enforceMustUnderstandCoverage(
   input: EnforceMustUnderstandInput,
 ): EnforceMustUnderstandResult {
-  const coverage = verifyMustUnderstandCoverage(input.text, input.mustUnderstand);
+  const options: MustUnderstandCoverageOptions = {
+    identifierTokens: input.identifierTokens,
+    matchRatio: input.matchRatio,
+  };
+  const coverage = verifyMustUnderstandCoverage(input.text, input.mustUnderstand, options);
   if (coverage.missing.length === 0) {
     return {
       text: input.text,
@@ -143,9 +214,10 @@ export function enforceMustUnderstandCoverage(
       item: fallback.item,
       line: fallback.line,
     })),
+    options,
   );
 
-  const finalCoverage = verifyMustUnderstandCoverage(text, input.mustUnderstand);
+  const finalCoverage = verifyMustUnderstandCoverage(text, input.mustUnderstand, options);
   return {
     text,
     coverage: finalCoverage,

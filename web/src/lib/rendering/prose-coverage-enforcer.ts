@@ -2,6 +2,17 @@ import type { NovelSeed } from "@/lib/schema/novel";
 import { collectChapterGenreConventionCoverage } from "@/lib/sim";
 import { enforceMustUnderstandCoverage } from "./must-understand-gate";
 
+function collectCharacterIdentifierTokens(seed: NovelSeed): string[] {
+  const tokens = new Set<string>();
+  for (const character of seed.characters) {
+    const fullName = character.name?.trim();
+    if (fullName && fullName.length >= 2) tokens.add(fullName);
+    const first = fullName?.split(/\s+/)[0];
+    if (first && first.length >= 2) tokens.add(first);
+  }
+  return [...tokens];
+}
+
 export type ProseCoverageRuleSource = "genre_convention";
 
 export interface ProseCoverageEnforcementInput {
@@ -47,6 +58,7 @@ export function enforceProseCoverage(
     text,
     mustUnderstand: coverage.mustUnderstand,
     fallbacks: coverage.fallbacks,
+    identifierTokens: collectCharacterIdentifierTokens(seed),
   });
 
   return {

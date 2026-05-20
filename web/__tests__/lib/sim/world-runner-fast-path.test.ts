@@ -59,6 +59,7 @@ function runWorld(fast: boolean) {
     skipRenderedChapters: fast,
     fastLedgerValidation: fast,
     fastEventApplication: fast,
+    disableGenreConvention: true,
   });
 }
 

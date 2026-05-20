@@ -100,4 +100,61 @@ describe("world novel writer adapter", () => {
     expect(prompt).not.toContain(actionLogs[0]!.privateState.hiddenGoal);
     expect(prompt).not.toContain("기계 렌더 초안");
   });
+
+  it("injects a deterministic Genre Convention section for regression characters on chapter 1", () => {
+    const seed = loadFixtureSeed();
+    const result = runWorldModelFirstSimulation(seed, {
+      startChapter: 1,
+      endChapter: 1,
+      characterActionsPerChapter: 2,
+    });
+    const sceneLog = result.sceneLogs[0]!;
+    const actionLogs = result.actionLogs.filter((log) => log.chapter === sceneLog.chapter);
+    const episodeWindow = selectEpisodeWindows({ result }).windows[0];
+    const prompt = buildWorldNovelWriterPrompt({
+      seed,
+      worldBrain: buildWorldBrainFromSeed(seed),
+      sceneLog,
+      actionLogs,
+      episodeWindow,
+    });
+
+    expect(prompt).toContain("이번 화 필수 이해 사항");
+    expect(prompt).toContain("엘리시아는 회귀자다");
+    expect(prompt).toContain("전생에 약혼식 직후 독살당했다");
+    expect(prompt).toContain("자각");
+    expect(prompt).toContain("회상");
+    // fallback 라인을 prompt에 직접 노출하지 않음 (LLM 베끼기 방지).
+    expect(prompt).not.toContain("엘리시아는 손끝의 통증으로 자신이 회귀자임을 깨달았다.");
+    expect(prompt).not.toContain("엘리시아는 전생에 약혼식 직후 독살당했던 자신을 떠올렸다.");
+  });
+
+  it("omits the Genre Convention section when no character has a genre_origin", () => {
+    const seed = loadFixtureSeed();
+    const strippedSeed: NovelSeed = {
+      ...seed,
+      characters: seed.characters.map((character) => ({
+        ...character,
+        genre_origin: undefined,
+      })),
+    };
+    const result = runWorldModelFirstSimulation(strippedSeed, {
+      startChapter: 1,
+      endChapter: 1,
+      characterActionsPerChapter: 2,
+    });
+    const sceneLog = result.sceneLogs[0]!;
+    const actionLogs = result.actionLogs.filter((log) => log.chapter === sceneLog.chapter);
+    const episodeWindow = selectEpisodeWindows({ result }).windows[0];
+    const prompt = buildWorldNovelWriterPrompt({
+      seed: strippedSeed,
+      worldBrain: buildWorldBrainFromSeed(strippedSeed),
+      sceneLog,
+      actionLogs,
+      episodeWindow,
+    });
+
+    expect(prompt).not.toContain("이번 화 필수 이해 사항");
+    expect(prompt).not.toContain("Genre Convention");
+  });
 });

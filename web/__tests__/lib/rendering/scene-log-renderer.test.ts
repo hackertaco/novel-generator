@@ -70,7 +70,17 @@ function loadFixtureSeed(): NovelSeed {
     join(process.cwd(), "seeds/test-romance-fantasy.json"),
     "utf8",
   );
-  return NovelSeedSchema.parse(normalizeLegacySeedInput(JSON.parse(raw)));
+  const parsed = NovelSeedSchema.parse(normalizeLegacySeedInput(JSON.parse(raw)));
+  // Renderer suites pre-date the deterministic GenreConvention hook and
+  // anchor on the fixture's baseline scene structure. Strip genre_origin so
+  // the regression event triplet doesn't perturb their expectations.
+  return {
+    ...parsed,
+    characters: parsed.characters.map((character) => ({
+      ...character,
+      genre_origin: undefined,
+    })),
+  };
 }
 
 function runFixtureScene() {

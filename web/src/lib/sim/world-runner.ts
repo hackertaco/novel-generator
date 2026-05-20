@@ -96,6 +96,12 @@ export interface WorldModelRunOptions {
   skipRenderedChapters?: boolean;
   fastLedgerValidation?: boolean;
   fastEventApplication?: boolean;
+  /**
+   * If true, skip the deterministic GenreConvention emit hook (regression
+   * chapter 1 etc.). Default false. Used by legacy fixture-anchored tests
+   * that pre-date the hook.
+   */
+  disableGenreConvention?: boolean;
 }
 
 export interface WorldModelRenderedChapter {
@@ -2297,16 +2303,18 @@ export function runWorldModelFirstSimulation(
     previousEvent = directorPressureEvent;
     narrativeDirectorPressureCount += 1;
 
-    const genreConventionEvents = buildGenreConventionEvents({
-      state: authority.getSimulationState(),
-      seed,
-      chapter,
-      nextSequence: 2,
-    });
-    for (const genreEvent of genreConventionEvents) {
-      applyEvent(genreEvent);
-      events.push(genreEvent);
-      previousEvent = genreEvent;
+    if (!options.disableGenreConvention) {
+      const genreConventionEvents = buildGenreConventionEvents({
+        state: authority.getSimulationState(),
+        seed,
+        chapter,
+        nextSequence: 2,
+      });
+      for (const genreEvent of genreConventionEvents) {
+        applyEvent(genreEvent);
+        events.push(genreEvent);
+        previousEvent = genreEvent;
+      }
     }
 
     beats.forEach((beat, beatIndex) => {

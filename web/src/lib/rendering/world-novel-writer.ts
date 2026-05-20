@@ -23,6 +23,48 @@ import {
 } from "./narrative-prose-validator";
 import { rewriteSurfaceProse } from "./surface-rewriter";
 import { enforceProseCoverage } from "./prose-coverage-enforcer";
+import {
+  collectChapterGenreConventionCoverage,
+  type GenreConventionFallback,
+} from "@/lib/sim";
+
+const GENRE_CONVENTION_KIND_LABEL: Record<GenreConventionFallback["kind"], string> = {
+  flashback: "회상 (감각/제스처로 전생/과거 기억을 자연스럽게 끌어오기)",
+  realization: "자각 (행동·표정·침묵으로 깨달음을 드러내기)",
+  time_jump: "시간 점프 (감각 cue로 시간 차이를 보이기, 명시 설명 금지)",
+};
+
+function buildGenreConventionSection(
+  coverage: ReturnType<typeof collectChapterGenreConventionCoverage>,
+): string {
+  if (coverage.mustUnderstand.length === 0) return "";
+
+  const byKind = new Map<GenreConventionFallback["kind"], string[]>();
+  for (const fallback of coverage.fallbacks) {
+    const list = byKind.get(fallback.kind) ?? [];
+    if (!list.includes(fallback.item)) list.push(fallback.item);
+    byKind.set(fallback.kind, list);
+  }
+
+  const lines: string[] = [
+    `# 이번 화 필수 이해 사항 (Genre Convention)`,
+    `독자가 이번 화 끝나기 전 다음을 자연스럽게 이해해야 한다.`,
+    `아래 항목은 # 금지의 내부 상태 설명 룰에 대한 명시적 예외다.`,
+    `각 항목은 본문에 1회 명시할 수 있다. 단 라벨을 그대로 인용하지 말고`,
+    `인물의 감각·시선·짧은 단서 한 줄로 풀어써라(예: "손끝에 죽기 직전의 통증이 다시 살아났다").`,
+    ``,
+  ];
+
+  for (const [kind, items] of byKind) {
+    lines.push(`## ${GENRE_CONVENTION_KIND_LABEL[kind] ?? kind}`);
+    for (const item of items) {
+      lines.push(`- ${item}`);
+    }
+    lines.push(``);
+  }
+
+  return lines.join("\n").trimEnd();
+}
 
 const ZERO_USAGE: TokenUsage = {
   prompt_tokens: 0,
@@ -411,6 +453,10 @@ export function buildWorldNovelWriterPrompt(input: BuildWorldNovelWriterPromptIn
     `4. 감정 변화와 권력 변화는 설명하지 말고 행동 배치와 반응 속도로 드러낸다.`,
     `5. 관계 변화 수치는 쓰지 말고, 거리감/호칭/말 끊김으로만 보이게 한다.`,
     `6. 한 문단마다 대사/행동/침묵/감각 중 최소 하나를 배치한다.`,
+    ``,
+    buildGenreConventionSection(
+      collectChapterGenreConventionCoverage(seed, sceneLog.chapter),
+    ),
     ``,
     `# 금지`,
     `- 로그를 요약하지 마라.`,
