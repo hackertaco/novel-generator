@@ -441,6 +441,101 @@ function utteranceFragments(value: string): string[] {
     .filter((fragment) => fragment.length >= 4);
 }
 
+interface VoiceTailContext {
+  voiceProfile?: { tone: string; speechPatterns: string[]; sampleDialogues: string[] };
+}
+
+const COGNITION_TELL_NEEDLES = [
+  "마음", "느꼈", "느낀", "느낌", "생각했", "생각이",
+  "깨달았", "깨달은", "깨달", "알았다", "알게 되었",
+  "꿰뚫어", "간파", "결심했", "고민했", "애썼",
+  "진심", "속내", "의도", "숨겨", "감춰",
+  "긴장감", "불안감", "경계심",
+];
+
+function isCognitionTellFragment(fragment: string): boolean {
+  return COGNITION_TELL_NEEDLES.some((needle) => fragment.includes(needle));
+}
+
+function buildVoiceTailCandidates(
+  voiceProfile: VoiceTailContext["voiceProfile"],
+  actionType: CharacterActionType,
+): string[] {
+  if (!voiceProfile) return [];
+  const samples = voiceProfile.sampleDialogues
+    .flatMap((dialogue) => utteranceFragments(dialogue))
+    .filter((fragment) => fragment.length >= 4 && fragment.length <= 28)
+    .filter((fragment) => !isCognitionTellFragment(fragment));
+  const patterns = voiceProfile.speechPatterns
+    .filter((pattern) => pattern.length >= 3 && pattern.length <= 24)
+    .filter((pattern) => !isCognitionTellFragment(pattern));
+  return [...samples, ...patterns, ...voiceToneNaturalTails(voiceProfile.tone, actionType)];
+}
+
+function voiceToneNaturalTails(
+  tone: string,
+  actionType: CharacterActionType,
+): string[] {
+  const isQuiet = /차분|냉정|단정|조용|침착/u.test(tone);
+  const isDirect = /직설|단호|날카|예리/u.test(tone);
+  const isSoft = /여린|부드|상냥|다정/u.test(tone);
+  const isFormal = /격식|정중|단정|냉소/u.test(tone);
+
+  const banks: Record<CharacterActionType, string[]> = {
+    observe: [
+      ...(isQuiet ? ["일단 듣고 있을게요", "지금은 보기만 하죠"] : []),
+      ...(isDirect ? ["짧게 보고 가죠", "필요한 만큼만 봅니다"] : []),
+      ...(isSoft ? ["조금만 더 지켜볼게요"] : []),
+      "여기서 한 박자 두고 보죠",
+    ],
+    probe_dialogue: [
+      ...(isQuiet ? ["하나만 여쭐게요"] : []),
+      ...(isDirect ? ["바로 물어볼게요", "그 부분부터 짚죠"] : []),
+      ...(isSoft ? ["혹시 그건 어떻게 보세요"] : []),
+      "그것부터 듣고 싶어요",
+    ],
+    counter_probe: [
+      ...(isQuiet ? ["저도 같은 걸 묻고 싶었어요"] : []),
+      ...(isDirect ? ["저 먼저 묻죠", "그쪽이 먼저 답하시죠"] : []),
+      ...(isFormal ? ["순서가 다른 것 같습니다"] : []),
+      "그건 제가 더 궁금한데요",
+    ],
+    deflect_dialogue: [
+      ...(isQuiet ? ["오늘은 거기까지만 할게요"] : []),
+      ...(isSoft ? ["다음에 따로 말씀드릴게요"] : []),
+      ...(isFormal ? ["이 자리에선 답을 미루겠습니다"] : []),
+      "그 얘기는 자리를 옮겨서 해요",
+    ],
+    request_help: [
+      ...(isQuiet ? ["잠깐만 도와주세요"] : []),
+      ...(isDirect ? ["손이 하나 더 필요해요"] : []),
+      ...(isSoft ? ["부탁 하나 드려도 될까요"] : []),
+      "혼자 못 할 일이라서요",
+    ],
+    request_access: [
+      ...(isQuiet ? ["잠깐 확인만 할게요"] : []),
+      ...(isFormal ? ["열어 봐도 되겠습니까"] : []),
+      ...(isDirect ? ["지금 봅시다"] : []),
+      "한 번만 보게 해 주세요",
+    ],
+    maintain_mask: [
+      ...(isQuiet ? ["오늘은 평소대로 갈게요"] : []),
+      ...(isSoft ? ["별일 아니에요"] : []),
+      ...(isFormal ? ["그대로 두시는 게 좋겠습니다"] : []),
+      "여기까지만 보여 드릴게요",
+    ],
+    withdraw: [
+      ...(isQuiet ? ["오늘은 여기까지 할게요"] : []),
+      ...(isFormal ? ["다음 기회에 다시 청합니다"] : []),
+      ...(isDirect ? ["일단 빠지겠습니다"] : []),
+      "이쯤에서 끊죠",
+    ],
+  };
+
+  const list = banks[actionType] ?? [];
+  return list.filter(Boolean);
+}
+
 function speechVariationTail(input: {
   actionType: CharacterActionType;
   intent: string;
@@ -448,33 +543,29 @@ function speechVariationTail(input: {
   key: string;
   worldConditionPressures?: string[];
   recentUtterances?: string[];
+  voiceProfile?: VoiceTailContext["voiceProfile"];
 }): string {
-  const conditionTails = worldConditionSpeechTails(input.worldConditionPressures ?? []);
-  const stakes = input.intent.includes("증거")
-    ? ["증거가 움직이기 전에요", "빈틈이 사라지기 전에요", "지금 남은 흔적부터 보겠습니다"]
-    : input.intent.includes("약속") || input.intent.includes("지위")
-      ? ["절차가 먼저입니다", "이름이 걸린 일입니다", "누가 보고 있는지도 생각하시죠"]
-      : input.intent.includes("위험")
-        ? ["위험은 이미 가까워졌습니다", "늦으면 제가 먼저 막겠습니다", "지금은 안전부터 보겠습니다"]
-        : input.hiddenGoal.includes("빼앗") || input.hiddenGoal.includes("무력화")
-          ? ["그렇게 보이게 두는 편이 낫겠죠", "오해는 오래 가지 않아요", "다들 보고 있으니까요"]
-          : ["여기서 답이 갈립니다", "다음 선택은 달라질 겁니다", "방금 말은 기록해 두겠습니다"];
-  const actionAngles: Record<CharacterActionType, string[]> = {
-    observe: ["말보다 멈춘 쪽을 보겠습니다", "지금은 보는 것만으로 충분합니다"],
-    probe_dialogue: ["첫 이름부터 말씀해 주세요", "방금 멈춘 이유부터 듣겠습니다"],
-    counter_probe: ["질문을 돌려드리죠", "출처부터 확인하겠습니다"],
-    deflect_dialogue: ["그 선은 넘지 않겠습니다", "여기서 더 밝힐 이유는 없습니다"],
-    request_help: ["혼자 처리할 일이 아닙니다", "한 번만 제 편에 서 주세요"],
-    request_access: ["문을 열 명분은 충분합니다", "허락 범위를 분명히 하시죠"],
-    maintain_mask: ["표정은 여기까지만 보이겠습니다", "흔들린 쪽은 제가 아닙니다"],
-    withdraw: ["오늘은 여기서 끊겠습니다", "다음에는 다른 자리에서 묻겠습니다"],
+  const voiceCandidates = buildVoiceTailCandidates(input.voiceProfile, input.actionType);
+  if (voiceCandidates.length > 0) {
+    return chooseFreshTail(voiceCandidates, `${input.key}:voice-tail`, input.recentUtterances);
+  }
+
+  // Fallback (voice profile 없는 minor 캐릭터용): 자연 화법 generic, 격언체 X.
+  const actionFallback: Record<CharacterActionType, string[]> = {
+    observe: ["지금은 보기만 할게요", "한 박자 두고 보죠"],
+    probe_dialogue: ["그것부터 들을게요", "먼저 물어볼게요"],
+    counter_probe: ["저도 같은 게 궁금해요", "순서를 바꿔서 듣죠"],
+    deflect_dialogue: ["오늘은 거기까지 할게요", "자리를 옮겨서 얘기해요"],
+    request_help: ["손이 하나 더 필요해요", "잠깐만 같이 봐 주세요"],
+    request_access: ["한 번만 보게 해 주세요", "지금 확인하죠"],
+    maintain_mask: ["여기까지만 보여 드릴게요"],
+    withdraw: ["이쯤에서 끊을게요"],
   };
-  const candidates = [
-    ...conditionTails,
-    ...stakes,
-    ...actionAngles[input.actionType],
-  ];
-  return chooseFreshTail(candidates, `${input.key}:speech-tail`, input.recentUtterances);
+  return chooseFreshTail(
+    actionFallback[input.actionType] ?? [],
+    `${input.key}:speech-tail-fallback`,
+    input.recentUtterances,
+  );
 }
 
 function speechContextTail(input: {
@@ -482,7 +573,11 @@ function speechContextTail(input: {
   location?: string;
   key: string;
   recentUtterances?: string[];
+  voiceProfile?: VoiceTailContext["voiceProfile"];
 }): string {
+  // Voice profile 있는 캐릭터는 보조 격언체 tail 자체를 붙이지 않는다.
+  // 격언체 풀은 사용자 어색 보고의 원흉이었음.
+  if (input.voiceProfile) return "";
   const label = pressureTopic(input.worldConditionPressures ?? []);
   const text = `${input.location ?? ""} ${(input.worldConditionPressures ?? []).join(" ")}`;
   const candidates = compact([
@@ -661,6 +756,7 @@ function decorateUtterance(input: {
   recentUtterances?: string[];
   worldConditionPressures?: string[];
   location?: string;
+  voiceProfile?: VoiceTailContext["voiceProfile"];
 }): string {
   const normalizedBase = input.base.replace(/[.!?。！？…]+$/u, "");
   const tail = speechVariationTail({
@@ -672,6 +768,7 @@ function decorateUtterance(input: {
     location: input.location,
     key: input.key,
     recentUtterances: input.recentUtterances,
+    voiceProfile: input.voiceProfile,
   });
   const attachContextTail = shouldAttachSpeechContextTail({
     actionType: input.actionType,
@@ -1122,10 +1219,15 @@ function selectSceneCharacterIds(input: CharacterActionSimulationInput): string[
   const introduced = input.seed.characters
     .filter((character) => character.introduction_chapter <= input.chapter)
     .map((character) => character.id);
+  // Fallback only when caller didn't anchor the scene cast. If an outline
+  // pinned characters (via input.characterIds), respect it strictly — don't
+  // smuggle introduced characters in just because they were available.
+  const hasAnchoredCast = input.characterIds.length > 0;
+  const fallbackIds = hasAnchoredCast ? [] : introduced.slice(0, 3);
   return compact([
     ...input.characterIds,
     ...(input.priorityCharacterIds ?? []),
-    ...introduced.slice(0, 3),
+    ...fallbackIds,
   ]).filter((characterId) => input.brain.characterMinds[characterId]);
 }
 
@@ -1823,6 +1925,7 @@ function utteranceCandidateForAction(input: {
       recentUtterances: input.recentUtterances,
       worldConditionPressures: input.worldConditionPressures,
       location: input.location,
+      voiceProfile: input.mind.voiceProfile,
     });
   if (relationPattern && input.actionType === "probe_dialogue") {
     const addressedPattern = relationPattern.includes(address)

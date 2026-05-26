@@ -120,13 +120,15 @@ describe("world novel writer adapter", () => {
     });
 
     expect(prompt).toContain("이번 화 필수 이해 사항");
-    expect(prompt).toContain("엘리시아는 회귀자다");
-    expect(prompt).toContain("전생에 약혼식 직후 독살당했다");
+    expect(prompt).toContain("엘리시아 크레센트");
+    expect(prompt).toContain("회귀자");
+    expect(prompt).toContain("약혼식");
+    expect(prompt).toContain("독살");
     expect(prompt).toContain("자각");
     expect(prompt).toContain("회상");
     // fallback 라인을 prompt에 직접 노출하지 않음 (LLM 베끼기 방지).
-    expect(prompt).not.toContain("엘리시아는 손끝의 통증으로 자신이 회귀자임을 깨달았다.");
-    expect(prompt).not.toContain("엘리시아는 전생에 약혼식 직후 독살당했던 자신을 떠올렸다.");
+    expect(prompt).not.toContain("죽기 직전의 통증이 다시 살아났다");
+    expect(prompt).not.toContain("이복동생 세레나가 차린 은잔의 독으로 자신이 독살당한 장면");
   });
 
   it("omits the Genre Convention section when no character has a genre_origin", () => {

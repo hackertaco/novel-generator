@@ -102,6 +102,15 @@ export interface WorldModelRunOptions {
    * that pre-date the hook.
    */
   disableGenreConvention?: boolean;
+  /**
+   * If true, restrict each chapter to its seeded outline:
+   *   - Only outline.characters_involved act (no low-activity priority adds).
+   *   - NarrativeDirectorPressure.summary uses outline.one_liner verbatim
+   *     instead of the simulator inventing plot ("판세 재정의의 여파로...").
+   * Default false to preserve backward compatibility with fixture-anchored
+   * tests; the scripted e2e path (scripts/simulate-world.ts) enables this.
+   */
+  outlineStrictMode?: boolean;
 }
 
 export interface WorldModelRenderedChapter {
@@ -525,15 +534,38 @@ function narrativeDirectorPressureForChapter(input: {
   chapter: number;
   title: string;
   oneLiner: string;
+  keyPoints?: string[];
   tensionLevel: number;
   location: string;
   threadIds: string[];
+  outlineStrictMode?: boolean;
 }): NarrativeDirectorPressure {
   const arcBeat = longArcWorldBeatForChapter(input.seed, input.chapter);
   const targetScenePurpose = targetScenePurposeForChapter(input.chapter, input.tensionLevel, arcBeat);
   const type: NarrativeDirectorPressure["type"] = input.tensionLevel >= 8
     ? "deadline"
     : arcBeat.pressureType;
+
+  if (input.outlineStrictMode && input.oneLiner.trim().length > 0) {
+    const keyPointAddendum = (input.keyPoints ?? [])
+      .filter((point) => point.trim().length > 0)
+      .slice(0, 3)
+      .join(" / ");
+    const summary = keyPointAddendum
+      ? `${input.oneLiner.trim()} — 화 안에서 다룰 핵심: ${keyPointAddendum}`
+      : input.oneLiner.trim();
+    return {
+      pressureId: `director_ch${padChapter(input.chapter)}_outline`,
+      targetScenePurpose,
+      type,
+      summary,
+      targetThreadIds: uniqueCharacterIds([
+        ...input.threadIds,
+        ...longArcThreadIdsForChapter(input.seed, input.chapter),
+      ]),
+      source: "narrative_director",
+    };
+  }
   const locationAnchor = input.location.includes("황궁")
     ? "황궁 문서실과 접견 일정"
     : input.location.includes("마법") || input.location.includes("탑")
@@ -2268,13 +2300,15 @@ export function runWorldModelFirstSimulation(
 
   for (let chapter = startChapter; chapter <= endChapter; chapter += 1) {
     const frame = getChapterFrame(seed, chapter);
-    const priorityCharacterIds = selectLowActivityPriorityCharacterIds({
-      seed,
-      brain,
-      chapter,
-      baseCharacterIds: frame.characterIds,
-      cumulativeActionCounts,
-    });
+    const priorityCharacterIds = options.outlineStrictMode
+      ? []
+      : selectLowActivityPriorityCharacterIds({
+        seed,
+        brain,
+        chapter,
+        baseCharacterIds: frame.characterIds,
+        cumulativeActionCounts,
+      });
     const scheduledCharacterIds = compactForRunner([
       ...frame.characterIds,
       ...priorityCharacterIds,
@@ -2287,9 +2321,11 @@ export function runWorldModelFirstSimulation(
       chapter,
       title: frame.title,
       oneLiner: frame.oneLiner,
+      keyPoints: frame.keyPoints,
       tensionLevel: frame.tensionLevel,
       location,
       threadIds: frame.threadIds,
+      outlineStrictMode: options.outlineStrictMode,
     });
     const directorPressureEvent = buildNarrativeDirectorPressureEvent({
       pressure: directorPressure,

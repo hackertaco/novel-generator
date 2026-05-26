@@ -23,6 +23,11 @@ import {
 } from "./narrative-prose-validator";
 import { rewriteSurfaceProse } from "./surface-rewriter";
 import { enforceProseCoverage } from "./prose-coverage-enforcer";
+import { verifyKoreanProseHygiene } from "./korean-prose-hygiene";
+import {
+  buildOpeningSetupContext,
+  formatOpeningSetupContextForPrompt,
+} from "./opening-setup";
 import {
   collectChapterGenreConventionCoverage,
   type GenreConventionFallback,
@@ -51,7 +56,7 @@ function buildGenreConventionSection(
     `독자가 이번 화 끝나기 전 다음을 자연스럽게 이해해야 한다.`,
     `아래 항목은 # 금지의 내부 상태 설명 룰에 대한 명시적 예외다.`,
     `각 항목은 본문에 1회 명시할 수 있다. 단 라벨을 그대로 인용하지 말고`,
-    `인물의 감각·시선·짧은 단서 한 줄로 풀어써라(예: "손끝에 죽기 직전의 통증이 다시 살아났다").`,
+    `인물의 감각·시선·짧은 단서 한 줄로 풀어써라(예: 잔이 너무 익숙해 손이 잠깐 멎었다).`,
     ``,
   ];
 
@@ -93,6 +98,29 @@ export const WorldNovelWriterReportSchema = z.object({
   violationCount: z.number().int().nonnegative(),
   violations: z.array(z.string()),
   usedFallback: z.boolean().default(false),
+  koreanHygiene: z
+    .object({
+      failCount: z.number().int().nonnegative(),
+      warnCount: z.number().int().nonnegative(),
+      counts: z.record(z.string(), z.number().int().nonnegative()),
+      signals: z
+        .array(
+          z.object({
+            kind: z.string(),
+            severity: z.enum(["warn", "fail"]),
+            lineNumber: z.number().int().nonnegative(),
+            excerpt: z.string(),
+            hint: z.string(),
+          }),
+        )
+        .default([]),
+    })
+    .default({
+      failCount: 0,
+      warnCount: 0,
+      counts: {},
+      signals: [],
+    }),
   mustUnderstandApplied: z
     .array(
       z.object({
@@ -453,6 +481,31 @@ export function buildWorldNovelWriterPrompt(input: BuildWorldNovelWriterPromptIn
     `4. 감정 변화와 권력 변화는 설명하지 말고 행동 배치와 반응 속도로 드러낸다.`,
     `5. 관계 변화 수치는 쓰지 말고, 거리감/호칭/말 끊김으로만 보이게 한다.`,
     `6. 한 문단마다 대사/행동/침묵/감각 중 최소 하나를 배치한다.`,
+    `7. 핵심 대사 직후에는, 그 발화자가 왜 그 말을 했는지를 짧은 단서 한 줄로 풀어쓴다.`,
+    `   - linePurpose/subtext/informationWithheld를 그대로 인용하거나 라벨로 적지 마라.`,
+    `   - 행동, 시선의 방향, 호흡, 손끝의 멈춤, 호칭 변화, 말 끊김, 향·빛·소리 같은 카메라에 보이는 단서로 풀어라.`,
+    `   - 독자는 이 화에서 처음 인물의 입장을 본다. 대사만 옮기지 말고 "이 사람이 지금 무엇을 재고 있는가"가 한 줄 단서로 드러나야 한다.`,
+    ``,
+    `# 한국어 자연스러움 (Korean Prose Hygiene)`,
+    `소리내서 읽었을 때 자연스러운 한국어를 쓴다. 번역체 시그널을 피하라.`,
+    `- 무정물 주어 남발 금지 — "사실이 손목을 붙잡았다", "공기가 익숙했다"처럼 추상명사가 주어가 되어 행동하는 표현이 한 단락에 두 번 이상이면 안 된다. 인물의 감각·행동으로 풀어라.`,
+    `- 한자어 명사 체인 금지 — "~의 ~인 ~이라는 ~이/가"처럼 명사를 조사로 줄줄이 잇지 마라. 두 문장으로 쪼개라. 예: "황태자의 약혼녀인, 공작가 장녀인 자신이 다시 눈 뜬 곳이 이 방이라는 사실이..." → "황태자의 약혼녀. 공작가 장녀. 다시 눈 뜬 곳이 이 방이었다."`,
+    `- 명사 술어 남발 금지 — "X였다", "Y였다", "Z였다"가 한 단락에 줄지어 등장하면 일부는 동사로 풀어라.`,
+    `- 한 문장에 부사구(~에, ~에서, ~로, ~으로, ~와, ~과) 4개 이상 누적 금지 — 쉼표나 마침표로 호흡을 끊어라.`,
+    `- 영어 추상 은유 직역 금지 — "닫는다(close)", "태운다(ship)", "죽인다(kill)" 같은 표현 대신 구체적 한국어 동사를 써라.`,
+    `- 이중 피동 금지 — "되어지다", "되어졌다", "되어진다" 같은 표현 절대 사용 금지. 능동형으로 풀어라.`,
+    `- 판별 기준: 한국어로 입으로 읽었을 때 자연스러운가? 어색하면 다시 써라.`,
+    ``,
+    formatOpeningSetupContextForPrompt(
+      buildOpeningSetupContext({
+        seed,
+        chapter: sceneLog.chapter,
+        participantIds: sceneLog.participantIds,
+        sceneLocation: sceneLog.location,
+        sceneTitle: sceneLog.title,
+        sceneAtmosphere: sceneLog.atmosphere,
+      }),
+    ),
     ``,
     buildGenreConventionSection(
       collectChapterGenreConventionCoverage(seed, sceneLog.chapter),
@@ -464,6 +517,7 @@ export function buildWorldNovelWriterPrompt(input: BuildWorldNovelWriterPromptIn
     `- "마음속", "계산", "긴장감", "감지되었다", "깊은 의미", "분명한 메시지", "느껴졌다", "알았다", "꿰뚫어 보았다", "고민했다", "애썼다", "준비해야 했다"처럼 해설문으로 감정/의미를 말하지 마라.`,
     `- roleMission, agentRole, action log, source id, scene id, 내부 ID 같은 메타어를 쓰지 마라.`,
     `- 비밀/숨은 목표를 문장으로 직접 말하지 마라.`,
+    `- 예외(렌더링 우선순위 7): 핵심 대사 직후 발화자가 왜 그 말을 했는지를 한 줄 단서로 풀어쓰는 것은 허용. 단 위 해설어/메타어는 여전히 금지하고, 카메라에 보이는 단서로만 풀어라.`,
     ``,
     `# 출력`,
     `- 소설 본문만.`,
@@ -537,6 +591,8 @@ export async function writeWorldNovelChapter(
   });
   text = coverageResult.text;
 
+  const hygieneReport = verifyKoreanProseHygiene(text);
+
   return {
     text: `${text}\n`,
     prompt,
@@ -551,6 +607,12 @@ export async function writeWorldNovelChapter(
       violationCount: violations.length,
       violations,
       usedFallback,
+      koreanHygiene: {
+        failCount: hygieneReport.failCount,
+        warnCount: hygieneReport.warnCount,
+        counts: hygieneReport.counts,
+        signals: hygieneReport.signals.slice(0, 30),
+      },
       mustUnderstandApplied: coverageResult.applied,
       mustUnderstandResidual: coverageResult.residualMissing,
       usage,

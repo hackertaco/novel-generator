@@ -653,6 +653,7 @@ async function main(): Promise<void> {
     skipRenderedChapters: useFastWorldRun,
     fastLedgerValidation: useFastWorldRun,
     fastEventApplication: useFastWorldRun,
+    outlineStrictMode: true,
   });
   const episodeSelection = selectEpisodeWindows({
     result,

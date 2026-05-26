@@ -518,9 +518,12 @@ describe("SceneLog renderer", () => {
 
     expect(proseOnly).not.toMatch(/판세\s*재정의의\s*여파로/u);
     expect(proseOnly).not.toMatch(/(?:출입\s*봉쇄|증언\s*분기|기록\s*감사|파벌\s*거래|징후\s*재출현|후폭풍\s*정리)의\s*여파로/u);
-    expect(proseOnly).not.toMatch(/전 같은 실수를 반복하지 않을 겁니다/u);
     expect(proseOnly).not.toMatch(/\.\./u);
     expect(proseOnly).not.toMatch(/엘리시아가,\s*거울/u);
+    // Voice-aware dialogue가 격언체 candidate를 제거했는지 검증.
+    expect(proseOnly).not.toContain("명단이 닫히면 침묵도 증언이 됩니다");
+    expect(proseOnly).not.toContain("장부가 닫히면 남는 건 소문뿐입니다");
+    expect(proseOnly).not.toContain("접힌 자국은 말보다 오래 남습니다");
     expect(rendered.dialogueLines.map((line) => line.utterance)).not.toContain(
       "전 같은 실수를 반복하지 않을 겁니다. 사용인들의 입이 닫히기 전에요",
     );

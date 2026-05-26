@@ -4,6 +4,22 @@ export {
   verifyMustUnderstandCoverage,
 } from "./must-understand-gate";
 export { enforceProseCoverage } from "./prose-coverage-enforcer";
+export { verifyKoreanProseHygiene } from "./korean-prose-hygiene";
+export type {
+  KoreanProseHygieneReport,
+  KoreanProseHygieneSeverity,
+  KoreanProseHygieneSignal,
+  KoreanProseHygieneSignalKind,
+} from "./korean-prose-hygiene";
+export {
+  buildOpeningSetupContext,
+  formatOpeningSetupContextForPrompt,
+} from "./opening-setup";
+export type {
+  BuildOpeningSetupContextInput,
+  OpeningSetupCharacterEntry,
+  OpeningSetupContext,
+} from "./opening-setup";
 export type {
   ProseCoverageAppliedEntry,
   ProseCoverageEnforcementInput,

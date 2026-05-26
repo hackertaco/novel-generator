@@ -63,6 +63,12 @@ export const WorldBrainActionEconomicsSchema = z.object({
   severity: z.enum(["low", "medium", "high"]),
 });
 
+export const CharacterVoiceProfileSchema = z.object({
+  tone: z.string(),
+  speechPatterns: StringListSchema,
+  sampleDialogues: StringListSchema,
+});
+
 export const CharacterMindSchema = z.object({
   characterId: z.string(),
   name: z.string(),
@@ -71,6 +77,11 @@ export const CharacterMindSchema = z.object({
   socialMask: z.string(),
   personalityCore: z.string(),
   voiceRules: StringListSchema,
+  voiceProfile: CharacterVoiceProfileSchema.default({
+    tone: "",
+    speechPatterns: [],
+    sampleDialogues: [],
+  }),
   desires: z.object({
     surfaceGoal: z.string(),
     hiddenGoal: z.string(),
@@ -147,6 +158,7 @@ export type WorldBrainPlanTransition = z.infer<typeof WorldBrainPlanTransitionSc
 export type WorldBrainKnowledgeFlow = z.infer<typeof WorldBrainKnowledgeFlowSchema>;
 export type WorldBrainActionEconomics = z.infer<typeof WorldBrainActionEconomicsSchema>;
 export type CharacterMind = z.infer<typeof CharacterMindSchema>;
+export type CharacterVoiceProfile = z.infer<typeof CharacterVoiceProfileSchema>;
 export type WorldBrain = z.infer<typeof WorldBrainSchema>;
 
 function compact(values: Array<string | null | undefined>): string[] {
@@ -269,6 +281,11 @@ function buildCharacterMind(character: Character): CharacterMind {
       ...character.voice.speech_patterns,
       ...character.voice.sample_dialogues.slice(0, 3),
     ]),
+    voiceProfile: {
+      tone: character.voice.tone ?? "",
+      speechPatterns: compact(character.voice.speech_patterns),
+      sampleDialogues: compact(character.voice.sample_dialogues),
+    },
     desires: {
       surfaceGoal,
       hiddenGoal,
