@@ -54,6 +54,7 @@ import {
 } from "./world-brain";
 import type { SimulationEvent, SimulationState } from "./types";
 import { buildGenreConventionEvents } from "./genre-convention";
+import { deriveChapterMicroBeats } from "./chapter-outline-derivation";
 
 interface CharacterActionDecision {
   beat: string;
@@ -478,13 +479,14 @@ function plotPointConsequence(point: PlotPoint): string | undefined {
   return normalizeText(point.consequence) || undefined;
 }
 
-function getChapterFrame(seed: NovelSeed, chapter: number): {
+function getChapterFrame(seed: NovelSeed, chapter: number, brain?: WorldBrain): {
   title: string;
   oneLiner: string;
   keyPoints: string[];
   keyPointCauses: Array<string | undefined>;
   keyPointConsequences: Array<string | undefined>;
   characterIds: string[];
+  microBeats: string[];
   tensionLevel: number;
   threadIds: string[];
 } {
@@ -514,10 +516,18 @@ function getChapterFrame(seed: NovelSeed, chapter: number): {
     ? outlineCharacters
     : introducedCharacters.slice(0, Math.max(1, Math.min(3, introducedCharacters.length)));
 
+  // v2: world model이 이야기 소스. 추상적 시드 outline을 arc key_events /
+  // foreshadowing schedule / characterMinds.currentPlan / genre_origin에서
+  // 파생한 구체 micro-beat으로 보강한다.
+  const microBeats = brain
+    ? deriveChapterMicroBeats({ seed, brain, chapter, characterIds }).map((entry) => entry.beat)
+    : [];
+
   return {
     title: outline?.title ?? extended?.title ?? `${chapter}화`,
     oneLiner: outline?.one_liner ?? extended?.one_liner ?? fallbackPoint,
     keyPoints: keyPoints.length > 0 ? keyPoints : [fallbackPoint],
+    microBeats,
     keyPointCauses: rawKeyPoints.map(plotPointCause),
     keyPointConsequences: rawKeyPoints.map(plotPointConsequence),
     characterIds,
@@ -535,6 +545,7 @@ function narrativeDirectorPressureForChapter(input: {
   title: string;
   oneLiner: string;
   keyPoints?: string[];
+  microBeats?: string[];
   tensionLevel: number;
   location: string;
   threadIds: string[];
@@ -551,9 +562,14 @@ function narrativeDirectorPressureForChapter(input: {
       .filter((point) => point.trim().length > 0)
       .slice(0, 3)
       .join(" / ");
-    const summary = keyPointAddendum
-      ? `${input.oneLiner.trim()} — 화 안에서 다룰 핵심: ${keyPointAddendum}`
-      : input.oneLiner.trim();
+    const microBeatAddendum = (input.microBeats ?? [])
+      .filter((beat) => beat.trim().length > 0)
+      .slice(0, 5)
+      .join(" / ");
+    const summaryParts = [input.oneLiner.trim()];
+    if (keyPointAddendum) summaryParts.push(`화 안에서 다룰 핵심: ${keyPointAddendum}`);
+    if (microBeatAddendum) summaryParts.push(`구체 소재(월드 모델 파생): ${microBeatAddendum}`);
+    const summary = summaryParts.join(" — ");
     return {
       pressureId: `director_ch${padChapter(input.chapter)}_outline`,
       targetScenePurpose,
@@ -2299,7 +2315,7 @@ export function runWorldModelFirstSimulation(
       : authority.applyEvent(event);
 
   for (let chapter = startChapter; chapter <= endChapter; chapter += 1) {
-    const frame = getChapterFrame(seed, chapter);
+    const frame = getChapterFrame(seed, chapter, brain);
     const priorityCharacterIds = options.outlineStrictMode
       ? []
       : selectLowActivityPriorityCharacterIds({
@@ -2322,6 +2338,7 @@ export function runWorldModelFirstSimulation(
       title: frame.title,
       oneLiner: frame.oneLiner,
       keyPoints: frame.keyPoints,
+      microBeats: frame.microBeats,
       tensionLevel: frame.tensionLevel,
       location,
       threadIds: frame.threadIds,
