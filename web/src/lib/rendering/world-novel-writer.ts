@@ -251,8 +251,14 @@ function formatDialogueTurn(
   return [
     `- ${turn.speakerName} -> ${turn.listenerNames.join(", ") || "장면"}`,
     `  speechAct: ${turn.speechAct}`,
-    turn.utterance ? `  대사 후보: "${safe(turn.utterance)}"` : "",
-    `  장면 기능: ${turn.speechAct}를 대사나 침묵으로 수행`,
+    turn.spokenIntent ? `  발화 의도(spokenIntent): ${safe(turn.spokenIntent)}` : "",
+    turn.hiddenIntent ? `  속내(hiddenIntent): ${safe(turn.hiddenIntent)}` : "",
+    turn.renderableConstraints?.linePurpose
+      ? `  장면 기능(linePurpose): ${safe(turn.renderableConstraints.linePurpose)}`
+      : "",
+    turn.utterance
+      ? `  대사 placeholder (시뮬레이터 후보 — 그대로 인용 금지, 아래 voice·intent로 새로 작성): "${safe(turn.utterance)}"`
+      : "",
     dynamics?.surfaceMeaning ? `  겉뜻: ${safe(dynamics.surfaceMeaning)}` : "",
     dynamics?.hiddenIntention ? `  속뜻: ${safe(dynamics.hiddenIntention)}` : "",
     `  상대 해석: ${safe(turn.listenerInterpretation)}`,
@@ -268,8 +274,8 @@ function formatDialogueTurn(
     dynamics?.writerHooks
       ? `  장면 훅: ${safe(dynamics.writerHooks.gesture)} / ${safe(dynamics.writerHooks.silence)} / ${safe(dynamics.writerHooks.sensoryCue)}`
       : "",
-    `  말투: ${stripVoiceSamples(turn.voiceGuidance).map(safe).join(" / ")}`,
-    `  주의: 속뜻은 직접 설명하지 말고 대사의 선택과 회피로만 표현`,
+    `  말투(voiceGuidance): ${stripVoiceSamples(turn.voiceGuidance).map(safe).join(" / ")}`,
+    `  주의: utterance placeholder는 시뮬레이터가 풀에서 박은 후보다. 같은 풀이 반복되니 그대로 인용하면 격언체가 됩니다. spokenIntent + 인물 voice + 상대 관계 + linePurpose로 새로 작성하세요.`,
   ].filter(Boolean).join("\n");
 }
 
@@ -476,7 +482,7 @@ export function buildWorldNovelWriterPrompt(input: BuildWorldNovelWriterPromptIn
     `# 렌더링 우선순위`,
     `0. 편집 계획의 renderMode와 suggestedWordBudget을 따른다. spotlight는 길게, summary는 짧게 처리한다.`,
     `1. 장면 구성의 setup/escalation/inflection/fallout 순서를 따른다. 로그를 기계적으로 나열하지 않는다.`,
-    `2. 대사 후보는 그대로 쓰거나 캐릭터 말투에 맞게 아주 작게만 변형한다.`,
+    `2. utterance placeholder는 그대로 인용 금지 — 시뮬레이터가 풀에서 박은 후보라 반복되면 격언체가 된다. 발화 의도(spokenIntent) + 인물 voice + 상대 관계 + linePurpose에서 매번 새로 작성한다.`,
     `3. 장면 훅의 제스처/침묵/감각 cue를 최소 하나 이상 사용한다.`,
     `4. 감정 변화와 권력 변화는 설명하지 말고 행동 배치와 반응 속도로 드러낸다.`,
     `5. 관계 변화 수치는 쓰지 말고, 거리감/호칭/말 끊김으로만 보이게 한다.`,
