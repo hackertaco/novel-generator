@@ -114,6 +114,12 @@ export interface WorldModelRunOptions {
    * tests; the scripted e2e path (scripts/simulate-world.ts) enables this.
    */
   outlineStrictMode?: boolean;
+  /**
+   * If true, character action selection is driven by the deterministic
+   * utility-scoring Planner (planner-scorer) instead of the if-chain heuristic.
+   * Default false → unchanged behavior. Used for A/B and staged rollout.
+   */
+  plannerEnabled?: boolean;
 }
 
 export interface WorldModelRenderedChapter {
@@ -2326,6 +2332,7 @@ export function runWorldModelFirstSimulation(
   const characterActionsPerChapter = options.characterActionsPerChapter ?? 2;
   const enableWorldBrainActions = options.enableWorldBrainActions ?? true;
   const characterSimulationMode = options.characterSimulationMode ?? "agent_ticks";
+  const plannerEnabled = options.plannerEnabled ?? false;
   const brain = buildWorldBrainFromSeed(seed);
   const runtimeMindStates = options.initialCheckpoint
     ? cloneRuntimeMindStates(options.initialCheckpoint.runtimeMindStates)
@@ -2477,6 +2484,7 @@ export function runWorldModelFirstSimulation(
           tensionLevel: frame.tensionLevel,
           directorPressure,
         }),
+        plannerEnabled,
       });
       actionLogs.push(...actionSimulation.actionLogs);
       interactionResolutions.push(...actionSimulation.interactionResolutions);

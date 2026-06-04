@@ -348,6 +348,11 @@ export interface CharacterActionSimulationInput {
     action: CharacterActionType;
     instigatorRoles?: AgentRole[];
   };
+  /**
+   * true 면 행동 선택을 if-chain 휴리스틱 대신 결정적 utility-scorer Planner 가 구동한다.
+   * 미설정(기본 false)이면 기존 경로 — 동작 100% 불변.
+   */
+  plannerEnabled?: boolean;
 }
 
 export interface CompileActionLogsToEventsInput {
@@ -2878,7 +2883,7 @@ export function runCharacterActionSimulation(
 	      agentRole: profile.agentRole,
 	      mind,
 	    });
-	    const actionType = actionTypeForTick({
+	    const heuristicActionType = actionTypeForTick({
 	      tick,
 	      mind,
 	      profile,
@@ -2889,6 +2894,35 @@ export function runCharacterActionSimulation(
 	      scenePurposeHint: input.scenePurposeHint,
 	      plotBeatAction,
 	    });
+	    // 새 utility-scorer Planner 의 결정 (shadow 기록 + plannerEnabled 시 실제 채택).
+	    const plannerDecision = scoreOperatorBoard({
+	      sceneId: input.sceneId,
+	      tick,
+	      peakTick,
+	      ticksPerScene,
+	      actorId,
+	      mind,
+	      agentRole: profile.agentRole,
+	      preferredActionTypes: profile.preferredActionTypes,
+	      targetId,
+	      targetTrust: targetId ? relationTrust(mind, targetId) : 0,
+	      location: input.location,
+	      eventDisposition: mind.eventDisposition,
+	      plotBeatBias: plotBeatAction ? { action: plotBeatAction, weight: 600 } : undefined,
+	      sceneActionLogs: actionLogs.map((priorLog): PlannerLogView => ({
+	        actorId: priorLog.actorId,
+	        targetIds: priorLog.targetIds,
+	        actionType: priorLog.action.type,
+	        status: priorLog.action.operator.status,
+	      })),
+	      actionFatigueByType: runtime?.actionFatigueByType,
+	    });
+	    const actionType = input.plannerEnabled ? plannerDecision.actionType : heuristicActionType;
+	    const plannerShadow = {
+	      actionType: plannerDecision.actionType,
+	      escalated: plannerDecision.escalated,
+	      agreesWithHeuristic: plannerDecision.actionType === heuristicActionType,
+	    };
     const intent = intentForAction({
       actionType,
       mind,
@@ -3077,33 +3111,6 @@ export function runCharacterActionSimulation(
 	    const trustSnapshot = Object.fromEntries(
 	      Object.keys(mind.relationshipModel).map((id) => [id, relationTrust(mind, id)]),
 	    );
-	    // Phase 1 shadow: 새 Planner가 무엇을 골랐을지 기록만 한다 (반환/행동은 기존 if-chain 그대로).
-	    const plannerShadowDecision = scoreOperatorBoard({
-	      sceneId: input.sceneId,
-	      tick,
-	      peakTick,
-	      ticksPerScene,
-	      actorId,
-	      mind,
-	      agentRole: profile.agentRole,
-	      preferredActionTypes: profile.preferredActionTypes,
-	      targetId,
-	      targetTrust: targetId ? relationTrust(mind, targetId) : 0,
-	      location: input.location,
-	      eventDisposition: mind.eventDisposition,
-	      sceneActionLogs: actionLogs.map((priorLog): PlannerLogView => ({
-	        actorId: priorLog.actorId,
-	        targetIds: priorLog.targetIds,
-	        actionType: priorLog.action.type,
-	        status: priorLog.action.operator.status,
-	      })),
-	      actionFatigueByType: runtime?.actionFatigueByType,
-	    });
-	    const plannerShadow = {
-	      actionType: plannerShadowDecision.actionType,
-	      escalated: plannerShadowDecision.escalated,
-	      agreesWithHeuristic: plannerShadowDecision.actionType === actionType,
-	    };
 	    if (runtime?.agentBrainState) {
 		      recordAgentBrainDecision(runtime.agentBrainState, {
 		        activeIntentionId,

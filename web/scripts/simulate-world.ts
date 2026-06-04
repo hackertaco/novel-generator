@@ -44,6 +44,7 @@ interface SimulateWorldCliOptions {
   qaRepairAttempts: number;
   qaPassThreshold: number;
   selectionOnly: boolean;
+  plannerEnabled: boolean;
 }
 
 function usage(): string {
@@ -64,6 +65,7 @@ function usage(): string {
     "  --max-scenes-per-episode <n>  Max adjacent scenes per episode window (default: 3)",
     "  --qa-repair-attempts <n>  Episode QA repair retries for --writer episode-llm (default: 1)",
     "  --qa-pass-threshold <n>   Minimum episode QA score for pass (default: 0.82)",
+    "  --planner         Drive character action selection with the deterministic utility-scoring Planner (default: if-chain heuristic)",
     "  --selection-only  Generate world logs and episode windows only; skip prose rendering and LLM writing",
   ].join("\n");
 }
@@ -98,6 +100,7 @@ function parseArgs(args = process.argv.slice(2)): SimulateWorldCliOptions {
   let qaRepairAttempts = 1;
   let qaPassThreshold = 0.82;
   let selectionOnly = false;
+  let plannerEnabled = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
@@ -194,6 +197,9 @@ function parseArgs(args = process.argv.slice(2)): SimulateWorldCliOptions {
         }
         index += 1;
         break;
+      case "--planner":
+        plannerEnabled = true;
+        break;
       case "--selection-only":
         selectionOnly = true;
         break;
@@ -224,6 +230,7 @@ function parseArgs(args = process.argv.slice(2)): SimulateWorldCliOptions {
     qaRepairAttempts,
     qaPassThreshold,
     selectionOnly,
+    plannerEnabled,
   };
 }
 
@@ -654,6 +661,7 @@ async function main(): Promise<void> {
     fastLedgerValidation: useFastWorldRun,
     fastEventApplication: useFastWorldRun,
     outlineStrictMode: true,
+    plannerEnabled: options.plannerEnabled,
   });
   const episodeSelection = selectEpisodeWindows({
     result,
