@@ -29,8 +29,10 @@ import {
 import {
   compileActionLogsToSimulationEvents,
   runCharacterActionSimulation,
+  type AgentRole,
   type CharacterActionLog,
   type CharacterActionSimulationDiagnostics,
+  type CharacterActionType,
   type InteractionResolution,
   type SimulationClock,
 } from "./character-action-sim";
@@ -537,6 +539,59 @@ function getChapterFrame(seed: NovelSeed, chapter: number, brain?: WorldBrain): 
       ...longArcThreadIdsForChapter(seed, chapter),
     ]),
   };
+}
+
+const PLOT_BEAT_MAGIC_PATTERN = /회귀|시간|마법|속성|봉인|각성|능력/;
+
+/**
+ * 챕터 outline / director pressure 에서 사건(plot-level) 행동을 결정적으로 도출한다.
+ * 강한 신호가 있을 때만 (챕터당 최대 1개) 반환하므로, 대부분의 챕터는 기존과 동일하게 동작한다.
+ * 같은 입력 → 같은 결과이므로 fast-path / full-path 가 동일하게 유지된다.
+ *
+ * 우선순위: awaken_magic > confront > take_physical > sabotage
+ */
+function derivePlotBeatForChapter(input: {
+  seed: NovelSeed;
+  brain: WorldBrain;
+  chapter: number;
+  characterIds: string[];
+  tensionLevel: number;
+  directorPressure: NarrativeDirectorPressure;
+}): { action: CharacterActionType; instigatorRoles?: AgentRole[] } | undefined {
+  const microBeats = deriveChapterMicroBeats({
+    seed: input.seed,
+    brain: input.brain,
+    chapter: input.chapter,
+    characterIds: input.characterIds,
+  });
+  const purpose = input.directorPressure.targetScenePurpose;
+
+  // 1) 장르 자각 / 마법 복선 공개 → 힘의 발현 (주인공)
+  const magicReveal = microBeats.some((beat) =>
+    beat.source === "genre_origin"
+    || (beat.source === "foreshadow_reveal" && PLOT_BEAT_MAGIC_PATTERN.test(beat.beat))
+  );
+  if (magicReveal) {
+    return { action: "awaken_magic", instigatorRoles: ["protagonist"] };
+  }
+
+  // 2) 비밀 압박(강제 폭로) 또는 고긴장 전개 → 정면 충돌
+  //    secret_pressure 는 본질적으로 "숨긴 것을 끄집어내는" 직면 비트라 긴장도와 무관하게 confront.
+  if (purpose === "secret_pressure" || (input.tensionLevel >= 8 && purpose === "advance_plot")) {
+    return { action: "confront" };
+  }
+
+  // 3) 자원 쟁탈 압박 → 물건 확보
+  if (input.directorPressure.type === "resource_scarcity") {
+    return { action: "take_physical" };
+  }
+
+  // 4) 봉쇄/제약 + 전개 → 은밀한 방해 (악역/안타고니스트)
+  if (input.directorPressure.type === "constraint" && purpose === "advance_plot") {
+    return { action: "sabotage", instigatorRoles: ["villain", "antagonist"] };
+  }
+
+  return undefined;
 }
 
 function narrativeDirectorPressureForChapter(input: {
@@ -2414,6 +2469,14 @@ export function runWorldModelFirstSimulation(
         ticksPerScene: Math.max(4, characterActionsPerChapter * 2, scheduledCharacterIds.length),
         activationMin: 1,
         activationMax: Math.max(1, characterActionsPerChapter),
+        plotBeat: derivePlotBeatForChapter({
+          seed,
+          brain,
+          chapter,
+          characterIds: scheduledCharacterIds,
+          tensionLevel: frame.tensionLevel,
+          directorPressure,
+        }),
       });
       actionLogs.push(...actionSimulation.actionLogs);
       interactionResolutions.push(...actionSimulation.interactionResolutions);
