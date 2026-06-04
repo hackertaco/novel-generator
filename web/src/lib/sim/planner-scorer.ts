@@ -205,6 +205,21 @@ function threatLevel(input: PlannerScoreInput): number {
   return n;
 }
 
+/** self 가 이번 scene 에서 떠보기/직면/방해의 대상이 된 횟수 — 마스킹/회피의 반응 근거. */
+function probedAtSelf(input: PlannerScoreInput): number {
+  let n = 0;
+  for (const log of input.sceneActionLogs) {
+    if (!log.targetIds.includes(input.actorId)) continue;
+    if (
+      log.actionType === "probe_dialogue"
+      || log.actionType === "counter_probe"
+      || log.actionType === "confront"
+      || log.actionType === "sabotage"
+    ) n += 1;
+  }
+  return n;
+}
+
 function goalScore(input: PlannerScoreInput, op: CharacterActionType): number {
   let s = 0;
   if (input.preferredActionTypes.includes(op)) s += W.goalPreferred;
@@ -222,8 +237,11 @@ function relationScore(input: PlannerScoreInput, op: CharacterActionType): numbe
     s += (-trust) * W.relTrustHostileMul + esc;
   }
   if (op === "request_help" && trust > 0) s += trust * W.relRequestHelpMul;
+  // 마스킹/회피는 반응적 방어 — 무조건이 아니라 self 가 지금 떠보기/직면을 당할 때만 보상.
+  // (무조건 +300 이 maintain_mask 를 기본 attractor 로 만들던 과편향을 제거.)
   if ((op === "deflect_dialogue" || op === "maintain_mask") && input.mind.secrets.length > 0) {
-    s += W.relSecretGuard;
+    const underPressure = probedAtSelf(input);
+    if (underPressure > 0) s += Math.min(W.relSecretGuard * underPressure, W.relSecretGuard * 2);
   }
   if (op === "sabotage" && trust < 0) s += (-trust) * W.relTrustHostileMul + esc;
   if (op === "awaken_magic") {
