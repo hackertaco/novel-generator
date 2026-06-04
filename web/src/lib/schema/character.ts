@@ -64,12 +64,25 @@ export const RelationshipFactSchema = z.object({
 
 export type RelationshipFact = z.infer<typeof RelationshipFactSchema>;
 
+export const EventDispositionEnum = z.enum([
+  "confront",
+  "sabotage",
+  "take_physical",
+  "awaken_magic",
+  "none",
+]);
+
+export type EventDisposition = z.infer<typeof EventDispositionEnum>;
+
 export const IntentProfileSchema = z.object({
   surface_goal: z.string().describe("겉으로 드러난 현재 목표"),
   hidden_goal: z.string().describe("숨기고 있는 진짜 목표"),
   core_fear: z.string().describe("핵심 두려움"),
   leverage_points: z.array(z.string()).default([]).describe("이 인물을 움직일 수 있는 압박/미끼"),
   taboo_actions: z.array(z.string()).default([]).describe("아무리 급해도 쉽게 넘지 못하는 금기 행동"),
+  event_disposition: EventDispositionEnum.optional().describe(
+    "이 인물이 기우는 사건(plot-level) 행동 — Planner가 자발 발화 판단에 사용. 미설정 시 사건 비기울임(none).",
+  ),
 });
 
 export type IntentProfile = z.infer<typeof IntentProfileSchema>;

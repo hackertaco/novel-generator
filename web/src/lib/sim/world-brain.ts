@@ -87,6 +87,14 @@ export const CharacterMindSchema = z.object({
     hiddenGoal: z.string(),
     need: z.string(),
   }),
+  // 시드 intent_profile.event_disposition 에서 옴 — Planner 사건 자발 발화 판단용.
+  eventDisposition: z.enum([
+    "confront",
+    "sabotage",
+    "take_physical",
+    "awaken_magic",
+    "none",
+  ]).optional(),
   fears: StringListSchema,
   taboos: StringListSchema,
   leveragePoints: StringListSchema,
@@ -291,6 +299,7 @@ function buildCharacterMind(character: Character): CharacterMind {
       hiddenGoal,
       need: internalArc?.need ?? "성장에 필요한 내면 진실 미정",
     },
+    eventDisposition: intent?.event_disposition,
     fears: compact([coreFear]),
     taboos: compact(intent?.taboo_actions ?? []),
     leveragePoints: compact(intent?.leverage_points ?? []),

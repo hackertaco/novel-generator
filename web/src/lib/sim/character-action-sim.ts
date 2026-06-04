@@ -14,6 +14,10 @@ import {
   recordAgentBrainDecision,
   type AgentBrainState,
 } from "./agent-brain-state";
+import {
+  scoreOperatorBoard,
+  type PlannerLogView,
+} from "./planner-scorer";
 
 const StringListSchema = z.array(z.string());
 
@@ -201,6 +205,13 @@ export const CharacterActionLogSchema = z.object({
   })),
   trustDeltas: z.record(z.string(), z.number().int()),
   sourceRailIds: StringListSchema,
+  // Phase 1 shadow: 새 utility-scorer Planner가 "골랐을" 행동을 기록만 한다 (반환값 불변).
+  // 실제 선택과의 일치 여부를 실제 시드에서 관찰하기 위한 디버그 필드.
+  plannerShadow: z.object({
+    actionType: CharacterActionTypeSchema,
+    escalated: z.boolean(),
+    agreesWithHeuristic: z.boolean(),
+  }).optional(),
 });
 
 export const InteractionResolutionSchema = z.object({
@@ -3066,6 +3077,33 @@ export function runCharacterActionSimulation(
 	    const trustSnapshot = Object.fromEntries(
 	      Object.keys(mind.relationshipModel).map((id) => [id, relationTrust(mind, id)]),
 	    );
+	    // Phase 1 shadow: 새 Planner가 무엇을 골랐을지 기록만 한다 (반환/행동은 기존 if-chain 그대로).
+	    const plannerShadowDecision = scoreOperatorBoard({
+	      sceneId: input.sceneId,
+	      tick,
+	      peakTick,
+	      ticksPerScene,
+	      actorId,
+	      mind,
+	      agentRole: profile.agentRole,
+	      preferredActionTypes: profile.preferredActionTypes,
+	      targetId,
+	      targetTrust: targetId ? relationTrust(mind, targetId) : 0,
+	      location: input.location,
+	      eventDisposition: mind.eventDisposition,
+	      sceneActionLogs: actionLogs.map((priorLog): PlannerLogView => ({
+	        actorId: priorLog.actorId,
+	        targetIds: priorLog.targetIds,
+	        actionType: priorLog.action.type,
+	        status: priorLog.action.operator.status,
+	      })),
+	      actionFatigueByType: runtime?.actionFatigueByType,
+	    });
+	    const plannerShadow = {
+	      actionType: plannerShadowDecision.actionType,
+	      escalated: plannerShadowDecision.escalated,
+	      agreesWithHeuristic: plannerShadowDecision.actionType === actionType,
+	    };
 	    if (runtime?.agentBrainState) {
 		      recordAgentBrainDecision(runtime.agentBrainState, {
 		        activeIntentionId,
@@ -3152,6 +3190,7 @@ export function runCharacterActionSimulation(
       }],
       trustDeltas,
       sourceRailIds: input.threadIds,
+      plannerShadow,
     });
     actionLogs.push(log);
     interactionResolutions.push(InteractionResolutionSchema.parse({
