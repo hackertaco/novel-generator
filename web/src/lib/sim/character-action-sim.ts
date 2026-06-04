@@ -36,6 +36,12 @@ export const CharacterActionTypeSchema = z.enum([
   "request_access",
   "maintain_mask",
   "withdraw",
+  // 사건(plot-level) 행동: 대화 마누버가 아니라 월드 상태를 물질적으로 바꾼다.
+  // outline-driven plotBeat 신호가 있을 때만 선택된다 (기본 동작 불변).
+  "confront",
+  "sabotage",
+  "take_physical",
+  "awaken_magic",
 ]);
 
 export const ActionOperatorCategorySchema = z.enum([
@@ -322,6 +328,15 @@ export interface CharacterActionSimulationInput {
   ticksPerScene?: number;
   activationMin?: number;
   activationMax?: number;
+  /**
+   * 사건(plot-level) 행동을 명시적으로 발생시키는 outline-driven 신호.
+   * 설정되지 않으면(기본) 시뮬레이션은 기존과 100% 동일하게 동작한다.
+   * 설정되면 peak-tension tick에서 자격을 갖춘 actor가 해당 사건을 실행한다.
+   */
+  plotBeat?: {
+    action: CharacterActionType;
+    instigatorRoles?: AgentRole[];
+  };
 }
 
 export interface CompileActionLogsToEventsInput {
@@ -530,6 +545,23 @@ function voiceToneNaturalTails(
       ...(isDirect ? ["일단 빠지겠습니다"] : []),
       "이쯤에서 끊죠",
     ],
+    confront: [
+      ...(isDirect ? ["이제 분명히 하죠", "더는 둘러대지 않습니다"] : []),
+      ...(isQuiet ? ["할 말은 지금 하겠어요"] : []),
+      "오늘은 짚고 넘어가죠",
+    ],
+    sabotage: [
+      ...(isQuiet ? ["조용히 정리하죠"] : []),
+      "이건 여기서 끊어 두겠어요",
+    ],
+    take_physical: [
+      ...(isDirect ? ["이건 제가 맡아 두죠"] : []),
+      "이 물건은 제가 가져갑니다",
+    ],
+    awaken_magic: [
+      ...(isQuiet ? ["이제 숨기지 않을게요"] : []),
+      "여기서 보여 드리죠",
+    ],
   };
 
   const list = banks[actionType] ?? [];
@@ -560,6 +592,10 @@ function speechVariationTail(input: {
     request_access: ["한 번만 보게 해 주세요", "지금 확인하죠"],
     maintain_mask: ["여기까지만 보여 드릴게요"],
     withdraw: ["이쯤에서 끊을게요"],
+    confront: ["이제 분명히 하죠", "더는 미루지 않을게요"],
+    sabotage: ["조용히 정리하죠"],
+    take_physical: ["이건 제가 가져갈게요"],
+    awaken_magic: ["여기서 보여 드리죠"],
   };
   return chooseFreshTail(
     actionFallback[input.actionType] ?? [],
@@ -655,6 +691,10 @@ function shouldAttachSpeechContextTail(input: {
     observe: 0.34,
     maintain_mask: 0.28,
     withdraw: 0.26,
+    confront: 0.5,
+    sabotage: 0.4,
+    take_physical: 0.4,
+    awaken_magic: 0.45,
   };
   const threshold = thresholdByAction[input.actionType];
 
@@ -876,6 +916,23 @@ function contextualUtteranceCandidates(input: {
       `${address}, 오늘 대답은 여기까지 듣겠습니다.`,
       `${topicLabel}은 남겨 두죠. 다음에 다른 말이 나올 겁니다.`,
       `${roleAngle} 여기서 물러나는 편이 더 낫겠습니다.`,
+    ],
+    confront: [
+      `${address}, 이제 분명히 하죠.`,
+      `${address}, 더는 모른 척하지 않겠습니다.`,
+      `${roleAngle} 오늘은 짚고 넘어가야겠습니다.`,
+    ],
+    sabotage: [
+      `${roleAngle} 이건 조용히 끊어 두겠습니다.`,
+      `${topicLabel} 쪽은 제가 정리하겠습니다.`,
+    ],
+    take_physical: [
+      `${address}, 이 물건은 여기 두지 않겠습니다.`,
+      `이건 제가 가져가겠습니다.`,
+    ],
+    awaken_magic: [
+      `${address}, 이제 숨길 이유가 없군요.`,
+      `여기서 보여 드리죠.`,
     ],
   };
   return mapping[input.actionType];
@@ -1355,7 +1412,13 @@ function actionTypeForTick(input: {
   actionLogs: CharacterActionLog[];
   actionFatigueByType?: Record<string, number>;
   scenePurposeHint?: string;
+  plotBeatAction?: CharacterActionType;
 }): CharacterActionType {
+  // outline-driven 사건 신호가 있으면 diversify 를 거치지 않고 그대로 실행한다.
+  // (의도된 turning point 이므로 반복-회피 로직에 밀려나면 안 된다.)
+  if (input.plotBeatAction) {
+    return input.plotBeatAction;
+  }
   const previousStatus = input.previousLog?.action.operator.status;
   const previousFailed = previousStatus === "blocked"
     || previousStatus === "partial"
@@ -1455,6 +1518,40 @@ function actionTypeForTick(input: {
   return diversify("observe");
 }
 
+const DEFAULT_PLOT_INSTIGATOR_ROLES: AgentRole[] = [
+  "protagonist",
+  "antagonist",
+  "villain",
+  "rival",
+];
+
+const MAGIC_CONTEXT_PATTERN = /회귀|시간|마법|속성|봉인|기억/;
+
+/**
+ * peak-tension tick 에서 자격을 갖춘 actor 가 사건 행동을 실행할지 결정한다.
+ * 자격을 못 갖추면 undefined 를 반환해 기존 선택 로직으로 폴백한다 (결정적).
+ */
+function resolvePlotBeatAction(input: {
+  plotBeat?: { action: CharacterActionType; instigatorRoles?: AgentRole[] };
+  tick: number;
+  peakTick: number;
+  agentRole: AgentRole;
+  mind: CharacterMind;
+}): CharacterActionType | undefined {
+  if (!input.plotBeat || input.tick !== input.peakTick) return undefined;
+  const eligibleRoles = input.plotBeat.instigatorRoles ?? DEFAULT_PLOT_INSTIGATOR_ROLES;
+  if (!eligibleRoles.includes(input.agentRole)) return undefined;
+  if (input.plotBeat.action === "awaken_magic") {
+    const hasMagicContext = [
+      ...input.mind.secrets,
+      ...input.mind.knownFacts,
+      ...input.mind.memorySeeds,
+    ].some((value) => MAGIC_CONTEXT_PATTERN.test(value));
+    if (!hasMagicContext) return undefined;
+  }
+  return input.plotBeat.action;
+}
+
 function speechActHintForAction(actionType: CharacterActionType): string {
   const mapping: Record<CharacterActionType, string> = {
     observe: "withhold",
@@ -1465,6 +1562,10 @@ function speechActHintForAction(actionType: CharacterActionType): string {
     request_access: "request_access",
     maintain_mask: "maintain_mask",
     withdraw: "withhold",
+    confront: "threaten_softly",
+    sabotage: "withhold",
+    take_physical: "withhold",
+    awaken_magic: "confess_partial",
   };
   return mapping[actionType];
 }
@@ -1479,6 +1580,10 @@ function decisionModeForAction(actionType: CharacterActionType): string {
     request_access: "access_driven_search",
     maintain_mask: "secret_protection",
     withdraw: "aftermath",
+    confront: "confrontation",
+    sabotage: "covert_sabotage",
+    take_physical: "physical_seizure",
+    awaken_magic: "power_awakening",
   };
   return mapping[actionType];
 }
@@ -1500,6 +1605,10 @@ function actionOperatorForAction(input: {
     request_access: "political",
     maintain_mask: "social",
     withdraw: "physical",
+    confront: "social",
+    sabotage: "physical",
+    take_physical: "physical",
+    awaken_magic: "magic",
   };
   const magicalContext = [
     ...input.mind.secrets,
@@ -1518,6 +1627,10 @@ function actionOperatorForAction(input: {
     request_access: [`${input.location} has access rules or social permission boundaries`],
     maintain_mask: [`${input.actorName} has a public mask to preserve`],
     withdraw: [`${input.actorName} can physically or socially leave the exchange`],
+    confront: [`${input.actorName} has enough leverage to force a hidden conflict into the open against ${target}`],
+    sabotage: [input.targetName ? `${input.actorName} can reach ${target}'s plan or resource without being caught` : `${input.location} has a plan or resource ${input.actorName} can undermine`],
+    take_physical: [`${input.location} has a physical object ${input.actorName} can seize, move, or hide`],
+    awaken_magic: [`${input.actorName} has a latent power, 회귀 지식, or 속성 that can manifest`],
   };
   const effectByAction: Record<CharacterActionType, string[]> = {
     observe: [`records a clue about ${target}`, "keeps direct conflict low"],
@@ -1528,10 +1641,17 @@ function actionOperatorForAction(input: {
     request_access: ["opens or narrows a permission boundary"],
     maintain_mask: ["stabilizes public posture", "delays direct exposure"],
     withdraw: ["breaks the current exchange", "moves pressure into later pursuit"],
+    confront: [`forces a hidden conflict with ${target} into the open`, "raises stakes sharply and cannot be taken back"],
+    sabotage: [`weakens ${target}'s plan or resource`, "stays hidden unless witnessed"],
+    take_physical: ["changes who holds or where a key object is", "opens or closes a concrete affordance"],
+    awaken_magic: [`manifests ${input.actorName}'s power`, "reveals something about the actor's true nature"],
   };
+  // take_physical/awaken_magic 은 사물/자기 자신을 대상으로 하므로 인물 target 이 필수가 아니다.
   const requiresTarget = input.actionType !== "observe"
     && input.actionType !== "maintain_mask"
-    && input.actionType !== "withdraw";
+    && input.actionType !== "withdraw"
+    && input.actionType !== "take_physical"
+    && input.actionType !== "awaken_magic";
   const lacksTarget = requiresTarget && !input.targetName;
 
   return {
@@ -1543,12 +1663,26 @@ function actionOperatorForAction(input: {
       ? "상대에게 빚을 만들 수 있다"
       : input.actionType === "request_access"
         ? "거절당하면 공식 명분이 약해진다"
-        : "의도를 읽힐 수 있다",
+        : input.actionType === "confront"
+          ? "되돌릴 수 없는 충돌을 만든다"
+          : input.actionType === "sabotage"
+            ? "발각되면 더 큰 적의를 산다"
+            : input.actionType === "take_physical"
+              ? "물건의 행방이 추적될 수 있다"
+              : input.actionType === "awaken_magic"
+                ? "힘의 정체가 드러날 수 있다"
+                : "의도를 읽힐 수 있다",
     risk: input.actionType === "withdraw"
       ? "남은 단서가 상대에게 넘어갈 수 있다"
-      : input.targetName
-        ? `${subject(target)} 역으로 의도를 해석할 수 있다`
-        : "관찰만으로는 사건이 진전되지 않을 수 있다",
+      : input.actionType === "confront"
+        ? "상대가 정면으로 맞받아칠 수 있다"
+        : input.actionType === "sabotage"
+          ? "현장을 들키면 입장이 뒤집힌다"
+          : input.actionType === "awaken_magic"
+            ? "통제하지 못하면 힘이 역으로 노출된다"
+            : input.targetName
+              ? `${subject(target)} 역으로 의도를 해석할 수 있다`
+              : "관찰만으로는 사건이 진전되지 않을 수 있다",
     status: lacksTarget ? "blocked" : "accepted",
     statusReason: lacksTarget ? "target-dependent operator has no concrete target" : "pending world game master resolution",
   };
@@ -1877,6 +2011,28 @@ function visibleBehaviorForAction(
       `${topic(actorName)} 더 묻지 말라는 듯 ${target} 등진다`,
       `${topic(actorName)} 말을 접고 ${target} 사이에 침묵을 세운다`,
     ],
+    confront: [
+      `${topic(actorName)} 물러서지 않고 ${target} 정면으로 마주 선다`,
+      `${topic(actorName)} 숨겨 온 말을 ${target} 향해 그대로 꺼낸다`,
+      `${topic(actorName)} 한 걸음 다가서며 ${target} 진실을 들이민다`,
+      `${topic(actorName)} 더는 미루지 않고 ${target} 갈등을 공개한다`,
+    ],
+    sabotage: [
+      `${topic(actorName)} 남의 눈을 피해 ${target} 계획의 한 축을 끊는다`,
+      `${topic(actorName)} 태연한 얼굴로 ${target} 손쓸 수 없게 만든다`,
+      `${topic(actorName)} 짧은 틈을 노려 ${target} 흐름을 흐트러뜨린다`,
+    ],
+    take_physical: [
+      `${topic(actorName)} 망설임 없이 문제의 물건을 집어 든다`,
+      `${topic(actorName)} 탁자 위 물건을 자기 쪽으로 옮긴다`,
+      `${topic(actorName)} 물건을 소매 안으로 조용히 감춘다`,
+      `${topic(actorName)} 손을 뻗어 핵심 물건을 확보한다`,
+    ],
+    awaken_magic: [
+      `${topic(actorName)} 억눌러 온 힘을 처음으로 끌어올린다`,
+      `${topic(actorName)} 손끝의 익숙한 감각을 다시 깨운다`,
+      `${topic(actorName)} 숨을 고르고 봉인해 둔 힘을 연다`,
+    ],
   };
   const variants = mapping[actionType];
   const base = chooseFreshBehavior(variants, variantKey, recentVisibleBehaviors);
@@ -2083,6 +2239,10 @@ function surfaceMeaningForAction(actionType: CharacterActionType, targetName?: s
     request_access: `${target}에 접근할 명분을 요구하는 말`,
     maintain_mask: `흔들리지 않는 태도를 보여주는 공적 응답`,
     withdraw: `대화를 끊고 거리를 확보하는 선언`,
+    confront: `${target}에게 숨겨 온 갈등을 정면으로 드러내는 선언`,
+    sabotage: `${target}의 계획을 겉으로 드러내지 않고 무력화하려는 시도`,
+    take_physical: `문제의 물건을 직접 확보하는 행동`,
+    awaken_magic: `억눌러 온 힘을 처음으로 드러내는 순간`,
   };
   return mapping[actionType];
 }
@@ -2146,6 +2306,30 @@ function targetInterpretationForAction(input: {
       "따라붙을지 기다릴지 사이에서 다음 수를 고른다",
       "침묵이 남긴 단서를 다른 통로로 확인하려 한다",
     ],
+    confront: [
+      "정면으로 드러난 적의를 보고 물러설지 맞설지 정한다",
+      "감춰 온 일이 들켰다고 판단하고 다음 수를 바꾼다",
+      "공개된 갈등 앞에서 가면을 유지할지 버릴지 고른다",
+      "되돌릴 수 없는 선이 그어졌다고 느낀다",
+    ],
+    sabotage: [
+      "무언가 어긋났음을 뒤늦게 감지하고 원인을 찾는다",
+      "계획의 한 축이 끊겼다고 느끼며 경계를 높인다",
+      "누가 손댔는지 의심의 범위를 좁힌다",
+      "겉으로는 평정을 유지하며 손실을 계산한다",
+    ],
+    take_physical: [
+      "물건이 사라진 것을 알아차리고 행방을 쫓는다",
+      "빼앗긴 것이 무엇을 의미하는지 다시 계산한다",
+      "되찾을 방법과 대가를 저울질한다",
+      "물건이 옮겨진 빈자리를 응시한다",
+    ],
+    awaken_magic: [
+      "상대의 힘을 처음 보고 전제를 다시 세운다",
+      "예상 밖의 능력 앞에서 거리를 다시 잰다",
+      "드러난 정체를 어떻게 이용할지 계산한다",
+      "두려움과 호기심 사이에서 반응을 고른다",
+    ],
   };
   const responses = responsePools[input.actionType];
   const response = responses[
@@ -2176,6 +2360,10 @@ function emotionalShiftForAction(input: {
     request_access: "명분을 세운 조급함",
     maintain_mask: "감정을 눌러 둔 평정",
     withdraw: "후퇴 뒤의 계산",
+    confront: "감추지 않은 정면의 결기",
+    sabotage: "겉은 태연한 은밀한 결단",
+    take_physical: "물건을 쥔 단호함",
+    awaken_magic: "힘을 처음 꺼낸 떨림과 확신",
   };
 
   return {
@@ -2183,7 +2371,11 @@ function emotionalShiftForAction(input: {
     actorAfter: afterByAction[input.actionType],
     targetBefore: input.targetName ? "상대의 의도를 확인하지 못한 경계" : null,
     targetAfter: input.targetName ? "다음 반응을 준비하는 의심" : null,
-    intensityDelta: input.actionType === "request_help" ? 1 : 2,
+    intensityDelta: input.actionType === "request_help"
+      ? 1
+      : input.actionType === "confront" || input.actionType === "awaken_magic"
+        ? 3
+        : 2,
     reason: `${topic(input.actorName)} '${input.intent}'라는 목적을 장면 표면으로 끌어올린다`,
   };
 }
@@ -2203,14 +2395,19 @@ function powerShiftForAction(input: {
     request_access: "access",
     maintain_mask: "social",
     withdraw: "social",
+    confront: "social",
+    sabotage: "information",
+    take_physical: "access",
+    awaken_magic: "emotional",
   };
   const targetKeepsPower = input.actionType === "request_help" || input.actionType === "request_access";
+  const bigSwing = input.actionType === "confront" || input.actionType === "awaken_magic";
 
   return {
     axis: axisByAction[input.actionType],
     fromCharacterId: targetKeepsPower ? input.actorId : input.targetId ?? null,
     toCharacterId: targetKeepsPower ? input.targetId ?? input.actorId : input.actorId,
-    delta: targetKeepsPower ? 1 : 2,
+    delta: targetKeepsPower ? 1 : bigSwing ? 3 : 2,
     reason: input.intent,
   };
 }
@@ -2224,14 +2421,16 @@ function relationshipShiftForAction(input: {
 }): InteractionResolution["relationshipShift"] {
   const probing = input.actionType === "probe_dialogue" || input.actionType === "counter_probe";
   const defensive = input.actionType === "deflect_dialogue" || input.actionType === "withdraw";
+  const aggressive = input.actionType === "confront" || input.actionType === "sabotage";
+  const seizing = input.actionType === "take_physical";
 
   return {
     sourceCharacterId: input.actorId,
     targetCharacterId: input.targetId ?? null,
     trustDelta: input.trustDelta,
-    suspicionDelta: probing || defensive ? 1 : 0,
+    suspicionDelta: probing || defensive || aggressive || seizing ? 1 : 0,
     dependencyDelta: input.actionType === "request_help" ? 1 : 0,
-    hostilityDelta: defensive ? 1 : 0,
+    hostilityDelta: defensive ? 1 : aggressive ? 2 : 0,
     reason: input.intent,
   };
 }
@@ -2272,6 +2471,10 @@ function targetReactionForAction(input: {
     request_access: `${target} 접근 허락의 명분과 위험을 동시에 따진다`,
     maintain_mask: `${target} 무너지지 않는 표정을 보고 의심의 방향을 바꾼다`,
     withdraw: `${target} 끊긴 대화 뒤에 남은 정보를 따로 보관한다`,
+    confront: `${target} 정면으로 드러난 갈등 앞에서 물러설지 맞설지 정해야 한다`,
+    sabotage: `${target} 계획이 어긋난 것을 감지하고 원인을 추적해야 한다`,
+    take_physical: `${target} 물건이 ${input.actorName}의 손에 넘어간 것을 알아차린다`,
+    awaken_magic: `${target} 드러난 힘 앞에서 전제를 다시 세워야 한다`,
   };
   return `${mapping[input.actionType]} (${input.intent}; 근거: ${input.visibleBehavior}); ${followThrough}`;
 }
@@ -2315,6 +2518,10 @@ function followUpSeedForAction(input: {
     request_access: `${target} 접근을 허락할 범위와 감시 조건을 정해야 한다`,
     maintain_mask: `${target} ${input.actorName}의 가면을 깨뜨릴 새 압박을 찾아야 한다`,
     withdraw: `${target} 끊긴 대화 뒤 남은 단서를 다른 통로로 확인해야 한다`,
+    confront: `${target} 공개된 갈등에 맞설지 물러설지 다음 수를 정해야 한다`,
+    sabotage: `${target} 끊긴 계획을 복구하거나 손댄 사람을 찾아야 한다`,
+    take_physical: `${target} 빼앗긴 물건을 되찾거나 대체할 길을 찾아야 한다`,
+    awaken_magic: `${target} 드러난 힘을 막거나 이용할 방법을 찾아야 한다`,
   };
   return normalizeMemoryText(`${mapping[input.actionType]}; ${nextStep}${visibleCue} [pressure:${input.logId}]`);
 }
@@ -2340,6 +2547,10 @@ function gainedKnowledgeForAction(input: {
     request_access: `${target} ${input.actorName}에게 허락할 접근 범위를 새로 계산해야 한다`,
     maintain_mask: `${target} ${input.actorName}의 가면이 유지된 이유를 다시 해석해야 한다`,
     withdraw: `${target} 끊긴 대화 뒤 남은 단서를 별도 경로로 추적해야 한다`,
+    confront: `${target} ${input.actorName}이(가) 더는 숨기지 않는다는 사실을 받아들여야 한다`,
+    sabotage: `${target} 자신의 계획에 균열이 생겼음을 의식하게 된다`,
+    take_physical: `${target} 핵심 물건이 ${input.actorName}의 손에 넘어갔음을 알게 된다`,
+    awaken_magic: `${target} ${input.actorName}에게 알려지지 않은 힘이 있음을 알게 된다`,
   };
 
   return `${mapping[input.actionType]} (관찰 단서: ${input.visibleBehavior})`;
@@ -2429,6 +2640,10 @@ function writerHooksForAction(input: {
     request_access: `${topic(input.actorName)} 예법에 맞춰 한 걸음 앞으로 선다`,
     maintain_mask: `${topic(input.actorName)} 흐트러진 표정을 곧바로 되돌린다`,
     withdraw: `${topic(input.actorName)} 먼저 시선을 거두고 몸을 돌린다`,
+    confront: `${topic(input.actorName)} 시선을 피하지 않고 ${target}에게 한 걸음 다가선다`,
+    sabotage: `${topic(input.actorName)} 아무렇지 않은 얼굴로 손을 빠르게 움직인다`,
+    take_physical: `${topic(input.actorName)} 망설임 없이 물건을 집어 든다`,
+    awaken_magic: `${topic(input.actorName)} 숨을 고르며 손끝에 힘을 모은다`,
   };
   const sensoryCuePool: Record<CharacterActionType, string[]> = {
     observe: [
@@ -2463,6 +2678,22 @@ function writerHooksForAction(input: {
       `${input.location}의 의자 다리가 바닥을 낮게 긁고 멈춘다`,
       `${input.location}의 복도 쪽 소음이 멀어지며 말끝을 끊는다`,
     ],
+    confront: [
+      `${input.location}의 공기가 한순간 팽팽해진다`,
+      `${input.location}의 모든 소리가 잠깐 멎는다`,
+    ],
+    sabotage: [
+      `${input.location}의 그림자 하나가 소리 없이 움직인다`,
+      `${input.location}의 어딘가에서 작은 어긋남이 생긴다`,
+    ],
+    take_physical: [
+      `${input.location}의 탁자 위 빈자리가 도드라진다`,
+      `${input.location}의 물건 하나가 자리를 옮긴다`,
+    ],
+    awaken_magic: [
+      `${input.location}의 빛이 한 번 흔들린다`,
+      `${input.location}의 공기에 낯선 결이 스민다`,
+    ],
   };
   const sensoryCues = sensoryCuePool[input.actionType];
   const sensoryCue = sensoryCues[Math.floor(stableScore(`sensory:${input.location}:${input.actorName}:${target}:${input.actionType}`) * sensoryCues.length)] ?? sensoryCues[0];
@@ -2483,6 +2714,19 @@ function intentForAction(input: {
   oneLiner: string;
 }): string {
   const target = input.targetName ?? "상황";
+  // 사건 행동은 role 분기보다 우선한다 (의도가 행동 자체로 고정되어 있음).
+  if (input.actionType === "confront") {
+    return `${target}와(과) 숨겨 온 갈등을 정면으로 드러내 '${input.mind.desires.hiddenGoal}'의 흐름을 바꾼다`;
+  }
+  if (input.actionType === "sabotage") {
+    return `${target}의 계획을 들키지 않게 끊어 '${input.mind.desires.hiddenGoal}'에 유리한 틈을 만든다`;
+  }
+  if (input.actionType === "take_physical") {
+    return `문제의 물건을 직접 확보해 '${input.mind.desires.hiddenGoal}'의 다음 수를 연다`;
+  }
+  if (input.actionType === "awaken_magic") {
+    return `억눌러 온 힘을 처음으로 끌어올려 '${input.mind.desires.hiddenGoal}'의 판을 뒤집는다`;
+  }
   if (input.profile.agentRole === "protagonist") {
     if (input.actionType === "request_access") return `${companion(target)} 연결된 증거 경로를 열어 반격 가능성을 높인다`;
     if (input.actionType === "maintain_mask" || input.actionType === "deflect_dialogue") {
@@ -2522,6 +2766,10 @@ function intentForAction(input: {
 function trustDeltaForAction(actionType: CharacterActionType, targetId?: string): Record<string, number> {
   if (!targetId) return {};
   if (actionType === "request_help") return { [targetId]: 1 };
+  // 사건 행동은 관계를 더 크게 흔든다.
+  if (actionType === "confront" || actionType === "sabotage") return { [targetId]: -2 };
+  if (actionType === "take_physical") return { [targetId]: -1 };
+  if (actionType === "awaken_magic") return { [targetId]: 0 };
   if (
     actionType === "probe_dialogue"
     || actionType === "counter_probe"
@@ -2555,6 +2803,8 @@ export function runCharacterActionSimulation(
   const profilesById = new Map(profiles.map((profile) => [profile.characterId, profile]));
   const sceneCharacterIds = selectSceneCharacterIds(input);
   const ticksPerScene = input.ticksPerScene ?? Math.max(4, sceneCharacterIds.length);
+  // buildClock 의 peakTensionTicks 계산과 동일하게 유지한다.
+  const peakTick = Math.max(1, Math.ceil(ticksPerScene * 0.66));
   const clocks: SimulationClock[] = [];
   const actionLogs: CharacterActionLog[] = [];
   const interactionResolutions: InteractionResolution[] = [];
@@ -2610,6 +2860,13 @@ export function runCharacterActionSimulation(
     });
     const actorName = mind.name;
     const targetName = targetId ? characterName(input.brain, targetId) : undefined;
+	    const plotBeatAction = resolvePlotBeatAction({
+	      plotBeat: input.plotBeat,
+	      tick,
+	      peakTick,
+	      agentRole: profile.agentRole,
+	      mind,
+	    });
 	    const actionType = actionTypeForTick({
 	      tick,
 	      mind,
@@ -2619,6 +2876,7 @@ export function runCharacterActionSimulation(
 	      actionLogs,
 	      actionFatigueByType: runtime?.actionFatigueByType,
 	      scenePurposeHint: input.scenePurposeHint,
+	      plotBeatAction,
 	    });
     const intent = intentForAction({
       actionType,
@@ -2694,7 +2952,11 @@ export function runCharacterActionSimulation(
       visibleBehavior,
     });
     const trustDelta = targetId ? trustDeltas[targetId] ?? 0 : 0;
-    const scenePressureDelta = actionType === "request_help" ? 1 : 2;
+    const scenePressureDelta = actionType === "request_help"
+      ? 1
+      : actionType === "confront" || actionType === "awaken_magic"
+        ? 3
+        : 2;
     const operatorAttempt = actionOperatorForAction({
       actionType,
       actorName,

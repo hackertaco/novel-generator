@@ -139,6 +139,11 @@ function actionPressure(log: CharacterActionLog): number {
     maintain_mask: 0.09,
     withdraw: 0.07,
     observe: 0.04,
+    // 사건(plot-level) 행동은 장면의 핵심이므로 높은 가중치.
+    confront: 0.22,
+    sabotage: 0.2,
+    take_physical: 0.18,
+    awaken_magic: 0.22,
   };
   return actionWeights[log.action.type] ?? 0.04;
 }

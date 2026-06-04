@@ -450,6 +450,106 @@ describe("character action simulation", () => {
     )).toHaveLength(0);
   });
 
+  it("fires explicit plot-beat actions at the peak tick with material state deltas, and is opt-in", () => {
+    const seed = loadFixtureSeed();
+    const brain = buildWorldBrainFromSeed(seed);
+    const base = {
+      seed,
+      brain,
+      chapter: 1,
+      sceneId: "scene_plot_beat",
+      title: "정면",
+      oneLiner: "회귀 자각",
+      characterIds: ["elysia", "serena", "marian"],
+      location: "크레센트 공작가",
+      runtimeMindStates: runtimeFromBrain(brain),
+      threadIds: ["main"],
+      ticksPerScene: 5,
+      priorityCharacterIds: ["elysia", "serena", "marian"],
+    };
+
+    // 기본(plotBeat 없음): 사건(plot-level) 행동은 전혀 나오지 않는다 — 기존 동작 불변.
+    const plain = runCharacterActionSimulation(base);
+    expect(plain.actionLogs.some((log) =>
+      ["confront", "sabotage", "take_physical", "awaken_magic"].includes(log.action.type)
+    )).toBe(false);
+
+    // confront plotBeat: peak tick(4)에서 protagonist(elysia)가 실행, 두 번 돌려도 동일(결정적).
+    const confrontInput = { ...base, plotBeat: { action: "confront" as const } };
+    const first = runCharacterActionSimulation(confrontInput);
+    const second = runCharacterActionSimulation(confrontInput);
+    expect(second.actionLogs).toEqual(first.actionLogs);
+
+    const confrontLog = first.actionLogs.find((log) => log.action.type === "confront");
+    expect(confrontLog).toBeDefined();
+    expect(confrontLog!.tick).toBe(4);
+    expect(confrontLog!.privateState.agentRole).toBe("protagonist");
+    expect(confrontLog!.action.operator.category).toBe("social");
+    // 물질적 사건: 큰 장면 압력 + 강한 신뢰 이동 + 관계 delta가 남는다.
+    expect(confrontLog!.actualEffect.scenePressureDelta).toBe(3);
+    expect(Object.values(confrontLog!.trustDeltas)).toContain(-2);
+    expect(
+      confrontLog!.actualEffect.stateDeltas.some((delta) => delta.domain === "relationship"),
+    ).toBe(true);
+
+    const confrontResolution = first.interactionResolutions.find((resolution) =>
+      resolution.sourceActionLogIds.includes(confrontLog!.logId)
+    );
+    expect(confrontResolution?.speechDraft.speechAct).toBe("threaten_softly");
+    expect(confrontResolution?.powerShift.delta).toBe(3);
+
+    // compile → SimulationEvent 로 사건이 provenance 와 함께 보존된다.
+    const events = compileActionLogsToSimulationEvents({
+      actionLogs: first.actionLogs,
+      interactionResolutions: first.interactionResolutions,
+      brain,
+      chapter: 1,
+      startBeatIndex: 0,
+      title: "정면",
+      location: "크레센트 공작가",
+      threadIds: ["main"],
+    });
+    const confrontEvent = events.find((event) =>
+      event.tags?.includes(`operator:${confrontLog!.action.operator.id}`)
+    );
+    expect(confrontEvent).toBeDefined();
+    expect(confrontEvent!.stateChanges.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("gates plot beats by instigator role (ally does not instigate by default, but can via override)", () => {
+    const seed = loadFixtureSeed();
+    const brain = buildWorldBrainFromSeed(seed);
+    // ticksPerScene 4 -> peak tick 3 -> actor is marian (ally).
+    const base = {
+      seed,
+      brain,
+      chapter: 1,
+      sceneId: "scene_plot_beat_gate",
+      title: "정면",
+      oneLiner: "회귀 자각",
+      characterIds: ["elysia", "serena", "marian"],
+      location: "크레센트 공작가",
+      runtimeMindStates: runtimeFromBrain(brain),
+      threadIds: ["main"],
+      ticksPerScene: 4,
+      priorityCharacterIds: ["elysia", "serena", "marian"],
+    };
+
+    // 기본 instigator 역할(ally 제외) → confront 발생 안 함.
+    const defaultRun = runCharacterActionSimulation({ ...base, plotBeat: { action: "confront" as const } });
+    expect(defaultRun.actionLogs.some((log) => log.action.type === "confront")).toBe(false);
+
+    // instigatorRoles 로 ally 를 허용하면 peak tick 에서 marian 이 confront 를 실행.
+    const overrideRun = runCharacterActionSimulation({
+      ...base,
+      plotBeat: { action: "confront" as const, instigatorRoles: ["ally"] },
+    });
+    const allyConfront = overrideRun.actionLogs.find((log) => log.action.type === "confront");
+    expect(allyConfront).toBeDefined();
+    expect(allyConfront!.privateState.agentRole).toBe("ally");
+    expect(allyConfront!.tick).toBe(3);
+  });
+
   it("rejects malformed action logs without actor and tick", () => {
     const result = CharacterActionLogSchema.safeParse({
       logId: "bad",
