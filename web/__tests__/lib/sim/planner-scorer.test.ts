@@ -176,6 +176,49 @@ describe("planner-scorer (Phase 0 deterministic utility scorer)", () => {
     expect(used.pacing).toBeLessThan(fresh.pacing);
   });
 
+  describe("scheme scoring", () => {
+    it("scheme stage tactics dominate op choice toward the scheme target (지금 손해 = 위장 협조)", () => {
+      const decision = scoreOperatorBoard(baseInput({
+        targetId: "elysia",
+        targetTrust: 1,
+        scheme: { stageTactics: ["request_help"], schemeTargetId: "elysia", atFinalStage: false },
+      }));
+      expect(decision.actionType).toBe("request_help");
+    });
+
+    it("payoff op unlocks the big bonus only at the final stage", () => {
+      const early = scoreOperator(baseInput({
+        targetId: "serena", targetTrust: -1,
+        scheme: { stageTactics: [], schemeTargetId: "serena", atFinalStage: false, payoffOp: "confront" },
+      }), "confront");
+      const final_ = scoreOperator(baseInput({
+        targetId: "serena", targetTrust: -1,
+        scheme: { stageTactics: ["confront"], schemeTargetId: "serena", atFinalStage: true, payoffOp: "confront" },
+      }), "confront");
+      expect(final_.goal).toBeGreaterThan(early.goal);
+      expect(final_.goal - early.goal).toBeGreaterThanOrEqual(900);
+    });
+
+    it("known vulnerability exploit ops get a bonus against the schemer", () => {
+      const withExploit = scoreOperator(baseInput({
+        targetId: "serena", targetTrust: 0,
+        scheme: { stageTactics: [], schemeTargetId: "serena", atFinalStage: false, exploitOps: ["request_access"] },
+      }), "request_access");
+      const without = scoreOperator(baseInput({ targetId: "serena", targetTrust: 0 }), "request_access");
+      expect(withExploit.goal).toBeGreaterThan(without.goal);
+    });
+
+    it("scheme overrides eventDisposition (단계가 동적 성향)", () => {
+      const score = scoreOperator(baseInput({
+        targetTrust: -2,
+        eventDisposition: "confront",
+        scheme: { stageTactics: ["maintain_mask"], schemeTargetId: "serena", atFinalStage: false },
+      }), "confront");
+      // disposition 가산(+900)이 무시되므로 goal에 affinity가 없어야 함
+      expect(score.goal).toBeLessThan(900);
+    });
+  });
+
   it("ALL_OPS covers the full operator set including the 4 plot events", () => {
     expect(ALL_OPS).toHaveLength(12);
     for (const ev of EVENT_OPS) expect(ALL_OPS.includes(ev)).toBe(true);

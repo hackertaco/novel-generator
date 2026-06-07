@@ -56,6 +56,19 @@ export interface PlannerLogView {
   status: PlannerOpStatus;
 }
 
+/**
+ * 활성 음모 단계가 Planner 에 주는 컨텍스트.
+ * - schemer 본인: stageTactics/payoffOp (전략은 시드, 전술은 점수판에서 즉흥)
+ * - 음모를 아는 자(foreknowledge/단서): exploitOps — schemer 를 겨냥할 때 공략 가산
+ */
+export interface PlannerSchemeInput {
+  stageTactics: CharacterActionType[];
+  schemeTargetId?: string;
+  atFinalStage: boolean;
+  payoffOp?: CharacterActionType;
+  exploitOps?: CharacterActionType[];
+}
+
 export interface PlannerScoreInput {
   sceneId: string;
   tick: number;
@@ -76,6 +89,8 @@ export interface PlannerScoreInput {
   eventDisposition?: EventDisposition;
   /** outline-driven 신호. override 가 아니라 goal 가산 bias 로 강등. */
   plotBeatBias?: { action: CharacterActionType; weight: number };
+  /** 활성 음모 컨텍스트. 있으면 eventDisposition 보다 우선한다 (단계 = 동적 성향). */
+  scheme?: PlannerSchemeInput;
   /** 챕터간 carryover 압력 개수 (장편 호흡). */
   carryoverPressureCount?: number;
 }
@@ -103,6 +118,10 @@ const W = {
   goalPreferred: 500,
   goalEventAffinity: 900,
   goalPlotBiasDefault: 600,
+  schemeTactic: 700,
+  schemePayoff: 900,
+  schemeExploit: 500,
+  schemeTargetBias: 200,
   relTrustHostileMul: 400,
   relRequestHelpMul: 300,
   relSecretGuard: 300,
@@ -223,8 +242,23 @@ function probedAtSelf(input: PlannerScoreInput): number {
 function goalScore(input: PlannerScoreInput, op: CharacterActionType): number {
   let s = 0;
   if (input.preferredActionTypes.includes(op)) s += W.goalPreferred;
-  // goal 을 데이터로 읽는다 (정규식 추론 금지) — eventDisposition 이 이 op 를 가리키면 강한 가산.
-  if (EVENT_OPS.includes(op) && input.eventDisposition === op) s += W.goalEventAffinity;
+  if (input.scheme) {
+    // 음모가 있으면 단계가 동적 성향 — eventDisposition 은 무시한다.
+    const onSchemeTarget = input.targetId !== undefined && input.targetId === input.scheme.schemeTargetId;
+    if (input.scheme.stageTactics.includes(op)) {
+      s += W.schemeTactic;
+      if (onSchemeTarget) s += W.schemeTargetBias;
+    }
+    if (input.scheme.atFinalStage && input.scheme.payoffOp === op && onSchemeTarget) {
+      s += W.schemePayoff;
+    }
+    if (input.scheme.exploitOps?.includes(op) && onSchemeTarget) {
+      s += W.schemeExploit;
+    }
+  } else if (EVENT_OPS.includes(op) && input.eventDisposition === op) {
+    // goal 을 데이터로 읽는다 (정규식 추론 금지) — eventDisposition 이 이 op 를 가리키면 강한 가산.
+    s += W.goalEventAffinity;
+  }
   if (input.plotBeatBias && input.plotBeatBias.action === op) s += input.plotBeatBias.weight;
   return s;
 }
