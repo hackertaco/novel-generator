@@ -23,6 +23,11 @@ import {
   writeWorldNovelChapter,
 } from "../src/lib/rendering";
 import { NovelSeedSchema, type NovelSeed } from "../src/lib/schema/novel";
+import {
+  cullDerivedOutline,
+  labelDerivedOutline,
+  type DerivedOutline,
+} from "../src/lib/rendering/derived-outline";
 import type { CharacterActionLog } from "../src/lib/sim/character-action-sim";
 import type { SceneLog } from "../src/lib/sim/scene-log";
 import { runWorldModelFirstSimulation } from "../src/lib/sim/world-runner";
@@ -68,6 +73,62 @@ function usage(): string {
     "  --planner / --no-planner  Utility-scoring Planner 강제 on/off (미지정 시 world-runner 기본값 = on)",
     "  --selection-only  Generate world logs and episode windows only; skip prose rendering and LLM writing",
   ].join("\n");
+}
+
+/**
+ * 역전 모드(빈 chapter_outlines) 전용 — 로그에서 발견한 줄거리(derived outline)를 기록.
+ * spec: docs/superpowers/specs/2026-06-08-outline-inversion-design.md §6
+ */
+async function writeDerivedOutlineArtifacts(input: {
+  outDir: string;
+  result: {
+    seed: NovelSeed;
+    sceneLogs: Array<{ sceneId: string; chapter: number; sourceEventIds: string[] }>;
+    actionLogs: Array<{ chapter: number; actualEffect: { scenePressureDelta: number } }>;
+    ledger: { events: Array<{ id: string; chapter: number; tags?: string[]; summary: string }> };
+    schemeTimeline: unknown;
+  };
+  targetEpisodeCount?: number;
+  writeJson: (filePath: string, value: unknown) => void;
+}): Promise<DerivedOutline | undefined> {
+  const { result, outDir } = input;
+  input.writeJson(path.join(outDir, "scheme-timeline.json"), result.schemeTimeline);
+  if (result.seed.chapter_outlines.length > 0) return undefined;
+
+  const pressureByChapter = new Map<number, number>();
+  for (const log of result.actionLogs) {
+    const current = pressureByChapter.get(log.chapter) ?? 0;
+    pressureByChapter.set(log.chapter, Math.max(current, log.actualEffect.scenePressureDelta));
+  }
+  const scenes = result.sceneLogs.map((scene) => ({
+    sceneId: scene.sceneId,
+    chapter: scene.chapter,
+    eventIds: scene.sourceEventIds,
+    pressurePeak: pressureByChapter.get(scene.chapter) ?? 0,
+  }));
+  const events = (result.ledger.events ?? []).map((event) => ({
+    id: event.id,
+    chapter: event.chapter,
+    tags: event.tags ?? [],
+    summary: event.summary,
+  }));
+  const outline = cullDerivedOutline({
+    scenes,
+    events,
+    totalChapters: input.targetEpisodeCount ?? scenes.length,
+  });
+  const eventSummariesById = Object.fromEntries(events.map((event) => [event.id, event.summary]));
+  const labeled = await labelDerivedOutline({ outline, eventSummariesById });
+  input.writeJson(path.join(outDir, "derived-outline.json"), labeled);
+  const markdown = [
+    "# Derived Outline (발견된 줄거리)",
+    "",
+    ...labeled.chapters.map((chapter) =>
+      `## ${chapter.title} — ${chapter.oneLiner}\n- 장면: ${chapter.sourceSceneIds.join(", ")}\n- 절단: ${chapter.endsOn ?? "-"} (tension ${chapter.tensionPeak})`,
+    ),
+  ].join("\n");
+  fs.writeFileSync(path.join(outDir, "derived-outline.md"), markdown, "utf8");
+  return labeled;
 }
 
 function parseChapterRange(value: string): { startChapter: number; endChapter: number } {
@@ -677,6 +738,12 @@ async function main(): Promise<void> {
     actionLogs: result.actionLogs,
   });
   if (options.selectionOnly) {
+    await writeDerivedOutlineArtifacts({
+      outDir,
+      result,
+      targetEpisodeCount: options.targetEpisodeCount,
+      writeJson,
+    });
     writeJson(path.join(ledgersDir, "causal-ledger.json"), result.ledger);
     writeJson(path.join(outDir, "world-brain.json"), result.brain);
     writeJson(path.join(outDir, "scene-logs.json"), result.sceneLogs);
@@ -1019,6 +1086,12 @@ async function main(): Promise<void> {
     }
   }
 
+  await writeDerivedOutlineArtifacts({
+    outDir,
+    result,
+    targetEpisodeCount: options.targetEpisodeCount,
+    writeJson,
+  });
   writeJson(path.join(ledgersDir, "causal-ledger.json"), result.ledger);
   writeJson(path.join(outDir, "world-brain.json"), result.brain);
   writeJson(path.join(outDir, "scene-logs.json"), result.sceneLogs);

@@ -151,7 +151,7 @@ export async function labelDerivedOutline(input: {
       chapters.push({
         ...chapter,
         title: `${chapter.number}화`,
-        oneLiner: chapter.oneLiner || `${chapter.sourceSceneIds.length}개 장면`,
+        oneLiner: (chapter.oneLiner || `${chapter.sourceSceneIds.length}개 장면`).slice(0, 80),
       });
       continue;
     }
