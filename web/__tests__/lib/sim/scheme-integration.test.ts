@@ -103,11 +103,12 @@ describe("scheme world-brain compile", () => {
 
 describe("scheme runtime lifecycle (shadow — 행동 불변)", () => {
   it("records scheme stage transitions on the timeline without changing action selection", () => {
+    // shadow 검증 목적이므로 planner 를 명시적으로 끈다 (Phase 3 부터 기본은 true).
     const schemed = runWorldModelFirstSimulation(loadSchemedSeed(), {
-      startChapter: 1, endChapter: 6, characterActionsPerChapter: 4,
+      startChapter: 1, endChapter: 6, characterActionsPerChapter: 4, plannerEnabled: false,
     });
     const plain = runWorldModelFirstSimulation(loadPlainSeed(), {
-      startChapter: 1, endChapter: 6, characterActionsPerChapter: 4,
+      startChapter: 1, endChapter: 6, characterActionsPerChapter: 4, plannerEnabled: false,
     });
 
     // timeline에 advanced 기록 (chapter_at_least:3 → 3챕터 평가 시 advance)

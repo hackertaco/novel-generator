@@ -2349,7 +2349,9 @@ export function runWorldModelFirstSimulation(
   const characterActionsPerChapter = options.characterActionsPerChapter ?? 2;
   const enableWorldBrainActions = options.enableWorldBrainActions ?? true;
   const characterSimulationMode = options.characterSimulationMode ?? "agent_ticks";
-  const plannerEnabled = options.plannerEnabled ?? false;
+  // Phase 3: world-model 경로는 utility-scorer Planner 가 기본. (사용자 결정 2026-06-04;
+  // shadow 관찰 + 가중 튜닝 + pair-cooldown 검증 후 활성.) options 로 명시 해제 가능.
+  const plannerEnabled = options.plannerEnabled ?? true;
   const brain = buildWorldBrainFromSeed(seed);
   // 음모(scheme) 런타임: 보유 인물별 상태를 챕터 간 carry. 시드 순서라 결정적.
   const schemeStates = new Map<string, SchemeRuntimeState>();
