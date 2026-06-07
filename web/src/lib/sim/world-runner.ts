@@ -65,6 +65,7 @@ import {
   type SchemeWorldView,
 } from "./scheme-engine";
 import { ALL_OPS, EVENT_OPS, type PlannerSchemeInput } from "./planner-scorer";
+import { synthesizeChapterFrame, type SynthesizedFrame } from "./frame-synthesizer";
 
 interface CharacterActionDecision {
   beat: string;
@@ -567,6 +568,36 @@ function getChapterFrame(seed: NovelSeed, chapter: number, brain?: WorldBrain): 
 const PLOT_BEAT_MAGIC_PATTERN = /회귀|시간|마법|속성|봉인|각성|능력/;
 
 /**
+ * 역전 모드: 합성 프레임을 기존 frame 형태로 변환한다.
+ * keyPoints 가 항상 빈 배열 → beats.forEach 가 no-op = beats 주입 절단.
+ * 사건의 유일한 원천은 agent-tick (Planner + scheme).
+ * spec: docs/superpowers/specs/2026-06-08-outline-inversion-design.md §5
+ */
+function adaptSynthesizedFrame(input: {
+  synth: SynthesizedFrame;
+  seed: NovelSeed;
+  brain: WorldBrain;
+  chapter: number;
+}): ReturnType<typeof getChapterFrame> {
+  return {
+    title: `${input.chapter}화`, // 제목은 솎기(derived outline)의 몫
+    oneLiner: input.synth.oneLiner,
+    keyPoints: [],
+    keyPointCauses: [],
+    keyPointConsequences: [],
+    characterIds: input.synth.characterIds,
+    microBeats: deriveChapterMicroBeats({
+      seed: input.seed,
+      brain: input.brain,
+      chapter: input.chapter,
+      characterIds: input.synth.characterIds,
+    }).map((entry) => entry.beat),
+    tensionLevel: input.synth.tensionLevel,
+    threadIds: input.synth.threadIds,
+  };
+}
+
+/**
  * 챕터 outline / director pressure 에서 사건(plot-level) 행동을 결정적으로 도출한다.
  * 강한 신호가 있을 때만 (챕터당 최대 1개) 반환하므로, 대부분의 챕터는 기존과 동일하게 동작한다.
  * 같은 입력 → 같은 결과이므로 fast-path / full-path 가 동일하게 유지된다.
@@ -580,6 +611,8 @@ function derivePlotBeatForChapter(input: {
   characterIds: string[];
   tensionLevel: number;
   directorPressure: NarrativeDirectorPressure;
+  /** 역전 모드: 복선/자각 약속 이행(①)만 평가 — 사건 도출은 scheme 의 몫. */
+  invertedMode?: boolean;
 }): { action: CharacterActionType; instigatorRoles?: AgentRole[] } | undefined {
   const microBeats = deriveChapterMicroBeats({
     seed: input.seed,
@@ -597,6 +630,7 @@ function derivePlotBeatForChapter(input: {
   if (magicReveal) {
     return { action: "awaken_magic", instigatorRoles: ["protagonist"] };
   }
+  if (input.invertedMode) return undefined;
 
   // 2) 비밀 압박(강제 폭로) 또는 고긴장 전개 → 정면 충돌
   //    secret_pressure 는 본질적으로 "숨긴 것을 끄집어내는" 직면 비트라 긴장도와 무관하게 confront.
@@ -2359,6 +2393,8 @@ export function runWorldModelFirstSimulation(
     if (mind.scheme) schemeStates.set(mind.characterId, initSchemeState(mind.characterId, mind.scheme));
   }
   const schemeTimeline: SchemeTimelineEntry[] = [];
+  // 역전 모드: outline 없는 얇은 시드 → 프레임 합성 + beats 절단 (spec 2026-06-08 §5).
+  const inverted = seed.chapter_outlines.length === 0;
   const runtimeMindStates = options.initialCheckpoint
     ? cloneRuntimeMindStates(options.initialCheckpoint.runtimeMindStates)
     : createRuntimeMindStates(brain);
@@ -2405,7 +2441,14 @@ export function runWorldModelFirstSimulation(
 
   for (let chapter = startChapter; chapter <= endChapter; chapter += 1) {
     const actionLogCountBeforeChapter = actionLogs.length;
-    const frame = getChapterFrame(seed, chapter, brain);
+    const frame = inverted
+      ? adaptSynthesizedFrame({
+        synth: synthesizeChapterFrame({ seed, brain, chapter, totalChapters: endChapter, schemeStates }),
+        seed,
+        brain,
+        chapter,
+      })
+      : getChapterFrame(seed, chapter, brain);
     const priorityCharacterIds = options.outlineStrictMode
       ? []
       : selectLowActivityPriorityCharacterIds({
@@ -2545,6 +2588,7 @@ export function runWorldModelFirstSimulation(
           characterIds: scheduledCharacterIds,
           tensionLevel: frame.tensionLevel,
           directorPressure,
+          invertedMode: inverted,
         }),
         plannerEnabled,
         schemeContexts,
