@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import {
+  IntentProfileSchema,
   CharacterVoiceSchema,
   CharacterStateSchema,
   CharacterSchema,
@@ -315,5 +316,52 @@ describe("character reference helpers", () => {
   it("resolves full names and ids as well", () => {
     expect(resolveCharacterReference("세라핀 에델", characters)?.id).toBe("mc");
     expect(resolveCharacterReference("leon", characters)?.id).toBe("leon");
+  });
+});
+
+describe("scheme schema", () => {
+  const baseIntent = { surface_goal: "s", hidden_goal: "h", core_fear: "f" };
+  const scheme = {
+    objective: "약혼 파탄",
+    motive: "황태자비 자리",
+    target: "elysia",
+    stakes: { on_success: "내정", on_failure: "몰락", collateral: ["marian"] },
+    cover_story: "다정한 동생",
+    stages: [
+      {
+        id: "신뢰_쌓기",
+        goal: "곁에 머문다",
+        tactics: ["request_help", "maintain_mask"],
+        advance_when: { all: [{ trust_at_least: { from: "elysia", value: 2 } }, { chapter_at_least: 2 }] },
+        leaves_clue: "명단 흔적",
+        cost: "비밀 하나",
+        vulnerability: { fact: "명단 접근 기록", exploit_ops: ["request_access"] },
+        disrupted_when: { any: [{ secret_known_by: { secret: "명단 조작", by: "elysia" } }] },
+        dramatic_irony: "reader_knows",
+        tension_flow: "build_frustration",
+        stall_after_chapters: 4,
+      },
+      { id: "배신", goal: "공개 폭로", tactics: ["confront"], advance_when: null },
+    ],
+    payoff: { op: "confront", description: "공개 폭로" },
+    if_exposed: { response: "가속", exposure_threshold: 3 },
+    deadline: { chapter: 12, on_miss: "가속" },
+    accomplices: [{ id: "rael", role: "말", knows_full_plan: false }],
+  };
+
+  it("parses a full scheme on intent_profile", () => {
+    const parsed = IntentProfileSchema.parse({ ...baseIntent, scheme });
+    expect(parsed.scheme?.stages[0]?.id).toBe("신뢰_쌓기");
+    expect(parsed.scheme?.if_exposed.response).toBe("가속");
+  });
+
+  it("rejects unknown predicate vocabulary", () => {
+    const bad = { ...scheme, stages: [{ ...scheme.stages[0], advance_when: { mood_is: "ripe" } }, scheme.stages[1]] };
+    expect(IntentProfileSchema.safeParse({ ...baseIntent, scheme: bad }).success).toBe(false);
+  });
+
+  it("parses foreknowledge on intent_profile", () => {
+    const fore = IntentProfileSchema.parse({ ...baseIntent, foreknowledge: { source: "회귀", knows_schemes_of: ["serena"] } });
+    expect(fore.foreknowledge?.knows_schemes_of).toEqual(["serena"]);
   });
 });

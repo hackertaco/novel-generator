@@ -74,6 +74,76 @@ export const EventDispositionEnum = z.enum([
 
 export type EventDisposition = z.infer<typeof EventDispositionEnum>;
 
+// ── Scheme (음모) — 다화 책략의 시드 선언 ─────────────────────────────────────
+// spec: docs/superpowers/specs/2026-06-07-scheme-layer-design.md
+// 졸업/깨짐 조건은 기계 채점 가능한 술어 어휘만 허용 (자유 텍스트 금지).
+
+export const SchemePredicateSchema: z.ZodType<unknown> = z.lazy(() => z.union([
+  z.object({ trust_at_least: z.object({ from: z.string(), value: z.number().int() }) }).strict(),
+  z.object({ trust_below: z.object({ from: z.string(), value: z.number().int() }) }).strict(),
+  z.object({ event_occurred: z.object({ type: z.string(), by: z.string().optional(), target: z.string().optional() }) }).strict(),
+  z.object({ secret_known_by: z.object({ secret: z.string(), by: z.string() }) }).strict(),
+  z.object({ chapter_at_least: z.number().int().positive() }).strict(),
+  z.object({ scheme_stage_at: z.object({ of: z.string(), stage_index_at_least: z.number().int().nonnegative() }) }).strict(),
+  z.object({ exposure_at_least: z.number().int().positive() }).strict(),
+  z.object({ all: z.array(SchemePredicateSchema).min(1) }).strict(),
+  z.object({ any: z.array(SchemePredicateSchema).min(1) }).strict(),
+  z.object({ not: SchemePredicateSchema }).strict(),
+]));
+
+export const SchemeStageSchema = z.object({
+  id: z.string().describe("단계 식별자 (예: 신뢰_쌓기)"),
+  goal: z.string().describe("이 단계의 목표"),
+  tactics: z.array(z.string()).min(1).describe("이 단계에서 선호하는 operator들"),
+  advance_when: SchemePredicateSchema.nullable().default(null).describe("졸업 조건 (최종 단계는 null)"),
+  leaves_clue: z.string().optional().describe("이 단계가 흘리는 단서 (복선)"),
+  cost: z.string().optional().describe("이 단계에서 감수하는 손해"),
+  vulnerability: z.object({
+    fact: z.string(),
+    exploit_ops: z.array(z.string()).min(1),
+  }).optional().describe("이 단계가 노출하는 약점과 공략 가능한 operator"),
+  disrupted_when: SchemePredicateSchema.optional().describe("이 단계가 깨지는 조건"),
+  dramatic_irony: z.enum(["reader_knows", "reader_suspects", "reader_deceived"]).optional(),
+  tension_flow: z.enum(["build_frustration", "release_satisfaction", "neutral"]).optional(),
+  stall_after_chapters: z.number().int().positive().optional().describe("N화 무진전 시 교착 처리"),
+});
+
+export const SchemeSchema = z.object({
+  objective: z.string().describe("음모의 목표"),
+  motive: z.string().describe("동기 — 나중에 밝혀질 이유"),
+  target: z.string().describe("대상 인물 id"),
+  stakes: z.object({
+    on_success: z.string(),
+    on_failure: z.string(),
+    collateral: z.array(z.string()).default([]),
+  }).describe("판돈 — 성공/실패 시 결과"),
+  cover_story: z.string().describe("위장 — 겉으로 보이는 모습"),
+  stages: z.array(SchemeStageSchema).min(2).max(5),
+  payoff: z.object({ op: z.string(), description: z.string() }).describe("최종 회수의 사건 모양"),
+  if_exposed: z.object({
+    response: z.enum(["잠적", "가속", "포기"]),
+    exposure_threshold: z.number().int().positive(),
+  }),
+  deadline: z.object({
+    chapter: z.number().int().positive(),
+    on_miss: z.enum(["가속", "포기"]),
+  }).optional(),
+  accomplices: z.array(z.object({
+    id: z.string(),
+    role: z.enum(["공모", "말"]),
+    knows_full_plan: z.boolean(),
+  })).default([]),
+});
+
+export const ForeknowledgeSchema = z.object({
+  source: z.string().describe("앎의 출처 (예: 회귀)"),
+  knows_schemes_of: z.array(z.string()).min(1).describe("처음부터 구조를 아는 타인의 음모"),
+});
+
+export type Scheme = z.infer<typeof SchemeSchema>;
+export type SchemeStage = z.infer<typeof SchemeStageSchema>;
+export type Foreknowledge = z.infer<typeof ForeknowledgeSchema>;
+
 export const IntentProfileSchema = z.object({
   surface_goal: z.string().describe("겉으로 드러난 현재 목표"),
   hidden_goal: z.string().describe("숨기고 있는 진짜 목표"),
@@ -83,6 +153,8 @@ export const IntentProfileSchema = z.object({
   event_disposition: EventDispositionEnum.optional().describe(
     "이 인물이 기우는 사건(plot-level) 행동 — Planner가 자발 발화 판단에 사용. 미설정 시 사건 비기울임(none).",
   ),
+  scheme: SchemeSchema.optional().describe("다화 음모 — 전략은 여기 선언, 전술은 시뮬이 즉흥"),
+  foreknowledge: ForeknowledgeSchema.optional().describe("타인 음모의 사전 인지 (회귀물 핵심)"),
 });
 
 export type IntentProfile = z.infer<typeof IntentProfileSchema>;
