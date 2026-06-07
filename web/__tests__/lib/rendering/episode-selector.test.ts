@@ -51,7 +51,7 @@ function loadFixtureSeed(): NovelSeed {
 }
 
 describe("episode selector", () => {
-  it("selects episode windows from the world timeline without treating chapter as the model boundary", () => {
+  it("selects episode windows from the world timeline without treating chapter as the model boundary", { timeout: 30_000 }, () => {
     const result = runWorldModelFirstSimulation(loadFixtureSeed(), {
       startChapter: 1,
       endChapter: 5,

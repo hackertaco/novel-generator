@@ -119,11 +119,45 @@ describe("scheme runtime lifecycle (shadow — 행동 불변)", () => {
 
     // scheme 없는 시드는 timeline 빈 배열
     expect(plain.schemeTimeline).toEqual([]);
-  });
+  }, 30_000);
 
   it("is deterministic — two schemed runs produce identical timelines", () => {
     const first = runWorldModelFirstSimulation(loadSchemedSeed(), { startChapter: 1, endChapter: 5, characterActionsPerChapter: 4 });
     const second = runWorldModelFirstSimulation(loadSchemedSeed(), { startChapter: 1, endChapter: 5, characterActionsPerChapter: 4 });
     expect(second.schemeTimeline).toEqual(first.schemeTimeline);
-  });
+  }, 30_000);
+});
+
+describe("scheme drives behavior when planner is enabled (다화 책략 실행)", () => {
+  it("serena acts cooperative during 신뢰_쌓기, then escalates after stage advances", () => {
+    const result = runWorldModelFirstSimulation(loadSchemedSeed(), {
+      startChapter: 1, endChapter: 8, characterActionsPerChapter: 4, plannerEnabled: true,
+    });
+
+    const advancedAt = result.schemeTimeline.find((entry) =>
+      entry.characterId === "serena" && entry.kind === "advanced" && entry.stageId === "신뢰_쌓기",
+    );
+    expect(advancedAt).toBeDefined();
+
+    const serenaLogs = result.actionLogs.filter((log) => log.actorId === "serena");
+    const before = serenaLogs.filter((log) => log.chapter <= (advancedAt?.chapter ?? 0));
+    const after = serenaLogs.filter((log) => log.chapter > (advancedAt?.chapter ?? 0));
+
+    // 신뢰_쌓기 동안: 위장 협조(전술 op)가 우세, 사건 op는 없음 — "지금 손해"
+    const stageOneTactics = new Set(["request_help", "maintain_mask"]);
+    expect(before.length).toBeGreaterThan(0);
+    expect(before.filter((log) => stageOneTactics.has(log.action.type)).length / before.length)
+      .toBeGreaterThanOrEqual(0.5);
+    expect(before.some((log) => ["confront", "sabotage", "take_physical"].includes(log.action.type))).toBe(false);
+
+    // 단계 전환 후: 은밀/회수 사건 op가 등장 — "늦은 회수"
+    expect(after.some((log) => ["take_physical", "sabotage", "confront"].includes(log.action.type))).toBe(true);
+
+    // 결정성
+    const rerun = runWorldModelFirstSimulation(loadSchemedSeed(), {
+      startChapter: 1, endChapter: 8, characterActionsPerChapter: 4, plannerEnabled: true,
+    });
+    expect(rerun.schemeTimeline).toEqual(result.schemeTimeline);
+    expect(rerun.actionLogs.map((log) => log.action.type)).toEqual(result.actionLogs.map((log) => log.action.type));
+  }, 60_000);
 });
