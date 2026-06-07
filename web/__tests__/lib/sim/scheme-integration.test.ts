@@ -129,6 +129,22 @@ describe("scheme runtime lifecycle (shadow — 행동 불변)", () => {
   }, 30_000);
 });
 
+describe("scheme transition event promotion (B2a)", () => {
+  it("promotes scheme transitions to ledger-valid SimulationEvents with cut-point tags", () => {
+    const result = runWorldModelFirstSimulation(loadSchemedSeed(), {
+      startChapter: 1, endChapter: 4, characterActionsPerChapter: 4,
+    });
+    const transitions = (result.ledger.events ?? []).filter((event) =>
+      event.tags?.includes("scheme-transition"),
+    );
+    expect(transitions.length).toBeGreaterThanOrEqual(1);
+    expect(transitions[0]!.tags).toEqual(expect.arrayContaining(["cut-point-candidate"]));
+    expect(transitions[0]!.actorId).toBe("serena");
+    // 정식 장부 검증 통과 (순서/인과)
+    expect(result.report.validation.passed).toBe(true);
+  }, 60_000);
+});
+
 describe("scheme drives behavior when planner is enabled (다화 책략 실행)", () => {
   it("serena acts cooperative during 신뢰_쌓기, then escalates after stage advances", () => {
     const result = runWorldModelFirstSimulation(loadSchemedSeed(), {

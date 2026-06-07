@@ -568,6 +568,79 @@ function getChapterFrame(seed: NovelSeed, chapter: number, brain?: WorldBrain): 
 const PLOT_BEAT_MAGIC_PATTERN = /회귀|시간|마법|속성|봉인|각성|능력/;
 
 /**
+ * 음모 단계 전환을 정식 SimulationEvent 로 승격한다 (B2a).
+ * 솎기(derived outline)/편집 레이어가 정식 장부에서 절단 후보를 읽을 수 있게 한다.
+ */
+function buildSchemeTransitionEvent(input: {
+  chapter: number;
+  sequence: number;
+  location: string;
+  previousEvent?: SimulationEvent;
+  schemerId: string;
+  schemerName: string;
+  kind: SchemeHistoryKind;
+  stageId: string;
+}): SimulationEvent {
+  const eventId = `evt_world_ch${padChapter(input.chapter)}_scheme_${input.schemerId}_${input.kind}`;
+  const changeId = `${eventId}:scheme-stage`;
+  return {
+    id: eventId,
+    chapter: input.chapter,
+    episode: input.chapter,
+    sequence: input.sequence,
+    sceneId: `world_scene_${padChapter(input.chapter)}_agent_ticks`,
+    type: "status_change",
+    actorId: input.schemerId,
+    location: input.location,
+    summary: `음모 전개(${input.schemerName}): ${input.kind} — 단계 '${input.stageId}'`,
+    prerequisites: input.previousEvent
+      ? [{
+        prerequisiteId: `prior-event:${input.previousEvent.id}`,
+        type: "event",
+        description: input.previousEvent.summary,
+        eventId: input.previousEvent.id,
+        stateKey: `event:${input.previousEvent.id}`,
+      }]
+      : [],
+    involvedEntities: [{
+      entityId: input.schemerId,
+      entityType: "character",
+      role: "actor",
+      label: input.schemerName,
+    }],
+    stateChanges: [{
+      changeId,
+      domain: "world_model",
+      operation: "record",
+      stateKey: `scheme:${input.schemerId}:stage`,
+      summary: `음모 단계 ${input.stageId} (${input.kind})`,
+      entityIds: [input.schemerId],
+      afterValue: { kind: input.kind, stageId: input.stageId },
+    }],
+    outcomes: [{
+      outcomeId: `${eventId}:transition`,
+      type: "objective_fact_created",
+      summary: `음모 단계 전환: ${input.schemerName} → ${input.stageId} (${input.kind})`,
+      stateChangeIds: [changeId],
+    }],
+    tags: [
+      "world-model:first",
+      "simulation-first",
+      "scheme-transition",
+      `scheme:${input.schemerId}:${input.stageId}`,
+      "cut-point-candidate",
+    ],
+    payload: {
+      source: "scheme_engine",
+      schemerId: input.schemerId,
+      kind: input.kind,
+      stageId: input.stageId,
+      visibility: "audience",
+    },
+  };
+}
+
+/**
  * 역전 모드: 합성 프레임을 기존 frame 형태로 변환한다.
  * keyPoints 가 항상 빈 배열 → beats.forEach 가 no-op = beats 주입 절단.
  * 사건의 유일한 원천은 agent-tick (Planner + scheme).
@@ -1103,6 +1176,8 @@ function buildWorldEvent(input: {
   authority: WorldStateAuthority;
   chapter: number;
   beatIndex: number;
+  /** 챕터 내 단조 증가 sequence — beatIndex 와 분리 (genre 이벤트와의 충돌 방지). */
+  sequence: number;
   title: string;
   beat: string;
   cause?: string;
@@ -1131,7 +1206,7 @@ function buildWorldEvent(input: {
     id: eventId,
     chapter: input.chapter,
     episode: input.chapter,
-    sequence: input.beatIndex + 1,
+    sequence: input.sequence,
     sceneId,
     type: "plot_action",
     actorId,
@@ -1210,6 +1285,7 @@ function buildForeshadowEvent(input: {
       authority: input.authority,
       chapter: input.chapter,
       beatIndex: input.beatIndex + index,
+      sequence: input.beatIndex + index + 1,
       title: `${input.chapter}화 복선`,
       beat,
       cause: `${foreshadowing.id} scheduled ${action} at chapter ${input.chapter}`,
@@ -1616,6 +1692,7 @@ function buildWorldBrainActionEvents(input: {
       authority: input.authority,
       chapter: input.chapter,
       beatIndex: input.startBeatIndex + index,
+      sequence: input.startBeatIndex + index + 1,
       title: input.title,
       beat: decision.beat,
       cause: decision.cause,
@@ -2509,6 +2586,7 @@ export function runWorldModelFirstSimulation(
         authority,
         chapter,
         beatIndex: beatIndex + 1,
+        sequence: events.length + 1,
         title: frame.title,
         beat,
         cause: frame.keyPointCauses[beatIndex],
@@ -2717,6 +2795,20 @@ export function runWorldModelFirstSimulation(
             ...carryoverPressures,
             `음모 전개(${schemerMind.name}): ${entry.kind} — 현재 단계 '${activeStage?.id ?? "완료"}'`,
           ];
+          // B2a: 전환을 정식 이벤트로 승격 — 솎기/편집이 절단 후보로 읽는다.
+          const transitionEvent = buildSchemeTransitionEvent({
+            chapter,
+            sequence: events.length + 1,
+            location,
+            previousEvent,
+            schemerId,
+            schemerName: schemerMind.name,
+            kind: entry.kind,
+            stageId: entry.stageId,
+          });
+          applyEvent(transitionEvent);
+          events.push(transitionEvent);
+          previousEvent = transitionEvent;
         }
         schemeStates.set(schemerId, next);
       }
