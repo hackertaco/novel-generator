@@ -17,6 +17,7 @@ import {
 import {
   scoreOperatorBoard,
   type PlannerLogView,
+  type PlannerSchemeInput,
 } from "./planner-scorer";
 
 const StringListSchema = z.array(z.string());
@@ -353,6 +354,8 @@ export interface CharacterActionSimulationInput {
    * 미설정(기본 false)이면 기존 경로 — 동작 100% 불변.
    */
   plannerEnabled?: boolean;
+  /** actor 별 활성 음모 컨텍스트 (world-runner 가 SchemeState 에서 구성). */
+  schemeContexts?: Record<string, PlannerSchemeInput>;
 }
 
 export interface CompileActionLogsToEventsInput {
@@ -2908,6 +2911,7 @@ export function runCharacterActionSimulation(
 	      targetTrust: targetId ? relationTrust(mind, targetId) : 0,
 	      location: input.location,
 	      eventDisposition: mind.eventDisposition,
+	      scheme: input.schemeContexts?.[actorId],
 	      plotBeatBias: plotBeatAction ? { action: plotBeatAction, weight: 600 } : undefined,
 	      sceneActionLogs: actionLogs.map((priorLog): PlannerLogView => ({
 	        actorId: priorLog.actorId,

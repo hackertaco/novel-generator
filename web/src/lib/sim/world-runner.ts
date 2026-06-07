@@ -64,6 +64,7 @@ import {
   type SchemeRuntimeState,
   type SchemeWorldView,
 } from "./scheme-engine";
+import { ALL_OPS, type PlannerSchemeInput } from "./planner-scorer";
 
 interface CharacterActionDecision {
   beat: string;
@@ -2477,6 +2478,40 @@ export function runWorldModelFirstSimulation(
 
     if (enableWorldBrainActions && characterActionsPerChapter > 0 && characterSimulationMode === "agent_ticks") {
       const sceneId = `world_scene_${padChapter(chapter)}_agent_ticks`;
+      // 활성 음모를 Planner 컨텍스트로 변환 — schemer 본인은 단계 전술, 음모를 아는 자는 공략 op.
+      const isKnownOp = (value: string): value is CharacterActionType =>
+        (ALL_OPS as readonly string[]).includes(value);
+      const schemeContexts: Record<string, PlannerSchemeInput> = {};
+      for (const [schemerId, schemeState] of schemeStates) {
+        if (schemeState.status === "completed" || schemeState.status === "aborted") continue;
+        const schemerScheme = brain.characterMinds[schemerId]?.scheme;
+        const activeStage = schemerScheme?.stages[schemeState.currentStageIndex];
+        if (!schemerScheme || !activeStage) continue;
+        schemeContexts[schemerId] = {
+          stageTactics: activeStage.tactics.filter(isKnownOp),
+          schemeTargetId: schemerScheme.target,
+          atFinalStage: schemeState.currentStageIndex >= schemerScheme.stages.length - 1,
+          payoffOp: isKnownOp(schemerScheme.payoff.op) ? schemerScheme.payoff.op : undefined,
+        };
+      }
+      for (const mind of Object.values(brain.characterMinds)) {
+        if (schemeContexts[mind.characterId]) continue; // 본인 음모가 우선
+        for (const schemerId of mind.foreknownSchemes) {
+          const schemeState = schemeStates.get(schemerId);
+          if (!schemeState || schemeState.status === "completed" || schemeState.status === "aborted") continue;
+          const schemerScheme = brain.characterMinds[schemerId]?.scheme;
+          const activeStage = schemerScheme?.stages[schemeState.currentStageIndex];
+          const exploitOps = activeStage?.vulnerability?.exploit_ops.filter(isKnownOp) ?? [];
+          if (exploitOps.length === 0) continue;
+          schemeContexts[mind.characterId] = {
+            stageTactics: [],
+            schemeTargetId: schemerId, // 공략 대상 = schemer
+            atFinalStage: false,
+            exploitOps,
+          };
+          break; // v1: 처음 아는 음모 하나만
+        }
+      }
       const actionSimulation = runCharacterActionSimulation({
         seed,
         brain,
@@ -2508,6 +2543,7 @@ export function runWorldModelFirstSimulation(
           directorPressure,
         }),
         plannerEnabled,
+        schemeContexts,
       });
       actionLogs.push(...actionSimulation.actionLogs);
       interactionResolutions.push(...actionSimulation.interactionResolutions);
