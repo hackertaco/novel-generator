@@ -93,6 +93,11 @@ export interface PlannerScoreInput {
   scheme?: PlannerSchemeInput;
   /** 챕터간 carryover 압력 개수 (장편 호흡). */
   carryoverPressureCount?: number;
+  /**
+   * 이 (actor → 현재 target) pair 가 지금까지 일으킨 사건(EVENT_OPS) 누적 횟수 (cross-chapter).
+   * 같은 쌍에 사건을 도배하는 것을 누진 쿨다운으로 억제한다 (pair-cooldown).
+   */
+  eventPairCount?: number;
 }
 
 export interface OperatorScore {
@@ -139,6 +144,8 @@ const W = {
   pacingEventDistanceMul: -350,
   pacingEventPeakBonus: 250,
   pacingEventCooldown: -300,
+  pacingEventPairRepeatMul: -450,
+  pacingEventPairRepeatCap: 3,
   noiseMod: 80,
 } as const;
 
@@ -311,6 +318,9 @@ function pacingScore(input: PlannerScoreInput, op: CharacterActionType): number 
     if (input.tick >= input.peakTick) s += W.pacingEventPeakBonus;
     // 같은 사건 op 가 이미 이 scene 에서 나왔으면 쿨다운 (도배 방지).
     if (logs.some((log) => log.actionType === op)) s += W.pacingEventCooldown;
+    // pair-cooldown: 같은 (actor→target) 쌍의 사건 반복은 누진 페널티 (cross-chapter 도배 방지).
+    const pairRepeats = Math.min(input.eventPairCount ?? 0, W.pacingEventPairRepeatCap);
+    s += pairRepeats * W.pacingEventPairRepeatMul;
   }
   return s;
 }

@@ -64,7 +64,7 @@ import {
   type SchemeRuntimeState,
   type SchemeWorldView,
 } from "./scheme-engine";
-import { ALL_OPS, type PlannerSchemeInput } from "./planner-scorer";
+import { ALL_OPS, EVENT_OPS, type PlannerSchemeInput } from "./planner-scorer";
 
 interface CharacterActionDecision {
   beat: string;
@@ -2376,6 +2376,8 @@ export function runWorldModelFirstSimulation(
     ?? authority.getSimulationState().eventLog.at(-1);
   const cumulativeActionCounts = new Map<string, number>();
   const cumulativeInteractionCounts = new Map<string, number>();
+  // pair-cooldown: `${actorId}->${targetId}` 별 사건(EVENT_OPS) 누적 (같은 쌍 도배 방지).
+  const cumulativeEventPairCounts = new Map<string, number>();
   for (const event of authority.getSimulationState().eventLog) {
     if (event.tags?.includes("character-action") && event.actorId) {
       cumulativeActionCounts.set(
@@ -2544,7 +2546,15 @@ export function runWorldModelFirstSimulation(
         }),
         plannerEnabled,
         schemeContexts,
+        globalEventPairCounts: Object.fromEntries(cumulativeEventPairCounts),
       });
+      for (const log of actionSimulation.actionLogs) {
+        if (!EVENT_OPS.includes(log.action.type)) continue;
+        const eventTargetId = log.targetIds[0];
+        if (!eventTargetId) continue;
+        const pairKey = `${log.actorId}->${eventTargetId}`;
+        cumulativeEventPairCounts.set(pairKey, (cumulativeEventPairCounts.get(pairKey) ?? 0) + 1);
+      }
       actionLogs.push(...actionSimulation.actionLogs);
       interactionResolutions.push(...actionSimulation.interactionResolutions);
       simulationClocks.push(...actionSimulation.clocks);

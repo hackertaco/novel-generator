@@ -356,6 +356,8 @@ export interface CharacterActionSimulationInput {
   plannerEnabled?: boolean;
   /** actor 별 활성 음모 컨텍스트 (world-runner 가 SchemeState 에서 구성). */
   schemeContexts?: Record<string, PlannerSchemeInput>;
+  /** `${actorId}->${targetId}` 별 사건(EVENT_OPS) 누적 횟수 (pair-cooldown 용, cross-chapter). */
+  globalEventPairCounts?: Record<string, number>;
 }
 
 export interface CompileActionLogsToEventsInput {
@@ -2912,6 +2914,7 @@ export function runCharacterActionSimulation(
 	      location: input.location,
 	      eventDisposition: mind.eventDisposition,
 	      scheme: input.schemeContexts?.[actorId],
+	      eventPairCount: targetId ? input.globalEventPairCounts?.[`${actorId}->${targetId}`] ?? 0 : 0,
 	      plotBeatBias: plotBeatAction ? { action: plotBeatAction, weight: 600 } : undefined,
 	      sceneActionLogs: actionLogs.map((priorLog): PlannerLogView => ({
 	        actorId: priorLog.actorId,

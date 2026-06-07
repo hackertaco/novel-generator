@@ -167,6 +167,24 @@ describe("planner-scorer (Phase 0 deterministic utility scorer)", () => {
     expect(scoreOperatorBoard(input).actionType).toBe("confront");
   });
 
+  it("pair-cooldown: repeated events against the same target get progressively penalized (도배 방지)", () => {
+    const fresh = scoreOperator(
+      baseInput({ targetTrust: -2, eventDisposition: "confront", eventPairCount: 0 }),
+      "confront",
+    );
+    const repeated = scoreOperator(
+      baseInput({ targetTrust: -2, eventDisposition: "confront", eventPairCount: 3 }),
+      "confront",
+    );
+    expect(repeated.pacing).toBeLessThan(fresh.pacing);
+    // 3회 반복이면 disposition(+900)을 상쇄할 만큼 무거워야 함
+    expect(fresh.pacing - repeated.pacing).toBeGreaterThanOrEqual(900);
+    // 비사건 op에는 적용 안 됨
+    const probe = scoreOperator(baseInput({ targetTrust: -2, eventPairCount: 3 }), "probe_dialogue");
+    const probeFresh = scoreOperator(baseInput({ targetTrust: -2, eventPairCount: 0 }), "probe_dialogue");
+    expect(probe.pacing).toBe(probeFresh.pacing);
+  });
+
   it("pacing penalizes an operator the actor already used this scene", () => {
     const used = scoreOperator(
       baseInput({ sceneActionLogs: [{ actorId: "elysia", targetIds: ["serena"], actionType: "probe_dialogue", status: "accepted" }] }),
