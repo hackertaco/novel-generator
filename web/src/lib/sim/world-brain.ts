@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { Character } from "@/lib/schema/character";
+import { SchemeSchema, type Character } from "@/lib/schema/character";
 import type { NovelSeed, PlotArc } from "@/lib/schema/novel";
 import { conjunctiveParticle } from "@/lib/utils/korean";
 
@@ -95,6 +95,10 @@ export const CharacterMindSchema = z.object({
     "awaken_magic",
     "none",
   ]).optional(),
+  // 시드 intent_profile.scheme — 다화 음모. 전략은 선언, 전술은 시뮬 즉흥.
+  scheme: SchemeSchema.optional(),
+  // 시드 intent_profile.foreknowledge.knows_schemes_of — 회귀 인지(한 수 앞서기).
+  foreknownSchemes: z.array(z.string()).default([]),
   fears: StringListSchema,
   taboos: StringListSchema,
   leveragePoints: StringListSchema,
@@ -300,6 +304,8 @@ function buildCharacterMind(character: Character): CharacterMind {
       need: internalArc?.need ?? "성장에 필요한 내면 진실 미정",
     },
     eventDisposition: intent?.event_disposition,
+    scheme: intent?.scheme,
+    foreknownSchemes: intent?.foreknowledge?.knows_schemes_of ?? [],
     fears: compact([coreFear]),
     taboos: compact(intent?.taboo_actions ?? []),
     leveragePoints: compact(intent?.leverage_points ?? []),
@@ -475,6 +481,19 @@ export function buildWorldBrainFromSeed(seed: NovelSeed): WorldBrain {
   const characterMinds = Object.fromEntries(
     seed.characters.map((character) => [character.id, buildCharacterMind(character)]),
   );
+
+  // foreknowledge(회귀 인지): 아는 쪽 인물의 knownFacts에 타인 음모의 구조를 주입.
+  // "주인공이 왜 한 수 앞서는가"의 시스템적 근거.
+  for (const mind of Object.values(characterMinds)) {
+    for (const schemerId of mind.foreknownSchemes) {
+      const schemerMind = characterMinds[schemerId];
+      if (!schemerMind?.scheme) continue;
+      const stageSummary = schemerMind.scheme.stages.map((stage) => stage.id).join(" → ");
+      mind.knownFacts.push(
+        `[음모 인지] ${schemerMind.name}: ${schemerMind.scheme.objective} (단계: ${stageSummary})`,
+      );
+    }
+  }
 
   const hiddenTruths = compact([
     ...seed.foreshadowing.map((fs) => fs.canonical_target ?? fs.description),

@@ -57,6 +57,13 @@ import {
 import type { SimulationEvent, SimulationState } from "./types";
 import { buildGenreConventionEvents } from "./genre-convention";
 import { deriveChapterMicroBeats } from "./chapter-outline-derivation";
+import {
+  evaluateSchemeChapter,
+  initSchemeState,
+  type SchemeHistoryKind,
+  type SchemeRuntimeState,
+  type SchemeWorldView,
+} from "./scheme-engine";
 
 interface CharacterActionDecision {
   beat: string;
@@ -167,6 +174,13 @@ export interface WorldModelRunReport {
   costUsd: 0;
 }
 
+export interface SchemeTimelineEntry {
+  chapter: number;
+  characterId: string;
+  kind: SchemeHistoryKind;
+  stageId: string;
+}
+
 export interface WorldModelRunResult {
   seed: NovelSeed;
   brain: WorldBrain;
@@ -181,6 +195,8 @@ export interface WorldModelRunResult {
   checkpoint: WorldModelRunCheckpoint;
   chapters: WorldModelRenderedChapter[];
   report: WorldModelRunReport;
+  /** 음모 단계 전환 기록 (v1: SimulationEvent 승격 대신 timeline — spec §4.2 보정). */
+  schemeTimeline: SchemeTimelineEntry[];
 }
 
 function padChapter(chapter: number): string {
@@ -2334,6 +2350,12 @@ export function runWorldModelFirstSimulation(
   const characterSimulationMode = options.characterSimulationMode ?? "agent_ticks";
   const plannerEnabled = options.plannerEnabled ?? false;
   const brain = buildWorldBrainFromSeed(seed);
+  // 음모(scheme) 런타임: 보유 인물별 상태를 챕터 간 carry. 시드 순서라 결정적.
+  const schemeStates = new Map<string, SchemeRuntimeState>();
+  for (const mind of Object.values(brain.characterMinds)) {
+    if (mind.scheme) schemeStates.set(mind.characterId, initSchemeState(mind.characterId, mind.scheme));
+  }
+  const schemeTimeline: SchemeTimelineEntry[] = [];
   const runtimeMindStates = options.initialCheckpoint
     ? cloneRuntimeMindStates(options.initialCheckpoint.runtimeMindStates)
     : createRuntimeMindStates(brain);
@@ -2377,6 +2399,7 @@ export function runWorldModelFirstSimulation(
       : authority.applyEvent(event);
 
   for (let chapter = startChapter; chapter <= endChapter; chapter += 1) {
+    const actionLogCountBeforeChapter = actionLogs.length;
     const frame = getChapterFrame(seed, chapter, brain);
     const priorityCharacterIds = options.outlineStrictMode
       ? []
@@ -2548,6 +2571,65 @@ export function runWorldModelFirstSimulation(
       }
     }
 
+    // 음모 단계 평가 (챕터당 1회, 결정적). 전환은 timeline 기록 + 차기 챕터 pressure 주입.
+    if (schemeStates.size > 0) {
+      const chapterLogs = actionLogs.slice(actionLogCountBeforeChapter);
+      for (const [schemerId, state] of schemeStates) {
+        const schemerMind = brain.characterMinds[schemerId];
+        const scheme = schemerMind?.scheme;
+        if (!schemerMind || !scheme) continue;
+
+        // 들킴 게이지: 이 챕터에서 schemer의 은밀 행동이 (공모자 외) 목격되거나 backfired.
+        const accompliceIds = new Set(scheme.accomplices.map((accomplice) => accomplice.id));
+        let exposureDelta = 0;
+        for (const log of chapterLogs) {
+          if (log.actorId !== schemerId) continue;
+          if (log.action.type !== "sabotage" && log.action.type !== "take_physical") continue;
+          const witnessed = log.actualEffect.worldGameMaster.witnessCharacterIds
+            .some((id) => id !== schemerId && !accompliceIds.has(id));
+          if (witnessed || log.action.operator.status === "backfired") exposureDelta += 1;
+        }
+        const gauged = exposureDelta > 0
+          ? { ...state, exposureGauge: state.exposureGauge + exposureDelta }
+          : state;
+
+        const view: SchemeWorldView = {
+          chapter,
+          trustOf: (from) => {
+            const fromMind = brain.characterMinds[from];
+            const base = fromMind?.relationshipModel[schemerId]?.trustLevel ?? 0;
+            const delta = runtimeMindStates[from]?.trustDeltasByCharacter?.[schemerId] ?? 0;
+            return base + delta;
+          },
+          knowsFact: (secret, by) =>
+            (runtimeMindStates[by]?.knownFacts ?? []).some((fact) => fact.includes(secret))
+            || (brain.characterMinds[by]?.knownFacts ?? []).some((fact) => fact.includes(secret)),
+          eventOccurred: (query) => actionLogs.some((log) =>
+            log.action.type === query.type
+            && (!query.by || log.actorId === query.by)
+            && (!query.target || log.targetIds.includes(query.target))),
+          schemeStageIndexOf: (characterId) => schemeStates.get(characterId)?.currentStageIndex,
+          exposureOf: () => gauged.exposureGauge,
+        };
+        const next = evaluateSchemeChapter({
+          state: gauged,
+          scheme,
+          view,
+          targetPresent: Boolean(brain.characterMinds[gauged.targetId]),
+        });
+        if (next.history.length > state.history.length) {
+          const entry = next.history[next.history.length - 1]!;
+          schemeTimeline.push({ chapter, characterId: schemerId, kind: entry.kind, stageId: entry.stageId });
+          const activeStage = scheme.stages[next.currentStageIndex];
+          carryoverPressures = [
+            ...carryoverPressures,
+            `음모 전개(${schemerMind.name}): ${entry.kind} — 현재 단계 '${activeStage?.id ?? "완료"}'`,
+          ];
+        }
+        schemeStates.set(schemerId, next);
+      }
+    }
+
     const foreshadowEvents = buildForeshadowEvent({
       seed,
       authority,
@@ -2627,6 +2709,7 @@ export function runWorldModelFirstSimulation(
     runtimeMindStates,
     checkpoint,
     chapters,
+    schemeTimeline,
     report: {
       mode: "simulation_first_world_model",
       title: seed.title,
