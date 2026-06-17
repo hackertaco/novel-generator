@@ -37,6 +37,7 @@ import type { SimulationCausalLedger } from "../src/lib/sim/causal-ledger";
 import type { CharacterActionLog } from "../src/lib/sim/character-action-sim";
 import type { SceneLog } from "../src/lib/sim/scene-log";
 import { runWorldModelFirstSimulation } from "../src/lib/sim/world-runner";
+import type { SchemeTimelineEntry } from "../src/lib/sim/world-runner";
 
 type WriterMode = "renderer" | "llm" | "episode-llm" | "episode-prompt" | "episode-draft";
 
@@ -89,10 +90,21 @@ async function writeDerivedOutlineArtifacts(input: {
   outDir: string;
   result: {
     seed: NovelSeed;
-    sceneLogs: Array<{ sceneId: string; chapter: number; sourceEventIds: string[] }>;
-    actionLogs: Array<{ chapter: number; actualEffect: { scenePressureDelta: number } }>;
-    ledger: { events: Array<{ id: string; chapter: number; tags?: string[]; summary: string }> };
-    schemeTimeline: unknown;
+    sceneLogs: Array<{
+      sceneId: string;
+      chapter: number;
+      sourceEventIds: string[];
+      location: string;
+      sceneOutcome: string;
+      sourceActionLogIds: string[];
+    }>;
+    actionLogs: Array<{
+      logId: string;
+      chapter: number;
+      actualEffect: { scenePressureDelta: number; followUpActionSeed: string };
+    }>;
+    ledger: SimulationCausalLedger;
+    schemeTimeline: SchemeTimelineEntry[];
   };
   targetEpisodeCount?: number;
   writeJson: (filePath: string, value: unknown) => void;
@@ -125,16 +137,50 @@ async function writeDerivedOutlineArtifacts(input: {
   });
   const eventSummariesById = Object.fromEntries(events.map((event) => [event.id, event.summary]));
   const labeled = await labelDerivedOutline({ outline, eventSummariesById });
-  input.writeJson(path.join(outDir, "derived-outline.json"), labeled);
+  const sceneLogById = new Map(result.sceneLogs.map((scene) => [scene.sceneId, scene]));
+  const bridgeEvents = result.ledger.events.map((event) => ({
+    id: event.id,
+    chapter: event.chapter,
+    sceneId: event.sceneId,
+    triggeredBy: typeof event.payload?.["triggeredBy"] === "string"
+      ? (event.payload["triggeredBy"] as string)
+      : undefined,
+  }));
+  const bridgeActionLogs = result.actionLogs.map((log) => ({
+    logId: log.logId,
+    chapter: log.chapter,
+    followUpActionSeed: log.actualEffect.followUpActionSeed,
+  }));
+  const schemeEntries = result.schemeTimeline;
+  const labeledWithBridges: DerivedOutline = {
+    ...labeled,
+    chapters: labeled.chapters.map((chapter) => ({
+      ...chapter,
+      bridges: buildSceneBridges({
+        sceneLogs: chapter.sourceSceneIds
+          .map((sceneId) => sceneLogById.get(sceneId))
+          .filter((scene): scene is NonNullable<typeof scene> => Boolean(scene)),
+        actionLogs: bridgeActionLogs,
+        events: bridgeEvents,
+        schemeTimeline: schemeEntries,
+      }),
+    })),
+  };
+  input.writeJson(path.join(outDir, "derived-outline.json"), labeledWithBridges);
   const markdown = [
     "# Derived Outline (발견된 줄거리)",
     "",
-    ...labeled.chapters.map((chapter) =>
-      `## ${chapter.title} — ${chapter.oneLiner}\n- 장면: ${chapter.sourceSceneIds.join(", ")}\n- 절단: ${chapter.endsOn ?? "-"} (tension ${chapter.tensionPeak})`,
-    ),
+    ...labeledWithBridges.chapters.map((chapter) => [
+      `## ${chapter.title} — ${chapter.oneLiner}`,
+      `- 장면: ${chapter.sourceSceneIds.join(", ")}`,
+      `- 절단: ${chapter.endsOn ?? "-"} (tension ${chapter.tensionPeak})`,
+      ...(chapter.bridges ?? []).map((bridge) =>
+        `- 다리: ${bridge.fromSceneId} → ${bridge.toSceneId} (시간단위 ${bridge.timeGapChapters}, ${bridge.fromLocation} → ${bridge.toLocation}) 미해결: ${bridge.unresolvedPressure}`,
+      ),
+    ].join("\n")),
   ].join("\n");
   fs.writeFileSync(path.join(outDir, "derived-outline.md"), markdown, "utf8");
-  return labeled;
+  return labeledWithBridges;
 }
 
 function parseChapterRange(value: string): { startChapter: number; endChapter: number } {
