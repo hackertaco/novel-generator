@@ -15,6 +15,7 @@ import {
   formatCompressedEpisodePromptSource,
 } from "./episode-prompt-compressor";
 import type { WorldEpisodeWindow } from "./episode-selector";
+import { formatSceneBridgesForPrompt, type SceneBridge } from "./scene-bridge";
 import { validateNarrativeProse } from "./narrative-prose-validator";
 import type { WorldLogEditorialMap } from "./world-log-editorial-map";
 
@@ -66,6 +67,7 @@ export interface BuildEpisodeWindowWriterPromptInput {
   actionLogs: CharacterActionLog[];
   editorialPlans?: EditorialPlan[];
   worldLogEditorialMap?: WorldLogEditorialMap;
+  sceneBridges?: SceneBridge[];
   previousEpisodeEnding?: string;
   repairContext?: {
     previousDraft: string;
@@ -474,6 +476,17 @@ export function buildEpisodeWindowWriterPrompt(input: BuildEpisodeWindowWriterPr
     `# scene seam contract`,
     `- scene 경계를 "그 아침이 지나고", "그리고 [장소]", "장소만 바뀌었을 뿐"처럼 설명하지 않는다.`,
     `- 장소 전환은 문을 여는 손, 물건, 따라붙은 시선, 끊긴 대사의 다음 호흡으로 시작한다.`,
+    ``,
+    input.sceneBridges && input.sceneBridges.length > 0
+      ? [
+          `# 장면 다리 (scene bridges)`,
+          `장면 사이의 간극 정보다. 각 다리는 summary_bridge 한 단락으로 본문에서 메운다.`,
+          `- 앞 장면의 미해결 압력이 다음 장면 첫 행동의 이유가 되도록 잇는다.`,
+          `- 경과 시간/장소 이동은 "다음 날", "장소만 바뀌었을 뿐" 같은 설명문 대신 행동/빛/사물로 보인다.`,
+          `- 다리의 단어를 본문에 그대로 베끼지 않는다.`,
+          safe(formatSceneBridgesForPrompt(input.sceneBridges)),
+        ].join("\n")
+      : "",
     ``,
     `# episode 구성 규칙`,
     `1. scene id 순서를 유지하되, scene 경계는 독자가 못 느끼게 자연스럽게 잇는다.`,
