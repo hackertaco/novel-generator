@@ -28,6 +28,12 @@ import {
   labelDerivedOutline,
   type DerivedOutline,
 } from "../src/lib/rendering/derived-outline";
+import {
+  buildSceneBridges,
+  type SceneBridge,
+  type SceneBridgeEventInput,
+} from "../src/lib/rendering/scene-bridge";
+import type { SimulationCausalLedger } from "../src/lib/sim/causal-ledger";
 import type { CharacterActionLog } from "../src/lib/sim/character-action-sim";
 import type { SceneLog } from "../src/lib/sim/scene-log";
 import { runWorldModelFirstSimulation } from "../src/lib/sim/world-runner";
@@ -609,6 +615,40 @@ function formatRendererEditorialPlanMarkdown(summary: RendererEditorialPlanSumma
   return `${lines.join("\n").trim()}\n`;
 }
 
+function buildEpisodeSceneBridges(input: {
+  episodeWindow: WorldEpisodeWindow;
+  result: {
+    sceneLogs: SceneLog[];
+    actionLogs: CharacterActionLog[];
+    ledger: SimulationCausalLedger;
+    schemeTimeline: Array<{ chapter: number; characterId: string; stageId: string }>;
+  };
+}): SceneBridge[] {
+  const sceneLogById = new Map(input.result.sceneLogs.map((sceneLog) => [sceneLog.sceneId, sceneLog]));
+  const windowSceneLogs = input.episodeWindow.sourceSceneIds
+    .map((sceneId) => sceneLogById.get(sceneId))
+    .filter((sceneLog): sceneLog is SceneLog => Boolean(sceneLog));
+  const events: SceneBridgeEventInput[] = input.result.ledger.events.map((event) => {
+    const triggeredBy = event.payload?.["triggeredBy"];
+    return {
+      id: event.id,
+      chapter: event.chapter,
+      sceneId: event.sceneId,
+      triggeredBy: typeof triggeredBy === "string" ? triggeredBy : undefined,
+    };
+  });
+  return buildSceneBridges({
+    sceneLogs: windowSceneLogs,
+    actionLogs: input.result.actionLogs.map((log) => ({
+      logId: log.logId,
+      chapter: log.chapter,
+      followUpActionSeed: log.actualEffect.followUpActionSeed,
+    })),
+    events,
+    schemeTimeline: input.result.schemeTimeline,
+  });
+}
+
 async function writeEpisodeWithQa(input: {
   seed: NovelSeed;
   worldBrain: Parameters<typeof writeEpisodeWindowNovel>[0]["worldBrain"];
@@ -616,6 +656,7 @@ async function writeEpisodeWithQa(input: {
   sceneLogs: SceneLog[];
   actionLogs: CharacterActionLog[];
   worldLogEditorialMap: Parameters<typeof writeEpisodeWindowNovel>[0]["worldLogEditorialMap"];
+  sceneBridges?: SceneBridge[];
   previousEpisodeEnding: string;
   model?: string;
   qaRepairAttempts: number;
@@ -632,6 +673,7 @@ async function writeEpisodeWithQa(input: {
       sceneLogs: input.sceneLogs,
       actionLogs: input.actionLogs,
       worldLogEditorialMap: input.worldLogEditorialMap,
+      sceneBridges: input.sceneBridges,
       previousEpisodeEnding: input.previousEpisodeEnding,
       model: input.model,
       repairContext,
@@ -859,6 +901,7 @@ async function main(): Promise<void> {
   if (options.writerMode === "episode-llm") {
     let previousEpisodeEnding = "";
     for (const episodeWindow of episodeSelection.windows) {
+      const sceneBridges = buildEpisodeSceneBridges({ episodeWindow, result });
       const episodeRun = await writeEpisodeWithQa({
         seed,
         worldBrain: result.brain,
@@ -866,6 +909,7 @@ async function main(): Promise<void> {
         sceneLogs: result.sceneLogs,
         actionLogs: result.actionLogs,
         worldLogEditorialMap,
+        sceneBridges,
         previousEpisodeEnding,
         model: options.writerModel,
         qaRepairAttempts: options.qaRepairAttempts,
@@ -906,6 +950,7 @@ async function main(): Promise<void> {
   }
   if (options.writerMode === "episode-prompt") {
     for (const episodeWindow of episodeSelection.windows) {
+      const sceneBridges = buildEpisodeSceneBridges({ episodeWindow, result });
       const prompt = buildEpisodeWindowWriterPrompt({
         seed,
         worldBrain: result.brain,
@@ -913,6 +958,7 @@ async function main(): Promise<void> {
         sceneLogs: result.sceneLogs,
         actionLogs: result.actionLogs,
         worldLogEditorialMap,
+        sceneBridges,
       });
       const treatmentDecisions = worldLogEditorialMap.chapters
         .filter((chapter) => episodeWindow.sourceSceneIds.includes(chapter.sceneId))
