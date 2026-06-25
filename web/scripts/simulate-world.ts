@@ -57,6 +57,8 @@ interface SimulateWorldCliOptions {
   qaPassThreshold: number;
   selectionOnly: boolean;
   plannerEnabled?: boolean;
+  /** 장면 다리 주입 비활성화 (A/B 검증용). 기본값 = 켜짐. */
+  sceneBridgesEnabled: boolean;
 }
 
 function usage(): string {
@@ -79,6 +81,7 @@ function usage(): string {
     "  --qa-pass-threshold <n>   Minimum episode QA score for pass (default: 0.82)",
     "  --planner / --no-planner  Utility-scoring Planner 강제 on/off (미지정 시 world-runner 기본값 = on)",
     "  --selection-only  Generate world logs and episode windows only; skip prose rendering and LLM writing",
+    "  --no-scene-bridges  Disable scene-bridge injection into episode prompts (A/B verification)",
   ].join("\n");
 }
 
@@ -214,6 +217,7 @@ function parseArgs(args = process.argv.slice(2)): SimulateWorldCliOptions {
   let qaPassThreshold = 0.82;
   let selectionOnly = false;
   let plannerEnabled: boolean | undefined;
+  let sceneBridgesEnabled = true;
 
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
@@ -319,6 +323,9 @@ function parseArgs(args = process.argv.slice(2)): SimulateWorldCliOptions {
       case "--selection-only":
         selectionOnly = true;
         break;
+      case "--no-scene-bridges":
+        sceneBridgesEnabled = false;
+        break;
       case "--help":
       case "-h":
         console.log(usage());
@@ -347,6 +354,7 @@ function parseArgs(args = process.argv.slice(2)): SimulateWorldCliOptions {
     qaPassThreshold,
     selectionOnly,
     plannerEnabled,
+    sceneBridgesEnabled,
   };
 }
 
@@ -947,7 +955,9 @@ async function main(): Promise<void> {
   if (options.writerMode === "episode-llm") {
     let previousEpisodeEnding = "";
     for (const episodeWindow of episodeSelection.windows) {
-      const sceneBridges = buildEpisodeSceneBridges({ episodeWindow, result });
+      const sceneBridges = options.sceneBridgesEnabled
+        ? buildEpisodeSceneBridges({ episodeWindow, result })
+        : [];
       const episodeRun = await writeEpisodeWithQa({
         seed,
         worldBrain: result.brain,
@@ -996,7 +1006,9 @@ async function main(): Promise<void> {
   }
   if (options.writerMode === "episode-prompt") {
     for (const episodeWindow of episodeSelection.windows) {
-      const sceneBridges = buildEpisodeSceneBridges({ episodeWindow, result });
+      const sceneBridges = options.sceneBridgesEnabled
+        ? buildEpisodeSceneBridges({ episodeWindow, result })
+        : [];
       const prompt = buildEpisodeWindowWriterPrompt({
         seed,
         worldBrain: result.brain,
