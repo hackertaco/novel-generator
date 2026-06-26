@@ -28,9 +28,16 @@ import {
   labelDerivedOutline,
   type DerivedOutline,
 } from "../src/lib/rendering/derived-outline";
+import {
+  buildSceneBridges,
+  type SceneBridge,
+  type SceneBridgeEventInput,
+} from "../src/lib/rendering/scene-bridge";
+import type { SimulationCausalLedger } from "../src/lib/sim/causal-ledger";
 import type { CharacterActionLog } from "../src/lib/sim/character-action-sim";
 import type { SceneLog } from "../src/lib/sim/scene-log";
 import { runWorldModelFirstSimulation } from "../src/lib/sim/world-runner";
+import type { SchemeTimelineEntry } from "../src/lib/sim/world-runner";
 
 type WriterMode = "renderer" | "llm" | "episode-llm" | "episode-prompt" | "episode-draft";
 
@@ -50,6 +57,8 @@ interface SimulateWorldCliOptions {
   qaPassThreshold: number;
   selectionOnly: boolean;
   plannerEnabled?: boolean;
+  /** 장면 다리 주입 비활성화 (A/B 검증용). 기본값 = 켜짐. */
+  sceneBridgesEnabled: boolean;
 }
 
 function usage(): string {
@@ -72,6 +81,7 @@ function usage(): string {
     "  --qa-pass-threshold <n>   Minimum episode QA score for pass (default: 0.82)",
     "  --planner / --no-planner  Utility-scoring Planner 강제 on/off (미지정 시 world-runner 기본값 = on)",
     "  --selection-only  Generate world logs and episode windows only; skip prose rendering and LLM writing",
+    "  --no-scene-bridges  Disable scene-bridge injection into episode prompts (A/B verification)",
   ].join("\n");
 }
 
@@ -83,10 +93,21 @@ async function writeDerivedOutlineArtifacts(input: {
   outDir: string;
   result: {
     seed: NovelSeed;
-    sceneLogs: Array<{ sceneId: string; chapter: number; sourceEventIds: string[] }>;
-    actionLogs: Array<{ chapter: number; actualEffect: { scenePressureDelta: number } }>;
-    ledger: { events: Array<{ id: string; chapter: number; tags?: string[]; summary: string }> };
-    schemeTimeline: unknown;
+    sceneLogs: Array<{
+      sceneId: string;
+      chapter: number;
+      sourceEventIds: string[];
+      location: string;
+      sceneOutcome: string;
+      sourceActionLogIds: string[];
+    }>;
+    actionLogs: Array<{
+      logId: string;
+      chapter: number;
+      actualEffect: { scenePressureDelta: number; followUpActionSeed: string };
+    }>;
+    ledger: SimulationCausalLedger;
+    schemeTimeline: SchemeTimelineEntry[];
   };
   targetEpisodeCount?: number;
   writeJson: (filePath: string, value: unknown) => void;
@@ -119,16 +140,50 @@ async function writeDerivedOutlineArtifacts(input: {
   });
   const eventSummariesById = Object.fromEntries(events.map((event) => [event.id, event.summary]));
   const labeled = await labelDerivedOutline({ outline, eventSummariesById });
-  input.writeJson(path.join(outDir, "derived-outline.json"), labeled);
+  const sceneLogById = new Map(result.sceneLogs.map((scene) => [scene.sceneId, scene]));
+  const bridgeEvents = result.ledger.events.map((event) => ({
+    id: event.id,
+    chapter: event.chapter,
+    sceneId: event.sceneId,
+    triggeredBy: typeof event.payload?.["triggeredBy"] === "string"
+      ? (event.payload["triggeredBy"] as string)
+      : undefined,
+  }));
+  const bridgeActionLogs = result.actionLogs.map((log) => ({
+    logId: log.logId,
+    chapter: log.chapter,
+    followUpActionSeed: log.actualEffect.followUpActionSeed,
+  }));
+  const schemeEntries = result.schemeTimeline;
+  const labeledWithBridges: DerivedOutline = {
+    ...labeled,
+    chapters: labeled.chapters.map((chapter) => ({
+      ...chapter,
+      bridges: buildSceneBridges({
+        sceneLogs: chapter.sourceSceneIds
+          .map((sceneId) => sceneLogById.get(sceneId))
+          .filter((scene): scene is NonNullable<typeof scene> => Boolean(scene)),
+        actionLogs: bridgeActionLogs,
+        events: bridgeEvents,
+        schemeTimeline: schemeEntries,
+      }),
+    })),
+  };
+  input.writeJson(path.join(outDir, "derived-outline.json"), labeledWithBridges);
   const markdown = [
     "# Derived Outline (발견된 줄거리)",
     "",
-    ...labeled.chapters.map((chapter) =>
-      `## ${chapter.title} — ${chapter.oneLiner}\n- 장면: ${chapter.sourceSceneIds.join(", ")}\n- 절단: ${chapter.endsOn ?? "-"} (tension ${chapter.tensionPeak})`,
-    ),
+    ...labeledWithBridges.chapters.map((chapter) => [
+      `## ${chapter.title} — ${chapter.oneLiner}`,
+      `- 장면: ${chapter.sourceSceneIds.join(", ")}`,
+      `- 절단: ${chapter.endsOn ?? "-"} (tension ${chapter.tensionPeak})`,
+      ...(chapter.bridges ?? []).map((bridge) =>
+        `- 다리: ${bridge.fromSceneId} → ${bridge.toSceneId} (시간단위 ${bridge.timeGapChapters}, ${bridge.fromLocation} → ${bridge.toLocation}) 미해결: ${bridge.unresolvedPressure}`,
+      ),
+    ].join("\n")),
   ].join("\n");
   fs.writeFileSync(path.join(outDir, "derived-outline.md"), markdown, "utf8");
-  return labeled;
+  return labeledWithBridges;
 }
 
 function parseChapterRange(value: string): { startChapter: number; endChapter: number } {
@@ -162,6 +217,7 @@ function parseArgs(args = process.argv.slice(2)): SimulateWorldCliOptions {
   let qaPassThreshold = 0.82;
   let selectionOnly = false;
   let plannerEnabled: boolean | undefined;
+  let sceneBridgesEnabled = true;
 
   for (let index = 0; index < args.length; index += 1) {
     const token = args[index];
@@ -267,6 +323,9 @@ function parseArgs(args = process.argv.slice(2)): SimulateWorldCliOptions {
       case "--selection-only":
         selectionOnly = true;
         break;
+      case "--no-scene-bridges":
+        sceneBridgesEnabled = false;
+        break;
       case "--help":
       case "-h":
         console.log(usage());
@@ -295,6 +354,7 @@ function parseArgs(args = process.argv.slice(2)): SimulateWorldCliOptions {
     qaPassThreshold,
     selectionOnly,
     plannerEnabled,
+    sceneBridgesEnabled,
   };
 }
 
@@ -609,6 +669,40 @@ function formatRendererEditorialPlanMarkdown(summary: RendererEditorialPlanSumma
   return `${lines.join("\n").trim()}\n`;
 }
 
+function buildEpisodeSceneBridges(input: {
+  episodeWindow: WorldEpisodeWindow;
+  result: {
+    sceneLogs: SceneLog[];
+    actionLogs: CharacterActionLog[];
+    ledger: SimulationCausalLedger;
+    schemeTimeline: Array<{ chapter: number; characterId: string; stageId: string }>;
+  };
+}): SceneBridge[] {
+  const sceneLogById = new Map(input.result.sceneLogs.map((sceneLog) => [sceneLog.sceneId, sceneLog]));
+  const windowSceneLogs = input.episodeWindow.sourceSceneIds
+    .map((sceneId) => sceneLogById.get(sceneId))
+    .filter((sceneLog): sceneLog is SceneLog => Boolean(sceneLog));
+  const events: SceneBridgeEventInput[] = input.result.ledger.events.map((event) => {
+    const triggeredBy = event.payload?.["triggeredBy"];
+    return {
+      id: event.id,
+      chapter: event.chapter,
+      sceneId: event.sceneId,
+      triggeredBy: typeof triggeredBy === "string" ? triggeredBy : undefined,
+    };
+  });
+  return buildSceneBridges({
+    sceneLogs: windowSceneLogs,
+    actionLogs: input.result.actionLogs.map((log) => ({
+      logId: log.logId,
+      chapter: log.chapter,
+      followUpActionSeed: log.actualEffect.followUpActionSeed,
+    })),
+    events,
+    schemeTimeline: input.result.schemeTimeline,
+  });
+}
+
 async function writeEpisodeWithQa(input: {
   seed: NovelSeed;
   worldBrain: Parameters<typeof writeEpisodeWindowNovel>[0]["worldBrain"];
@@ -616,6 +710,7 @@ async function writeEpisodeWithQa(input: {
   sceneLogs: SceneLog[];
   actionLogs: CharacterActionLog[];
   worldLogEditorialMap: Parameters<typeof writeEpisodeWindowNovel>[0]["worldLogEditorialMap"];
+  sceneBridges?: SceneBridge[];
   previousEpisodeEnding: string;
   model?: string;
   qaRepairAttempts: number;
@@ -632,6 +727,7 @@ async function writeEpisodeWithQa(input: {
       sceneLogs: input.sceneLogs,
       actionLogs: input.actionLogs,
       worldLogEditorialMap: input.worldLogEditorialMap,
+      sceneBridges: input.sceneBridges,
       previousEpisodeEnding: input.previousEpisodeEnding,
       model: input.model,
       repairContext,
@@ -859,6 +955,9 @@ async function main(): Promise<void> {
   if (options.writerMode === "episode-llm") {
     let previousEpisodeEnding = "";
     for (const episodeWindow of episodeSelection.windows) {
+      const sceneBridges = options.sceneBridgesEnabled
+        ? buildEpisodeSceneBridges({ episodeWindow, result })
+        : [];
       const episodeRun = await writeEpisodeWithQa({
         seed,
         worldBrain: result.brain,
@@ -866,6 +965,7 @@ async function main(): Promise<void> {
         sceneLogs: result.sceneLogs,
         actionLogs: result.actionLogs,
         worldLogEditorialMap,
+        sceneBridges,
         previousEpisodeEnding,
         model: options.writerModel,
         qaRepairAttempts: options.qaRepairAttempts,
@@ -906,6 +1006,9 @@ async function main(): Promise<void> {
   }
   if (options.writerMode === "episode-prompt") {
     for (const episodeWindow of episodeSelection.windows) {
+      const sceneBridges = options.sceneBridgesEnabled
+        ? buildEpisodeSceneBridges({ episodeWindow, result })
+        : [];
       const prompt = buildEpisodeWindowWriterPrompt({
         seed,
         worldBrain: result.brain,
@@ -913,6 +1016,7 @@ async function main(): Promise<void> {
         sceneLogs: result.sceneLogs,
         actionLogs: result.actionLogs,
         worldLogEditorialMap,
+        sceneBridges,
       });
       const treatmentDecisions = worldLogEditorialMap.chapters
         .filter((chapter) => episodeWindow.sourceSceneIds.includes(chapter.sceneId))

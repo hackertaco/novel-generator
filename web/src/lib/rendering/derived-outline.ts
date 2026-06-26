@@ -7,6 +7,8 @@
  *  - 3단계(제목/한줄 이름표)만 LLM(주입형) — 골격(포함 사건/절단점)은 바꿀 수 없다.
  */
 
+import type { SceneBridge } from "./scene-bridge";
+
 export interface DerivedOutlineSceneInput {
   sceneId: string;
   chapter: number;
@@ -31,6 +33,8 @@ export interface DerivedOutlineChapter {
   /** 절단점 — 이 화의 마지막 사건 (cliffhanger 후보). */
   endsOn: string | null;
   tensionPeak: number;
+  /** 인접 장면 사이의 연결 재료 — 아티팩트 기록용. 산출은 scene-bridge.ts. */
+  bridges?: SceneBridge[];
 }
 
 export interface DerivedOutline {

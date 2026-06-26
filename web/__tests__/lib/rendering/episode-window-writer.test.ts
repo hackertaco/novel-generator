@@ -8,6 +8,7 @@ import {
   polishGenreSurface,
 } from "@/lib/rendering/episode-window-writer";
 import { selectEpisodeWindows } from "@/lib/rendering/episode-selector";
+import { buildSceneBridges } from "@/lib/rendering/scene-bridge";
 import { buildWorldLogEditorialMap } from "@/lib/rendering/world-log-editorial-map";
 import { NovelSeedSchema, type NovelSeed } from "@/lib/schema/novel";
 import { runWorldModelFirstSimulation } from "@/lib/sim/world-runner";
@@ -154,6 +155,49 @@ describe("episode window writer", () => {
     expect(prompt.length).toBeLessThan(15000);
     expect(prompt).not.toContain(result.actionLogs[0]!.privateState.hiddenGoal);
     expect(prompt).not.toContain(result.actionLogs[0]!.privateState.roleMission);
+    expect(prompt).not.toContain("장면 다리");
+  });
+
+  it("injects scene bridges as connective material between scenes", { timeout: 30_000 }, () => {
+    const seed = loadFixtureSeed();
+    const result = runWorldModelFirstSimulation(seed, {
+      startChapter: 1,
+      endChapter: 5,
+      characterActionsPerChapter: 4,
+    });
+    const episodeWindow = selectEpisodeWindows({
+      result,
+      targetEpisodeCount: 2,
+      maxScenesPerEpisode: 3,
+    }).windows[0]!;
+    const windowSceneLogs = episodeWindow.sourceSceneIds
+      .map((sceneId) => result.sceneLogs.find((sceneLog) => sceneLog.sceneId === sceneId)!)
+      .filter(Boolean);
+    const sceneBridges = buildSceneBridges({
+      sceneLogs: windowSceneLogs,
+      actionLogs: result.actionLogs.map((log) => ({
+        logId: log.logId,
+        chapter: log.chapter,
+        followUpActionSeed: log.actualEffect.followUpActionSeed,
+      })),
+      events: [],
+      schemeTimeline: [],
+    });
+    const prompt = buildEpisodeWindowWriterPrompt({
+      seed,
+      worldBrain: result.brain,
+      episodeWindow,
+      sceneLogs: result.sceneLogs,
+      actionLogs: result.actionLogs,
+      sceneBridges,
+    });
+
+    expect(sceneBridges.length).toBeGreaterThan(0);
+    expect(prompt).toContain("장면 다리");
+    expect(prompt).toContain("미해결 압력");
+    expect(prompt).toContain("summary_bridge 한 단락");
+    expect(prompt).toContain(`${windowSceneLogs[0]!.sceneId} → ${windowSceneLogs[1]!.sceneId}`);
+    expect(prompt.length).toBeLessThan(16000);
   });
 
   it("injects QA repair context without changing the source window contract", () => {
